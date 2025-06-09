@@ -90,25 +90,30 @@
 
 ---
 
-## 🧪 **TESTING SCENARIOS**
+## 🧪 **VALIDATION SCENARIOS (PROOF OF CONCEPT)**
 
-### Scenario 1: Initial System Creation
+### Scenario 1: Initial System Generation
 ```bash
-# User input: "Create a student management system"
-# Expected: Generated FastAPI + Streamlit + SQLite system
+# HBE input: "Create a system to manage students with name, registration number, and course"
+# Expected: Complete web system (API + UI + DB) operational in < 3 minutes
+# Validation: 100% functional system without manual intervention
 ```
 
 ### Scenario 2: Runtime Evolution
 ```bash
-# User input: "Add grade and GPA fields to students"  
-# Expected: System evolves without restart
+# HBE input: "Add birth date and grade point average fields to student"
+# Expected: System evolves dynamically in < 2 minutes without data loss
+# Validation: Zero downtime, data preserved, new functionality available
 ```
 
-### Scenario 3: Multi-Agent Collaboration
+### Scenario 3: Reusability and Configuration
 ```bash
-# User input: "Add validation rules for student email"
-# Expected: StudentBAE + ProgrammerAgent collaborate
+# HBE input: "Student should have modality field (in-person/online) and doesn't need formal registration"
+# Expected: BAE adapts to new context in < 1 minute with >80% reuse
+# Validation: Functional system for open courses with minimal recoding
 ```
+
+**📋 For complete technical specification of scenarios, see: `docs/PROOF_OF_CONCEPT.md`**
 
 ---
 
@@ -138,37 +143,61 @@
 
 ---
 
-## 📊 **SUCCESS CRITERIA**
+## 📊 **SUCCESS CRITERIA (PROOF OF CONCEPT METRICS)**
 
-### Technical Validation
-- [ ] StudentBAE generates syntactically correct Pydantic models
-- [ ] ProgrammerAgent creates working FastAPI routes
-- [ ] FrontendAgent produces functional Streamlit interfaces
-- [ ] RuntimeKernel orchestrates agents successfully
-- [ ] System supports runtime evolution without restart
+### Quantitative Metrics
+- [ ] **Response Time**
+  - [ ] Initial generation: < 3 minutes
+  - [ ] Runtime evolution: < 2 minutes  
+  - [ ] Configuration for reuse: < 1 minute
+- [ ] **Success Rate**
+  - [ ] Syntactic code generation: 100%
+  - [ ] Error-free execution: >95%
+  - [ ] Incremental evolution: 100% (simple modifications)
+- [ ] **Reusability Degree**
+  - [ ] Reused vs. new code: >80%
+  - [ ] Configuration vs. recoding: >90% configuration
 
-### Thesis Contribution Validation
-- [ ] Demonstrates BAE concept feasibility
-- [ ] Shows runtime system adaptation
-- [ ] Proves agent reusability (StudentBAE)
-- [ ] Validates human-agent interaction model
-- [ ] Documents performance and limitations
+### Qualitative Metrics  
+- [ ] **Semantic Accuracy** - Correct natural language interpretation
+- [ ] **Code Quality** - Adherence to Python/FastAPI/Streamlit best practices
+- [ ] **Interface Usability** - Intuitive UI with adequate error handling
+
+### Research Questions Validation
+- [ ] **RQ1**: "Student" BAE works in different contexts (reusability)
+- [ ] **RQ2**: Autonomous generation and evolution without specialized human intervention  
+- [ ] **RQ3**: Significant reduction in development time vs. traditional approaches
 
 ---
 
-## 🎯 **DEMO PREPARATION**
+## 🎯 **DEMONSTRATION SCRIPT (PROOF OF CONCEPT)**
 
-### Demo Script (10 minutes)
-1. **Introduction** (2 min): Explain BAE concept
-2. **Initial Generation** (3 min): Create student system from scratch
-3. **Runtime Evolution** (3 min): Add new attributes dynamically  
-4. **Agent Collaboration** (2 min): Show BAE + SWEA interaction
+### Demo Script - 10 minutes
+1. **Introduction** (2 min)
+   - BAE concept presentation vs. traditional LMA
+   - Differentiation from existing approaches (ChatDev, AgentVerse)
+
+2. **Scenario 1 - Initial Generation** (3 min)
+   - HBE: *"Create a system to manage students with name, registration number, and course"*
+   - Orchestration visualization: BAE → SWEAs → Working system
+   - End-to-end demonstration: API + UI + Database
+
+3. **Scenario 2 - Runtime Evolution** (3 min)
+   - HBE: *"Add birth date and grade point average"*
+   - Real-time automatic adaptation
+   - Data preservation + new functionality
+
+4. **Scenario 3 - Reusability** (2 min)
+   - Configuration for open courses: in-person/online modality
+   - Evidence of knowledge reuse (>80%)
+   - Adapted system working
 
 ### Demo Environment
-- [ ] Clean Docker environment ready
-- [ ] Sample data prepared
+- [ ] Clean and functional Docker environment
+- [ ] Sample data for Scenario 2 prepared
 - [ ] Backup system for fallback
-- [ ] Screen recording setup for presentation
+- [ ] Screen recording configured
+- [ ] Time metrics being collected in real-time
 
 ---
 

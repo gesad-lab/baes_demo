@@ -8,10 +8,14 @@ Based on your thesis proposal and our discussion, this guide implements a runtim
 
 ## 🎯 OBJECTIVES
 
-1. **Demonstrate BAE feasibility** - Student entity as autonomous agent
-2. **Runtime system evolution** - Dynamic schema/UI/API generation
-3. **Agent orchestration** - BAE + SWEA collaboration
-4. **Natural language interaction** - Human-driven system evolution
+**Proof of Concept:** Validate BAE architecture through three progressive scenarios:
+
+1. **Scenario 1: Initial Generation** - Automatic creation of functional system via natural language
+2. **Scenario 2: Runtime Evolution** - Dynamic adaptation without system reinitialization  
+3. **Scenario 3: Reusability** - Demonstration of configurability for different contexts
+4. **Empirical Validation** - Collection of quantitative and qualitative metrics to validate research questions
+
+For complete scenario details, see: `docs/PROOF_OF_CONCEPT.md`
 
 ---
 

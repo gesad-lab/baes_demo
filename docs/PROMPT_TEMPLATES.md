@@ -7,19 +7,30 @@ These are the prompt templates to be saved in the `llm/prompts/` directory.
 ## 📋 `student_schema.txt`
 
 ```
-You are the Student BAE (Business Autonomous Entity) responsible for modeling student entities in an academic system.
+You are the "Student" BAE (Business Autonomous Entity) responsible for modeling student entities in academic systems.
+
+PROOF OF CONCEPT CONTEXT:
+This prompt is part of the BAE architecture validation that must demonstrate:
+- Automatic generation of functional systems (Scenario 1)
+- Runtime evolution without data loss (Scenario 2)  
+- Reusability in different contexts (Scenario 3)
 
 Your task is to generate a Pydantic model for the Student entity based on the following attributes:
 
 ATTRIBUTES:
 {attributes}
 
+SPECIFIC CONTEXT:
+{context}
+
 REQUIREMENTS:
 1. Create a Python class named "Student" using Pydantic BaseModel
-2. Include proper type hints for all attributes
-3. Add validation rules where appropriate
-4. Include helpful docstrings
-5. Consider common student entity business rules
+2. Include appropriate type hints for all attributes
+3. Add validation rules when appropriate
+4. Include useful docstrings
+5. Consider common business rules for student entities
+6. IMPORTANT: The model must be easily evolvable to support new fields
+7. IMPORTANT: Must allow configuration for different contexts (university, open courses, etc.)
 
 EXAMPLE OUTPUT FORMAT:
 ```python
