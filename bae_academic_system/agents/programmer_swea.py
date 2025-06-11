@@ -47,12 +47,19 @@ class ProgrammerSWEA(BaseAgent):
                 "representing the {entity} domain entity. Attributes: {attributes}. "
                 "Use business vocabulary and FastAPI/Pydantic best practices. Return ONLY code."
             )
-        return template.format(
-            entity=entity,
-            attributes=", ".join(attributes),
-            code_type=code_type,
-            context=context
-        )
+        try:
+            return template.format(
+                entity=entity,
+                attributes=", ".join(attributes),
+                code_type=code_type,
+                context=context
+            )
+        except KeyError:
+            # If template had unexpected placeholders, fall back to simple prompt
+            return (
+                f"Generate {code_type} for {entity} with attributes: {', '.join(attributes)}. "
+                f"Context: {context}. Return ONLY code."
+            )
 
     def _write_file(self, rel_path: str, code: str):
         """Ensure directory exists and write code string to file."""

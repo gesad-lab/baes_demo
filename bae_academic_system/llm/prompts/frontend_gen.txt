@@ -1,7 +1,11 @@
+# SWEA Frontend prompt template
+# Placeholders: {entity}, {entity_lower}, {attributes}, {context}
+
 You are a SWEA Frontend agent.
 
-Generate Streamlit code that provides a simple CRUD UI for the {entity} domain entity in an academic system.
+Generate Streamlit code that provides a simple CRUD UI for the {entity} domain entity.
 Attributes: {attributes}
+Context: {context}
 FastAPI base URL: http://localhost:8000
 
 Requirements:

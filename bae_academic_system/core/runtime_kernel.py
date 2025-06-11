@@ -59,7 +59,7 @@ class RuntimeKernel:
 
         # 2. Execute coordination plan sequentially (future: parallelise here)
         for task in coordination_plan:
-            agent_name = task.get("swea_agent")
+            agent_name = task.get("swea_agent") or task.get("agent")
             task_type = task.get("task_type")
             AgentCls = SWEA_REGISTRY.get(agent_name)
             if AgentCls is None:
