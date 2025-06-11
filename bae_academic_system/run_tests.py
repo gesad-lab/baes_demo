@@ -10,6 +10,7 @@ import sys
 import subprocess
 import argparse
 from pathlib import Path
+import os
 
 
 def run_command(cmd):
@@ -29,7 +30,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run BAE system tests")
     parser.add_argument(
         "test_type", 
-        choices=["all", "unit", "integration", "scenario", "scenario1", "performance", "quick"],
+        choices=["all", "unit", "integration", "scenario", "scenario1", "performance", "quick", "online"],
         help="Type of tests to run"
     )
     parser.add_argument(
@@ -82,6 +83,10 @@ def main():
         cmd.append(str(TESTS_ROOT / "scenarios" / "test_scenario1.py"))
     elif args.test_type == "performance":
         cmd.extend(["-m", "performance"])
+    elif args.test_type == "online":
+        # Ensure env variable is set for live tests
+        os.environ["RUN_ONLINE"] = "1"
+        cmd.extend(["-m", "integration_online", str(TESTS_ROOT / "integration_online")])
     elif args.test_type == "quick":
         cmd.extend(["-m", "not slow", str(TESTS_ROOT / "unit")])
     
