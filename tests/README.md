@@ -2,30 +2,39 @@
 
 Comprehensive test suite for the BAE (Business Autonomous Entities) system following Python testing best practices.
 
+**⚠️ IMPORTANT: The actual working tests are located in `bae_academic_system/tests/`, not in this root `tests/` directory.**
+
 ## 📁 Test Structure
 
 ```
-tests/
-├── conftest.py                     # Shared fixtures and configuration
-├── README.md                       # This file
+bae_academic_system/
+├── tests/                         # Main test directory (working tests)
+│   ├── conftest.py               # Shared fixtures and configuration
+│   ├── __init__.py               # Package initialization
+│   │
+│   ├── unit/                     # Unit tests for individual components
+│   │   ├── agents/               # Agent component tests
+│   │   │   ├── test_base_agent.py     # Base agent functionality
+│   │   │   └── test_student_bae.py    # Student BAE domain entity tests
+│   │   ├── core/                 # Core system tests
+│   │   │   └── test_context_store.py  # Context store and domain knowledge
+│   │   └── llm/                  # LLM integration tests
+│   │       └── test_openai_client.py  # OpenAI GPT-4o-mini client tests
+│   │
+│   ├── integration/              # Integration tests
+│   │   ├── bae_swea/            # BAE-SWEA interaction tests
+│   │   └── end_to_end/          # Complete workflow tests
+│   │
+│   └── scenarios/                # Proof-of-concept scenario tests
+│       ├── test_scenario1.py     # Initial System Generation (main)
+│       └── test_scenario1_legacy.py  # Original test file (backup)
 │
-├── unit/                          # Unit tests for individual components
-│   ├── agents/                    # Agent component tests
-│   │   ├── test_base_agent.py     # Base agent functionality
-│   │   └── test_student_bae.py    # Student BAE domain entity tests
-│   ├── core/                      # Core system tests
-│   │   └── test_context_store.py  # Context store and domain knowledge
-│   └── llm/                       # LLM integration tests
-│       └── test_openai_client.py  # OpenAI client wrapper tests
-│
-├── integration/                   # Integration tests
-│   ├── bae_swea/                  # BAE-SWEA interaction tests
-│   └── end_to_end/                # Complete workflow tests
-│
-└── scenarios/                     # Proof-of-concept scenario tests
-    ├── test_scenario1.py          # Initial System Generation
-    └── test_scenario1_legacy.py   # Original test file (backup)
+├── run_tests.py                  # Test runner script
+├── pytest.ini                   # Pytest configuration
+└── requirements.txt              # Testing dependencies
 ```
+
+**Note**: This root `tests/` directory contains documentation but the actual working tests are in `bae_academic_system/tests/`.
 
 ## 🎯 Test Categories
 
@@ -55,6 +64,12 @@ Validate timing and efficiency requirements:
 
 ## 🚀 Running Tests
 
+**⚠️ IMPORTANT: All commands must be executed from the `bae_academic_system/` directory:**
+
+```bash
+cd bae_academic_system
+```
+
 ### Using the Test Runner (Recommended)
 ```bash
 # Run all tests
@@ -77,20 +92,20 @@ Validate timing and efficiency requirements:
 
 ### Using pytest directly
 ```bash
-# All tests
-pytest tests/
+# All tests (from bae_academic_system/ directory)
+python -m pytest tests/
 
 # By marker
-pytest -m unit tests/
-pytest -m scenario tests/
-pytest -m "not slow" tests/
+python -m pytest -m unit tests/
+python -m pytest -m scenario tests/
+python -m pytest -m "not slow" tests/
 
 # Specific files
-pytest tests/unit/agents/test_student_bae.py
-pytest tests/scenarios/test_scenario1.py
+python -m pytest tests/unit/agents/test_student_bae.py
+python -m pytest tests/scenarios/test_scenario1.py
 
 # With coverage
-pytest --cov=. --cov-report=html tests/
+python -m pytest --cov=. --cov-report=html tests/
 ```
 
 ## 🔧 Test Configuration
