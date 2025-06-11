@@ -154,17 +154,13 @@ database/*.sqlite
 database/*.sqlite3
 !database/.gitkeep
 
-# Generated code (temporary artifacts)
-generated/models/*.py
-generated/routes/*.py
-generated/ui/*.py
-!generated/*/.gitkeep
+# Generated code is now handled by managed_system_demo
+# These entries kept for reference but directories are removed
 
-# Also ignore generated artefacts inside package directory
-bae_academic_system/generated/models/*.py
-bae_academic_system/generated/routes/*.py
-bae_academic_system/generated/ui/*.py
-!bae_academic_system/generated/*/.gitkeep
+# Test generated directories (temporary test artifacts)
+tests/test_generated/
+tests/bae_test_*/
+tests/bae_live_test_*/
 
 # LLM API logs and temporary files
 llm/logs/

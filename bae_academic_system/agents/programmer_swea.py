@@ -1,5 +1,6 @@
 from bae_academic_system.agents.base_agent import BaseAgent
 from bae_academic_system.llm.openai_client import OpenAIClient
+from bae_academic_system.core.managed_system_manager import ManagedSystemManager
 from typing import Dict, Any, List
 import os
 
@@ -9,6 +10,7 @@ class ProgrammerSWEA(BaseAgent):
     def __init__(self):
         super().__init__("ProgrammerSWEA", "Code Generation Agent", "SWEA")
         self.llm_client = OpenAIClient()
+        self.managed_system_manager = ManagedSystemManager()
 
     # Supported task identifiers
     _SUPPORTED_TASKS = {
@@ -61,13 +63,18 @@ class ProgrammerSWEA(BaseAgent):
                 f"Context: {context}. Return ONLY code."
             )
 
-    def _write_file(self, rel_path: str, code: str):
-        """Ensure directory exists and write code string to file."""
-        abs_path = os.path.join("bae_academic_system", rel_path)
-        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-        with open(abs_path, "w") as f:
-            f.write(code)
-        return abs_path
+    def _write_to_managed_system(self, entity: str, artifact_type: str, code: str) -> str:
+        """Write code to the managed system instead of the legacy generated directory."""
+        # Ensure managed system structure exists
+        self.managed_system_manager.ensure_managed_system_structure()
+        
+        # Write the artifact to managed system
+        file_path = self.managed_system_manager.write_entity_artifact(entity, artifact_type, code)
+        
+        # Update main system files to include new entity
+        self.managed_system_manager.update_system_files()
+        
+        return file_path
 
     # -------------------- task implementations ------------------------
     def _generate_model(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -86,10 +93,10 @@ class ProgrammerSWEA(BaseAgent):
             },
         )
 
-        file_path = self._write_file(f"generated/models/{entity.lower()}_model.py", code)
+        file_path = self._write_to_managed_system(entity, "model", code)
         return self.create_success_response(
             "generate_model",
-            {"file_path": file_path, "code": code}
+            {"file_path": file_path, "code": code, "managed_system": True}
         )
 
     def _generate_api(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -108,8 +115,8 @@ class ProgrammerSWEA(BaseAgent):
             },
         )
 
-        file_path = self._write_file(f"generated/routes/{entity.lower()}_routes.py", code)
+        file_path = self._write_to_managed_system(entity, "routes", code)
         return self.create_success_response(
             "generate_api",
-            {"file_path": file_path, "code": code}
+            {"file_path": file_path, "code": code, "managed_system": True}
         ) 

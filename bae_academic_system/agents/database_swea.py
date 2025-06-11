@@ -1,4 +1,5 @@
 from bae_academic_system.agents.base_agent import BaseAgent
+from bae_academic_system.core.managed_system_manager import ManagedSystemManager
 from typing import Dict, Any, List
 import os
 import sqlite3
@@ -11,6 +12,7 @@ class DatabaseSWEA(BaseAgent):
 
     def __init__(self):
         super().__init__("DatabaseSWEA", "Database Provisioning Agent", "SWEA")
+        self.managed_system_manager = ManagedSystemManager()
 
     _SUPPORTED_TASKS = {
         "setup_database": "_setup_database"
@@ -35,9 +37,11 @@ class DatabaseSWEA(BaseAgent):
         entity = payload.get("entity", "Student")
         attributes: List[str] = payload.get("attributes", [])
 
+        # Use managed system database path
+        managed_system_path = self.managed_system_manager.managed_system_path
         db_file = payload.get(
-            "database_path",
-            os.path.join("bae_academic_system", "database", "academic.db")
+            "database_path", 
+            str(managed_system_path / "app" / "database" / "academic.db")
         )
         os.makedirs(os.path.dirname(db_file), exist_ok=True)
 
@@ -67,12 +71,16 @@ class DatabaseSWEA(BaseAgent):
             cursor.execute(f"CREATE TABLE IF NOT EXISTS {table_name} ({columns_sql_str})")
             conn.commit()
 
-        logger.info(f"Database created/updated at {db_file} with table {table_name}")
+        # Ensure managed system structure is updated
+        self.managed_system_manager.ensure_managed_system_structure()
+        
+        logger.info(f"Managed system database created/updated at {db_file} with table {table_name}")
         return self.create_success_response(
             "setup_database",
             {
                 "database_path": db_file,
                 "table": table_name,
-                "columns": columns_sql
+                "columns": columns_sql,
+                "managed_system": True
             }
         ) 

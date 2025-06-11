@@ -28,16 +28,16 @@ class TestDynamicEntityAdaptation:
     
     def setup_method(self):
         """Setup for each test method"""
-        # Create temporary directory for generated files
-        self.test_dir = tempfile.mkdtemp()
+        # Create temporary directory for generated files under tests directory
+        self.test_dir = tempfile.mkdtemp(prefix="bae_live_test_", dir="tests")
         self.original_cwd = os.getcwd()
         os.chdir(self.test_dir)
         
-        # Create required directory structure
-        os.makedirs("bae_academic_system/generated/models", exist_ok=True)
-        os.makedirs("bae_academic_system/generated/routes", exist_ok=True) 
-        os.makedirs("bae_academic_system/generated/ui", exist_ok=True)
-        os.makedirs("bae_academic_system/database", exist_ok=True)
+        # Create required directory structure in test directory
+        os.makedirs("test_generated/models", exist_ok=True)
+        os.makedirs("test_generated/routes", exist_ok=True) 
+        os.makedirs("test_generated/ui", exist_ok=True)
+        os.makedirs("test_database", exist_ok=True)
         os.makedirs("llm/prompts", exist_ok=True)
         
         # Create minimal prompt template
@@ -296,16 +296,16 @@ class TestDynamicEntityAdaptationLive:
     
     def setup_method(self):
         """Setup for each test method"""
-        # Create temporary directory for generated files
-        self.test_dir = tempfile.mkdtemp()
+        # Create temporary directory for generated files under tests directory
+        self.test_dir = tempfile.mkdtemp(prefix="bae_test_", dir="tests")
         self.original_cwd = os.getcwd()
         os.chdir(self.test_dir)
         
-        # Create required directory structure
-        os.makedirs("bae_academic_system/generated/models", exist_ok=True)
-        os.makedirs("bae_academic_system/generated/routes", exist_ok=True) 
-        os.makedirs("bae_academic_system/generated/ui", exist_ok=True)
-        os.makedirs("bae_academic_system/database", exist_ok=True)
+        # Create required directory structure in test directory
+        os.makedirs("test_generated/models", exist_ok=True)
+        os.makedirs("test_generated/routes", exist_ok=True) 
+        os.makedirs("test_generated/ui", exist_ok=True)
+        os.makedirs("test_database", exist_ok=True)
         os.makedirs("llm/prompts", exist_ok=True)
         
         # Create minimal prompt template
@@ -365,7 +365,7 @@ class TestDynamicEntityAdaptationLive:
             # Verify generated files exist and have correct content
             
             # Check API routes file
-            api_file = Path("bae_academic_system/generated/routes/student_routes.py")
+            api_file = Path("test_generated/routes/student_routes.py")
             if api_file.exists():
                 api_content = api_file.read_text()
                 # Should contain Book-related content, not just Student
@@ -373,7 +373,7 @@ class TestDynamicEntityAdaptationLive:
                     f"API content should reference books: {api_content[:200]}..."
             
             # Check UI file
-            ui_file = Path("bae_academic_system/generated/ui/student_ui.py") 
+            ui_file = Path("test_generated/ui/student_ui.py") 
             if ui_file.exists():
                 ui_content = ui_file.read_text()
                 # Should contain book-related content

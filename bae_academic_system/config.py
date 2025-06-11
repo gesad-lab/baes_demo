@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,4 +16,19 @@ class Config:
     # BAE-specific configuration
     DOMAIN_ENTITY_FOCUS = True
     SEMANTIC_COHERENCE_VALIDATION = True
-    BUSINESS_VOCABULARY_PRESERVATION = True 
+    BUSINESS_VOCABULARY_PRESERVATION = True
+    
+    # Managed System Configuration
+    @classmethod
+    def get_managed_system_path(cls) -> Path:
+        """Get the managed system path, supporting both absolute and relative paths."""
+        managed_path = os.getenv("MANAGED_SYSTEM_PATH", "../managed_system")
+        
+        if os.path.isabs(managed_path):
+            # Absolute path - use as is
+            return Path(managed_path)
+        else:
+            # Relative path - relative to BAE project root
+            bae_project_root = Path(__file__).resolve().parent.parent
+            return bae_project_root / managed_path
+    

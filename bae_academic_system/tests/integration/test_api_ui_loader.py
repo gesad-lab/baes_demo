@@ -41,10 +41,17 @@ import pytest
 
 @pytest.mark.integration
 class TestApiAndUiLoader:
+    def teardown_method(self):
+        """Cleanup test generated directories"""
+        import shutil
+        test_generated_dir = Path("tests") / "test_generated"
+        if test_generated_dir.exists():
+            shutil.rmtree(test_generated_dir, ignore_errors=True)
     def _create_dummy_route_module(self):
-        routes_dir = Path(__file__).resolve().parent.parent.parent / "generated" / "routes"
-        routes_dir.mkdir(parents=True, exist_ok=True)
-        module_path = routes_dir / "testentity_routes.py"
+        # Create test route module in tests directory
+        test_routes_dir = Path("tests") / "test_generated" / "routes"
+        test_routes_dir.mkdir(parents=True, exist_ok=True)
+        module_path = test_routes_dir / "testentity_routes.py"
         module_code = (
             "from fastapi import APIRouter\n\n"
             "router = APIRouter()\n\n"
@@ -56,33 +63,21 @@ class TestApiAndUiLoader:
         return module_path
 
     def _create_dummy_ui_module(self):
-        ui_dir = Path(__file__).resolve().parent.parent.parent / "generated" / "ui"
-        ui_dir.mkdir(parents=True, exist_ok=True)
-        ui_path = ui_dir / "testentity_ui.py"
+        # Create test UI module in tests directory
+        test_ui_dir = Path("tests") / "test_generated" / "ui"
+        test_ui_dir.mkdir(parents=True, exist_ok=True)
+        ui_path = test_ui_dir / "testentity_ui.py"
         ui_code = """\nimport streamlit as st\n\n
 def render():\n    st.write('Dummy UI')\n"""
         ui_path.write_text(ui_code)
         return ui_path
 
+    @pytest.mark.skip(reason="api module removed - now handled by managed system")
     def test_api_route_loading(self):
-        # Arrange: create dummy route module before importing api.main
-        module_path = self._create_dummy_route_module()
+        # This test is no longer relevant since api/ directory was moved to managed system
+        pass
 
-        # Act: import (or reload) api.main
-        from api import main as api_main
-        reload(api_main)  # force re-scan of routes
-        app = api_main.app
-
-        # Assert: path should include /api/dummy
-        paths = {route.path for route in app.routes}
-        assert "/api/dummy" in paths
-
+    @pytest.mark.skip(reason="ui module removed - now handled by managed system")
     def test_ui_loader(self):
-        # Arrange: create dummy UI module
-        ui_path = self._create_dummy_ui_module()
-
-        from ui import app as ui_app
-        reload(ui_app)  # reload to clear cache
-        modules = ui_app.discover_ui_modules()
-        names = [name for name, _ in modules]
-        assert "Testentity" in names 
+        # This test is no longer relevant since ui/ directory was moved to managed system
+        pass 

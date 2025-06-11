@@ -10,6 +10,7 @@ import logging
 from core.bae_registry import EnhancedBAERegistry
 from core.entity_recognizer import EntityRecognizer
 from core.context_store import ContextStore
+from core.managed_system_manager import ManagedSystemManager
 from agents.programmer_swea import ProgrammerSWEA
 from agents.frontend_swea import FrontendSWEA
 
@@ -46,6 +47,7 @@ class EnhancedRuntimeKernel:
         self.context_store = ContextStore(context_store_path)
         self.bae_registry = EnhancedBAERegistry()
         self.entity_recognizer = EntityRecognizer()
+        self.managed_system_manager = ManagedSystemManager()
         
         # SWEA agents (not domain-specific, coordinated by BAEs)
         self.programmer_swea = ProgrammerSWEA()
@@ -266,26 +268,53 @@ class EnhancedRuntimeKernel:
             logger.debug("Streamlit not available; skipping UI reload")
     
     def _start_servers(self):
-        """Start FastAPI and Streamlit servers"""
+        """Start FastAPI and Streamlit servers from the managed system"""
         try:
-            project_root = Path(__file__).resolve().parents[2]
+            # Ensure managed system is properly set up first
+            self.managed_system_manager.ensure_managed_system_structure()
+            self.managed_system_manager.update_system_files()
             
-            # Start FastAPI server
-            api_cmd = [
-                sys.executable, "-m", "uvicorn", "api.main:app",
-                "--host", Config.API_HOST, "--port", str(Config.API_PORT), "--reload"
-            ]
-            subprocess.Popen(api_cmd, cwd=project_root)
-            logger.info("🚀 FastAPI server started at http://%s:%s", Config.API_HOST, Config.API_PORT)
+            managed_system_path = self.managed_system_manager.managed_system_path
+            logger.info("🚀 Starting servers from managed system at: %s", managed_system_path)
             
-            # Start Streamlit UI
-            ui_file = project_root / "bae_academic_system" / "ui" / "app.py"
-            ui_cmd = ["streamlit", "run", str(ui_file), "--server.port", str(Config.UI_PORT)]
-            subprocess.Popen(ui_cmd, cwd=project_root)
-            logger.info("🎨 Streamlit UI started at http://%s:%s", Config.UI_HOST, Config.UI_PORT)
+            # Check if managed system has the startup script
+            start_script = managed_system_path / "start_servers.sh"
+            if start_script.exists():
+                # Use the managed system's startup script
+                subprocess.Popen(["bash", str(start_script)], cwd=managed_system_path)
+                logger.info("🚀 Servers started using managed system startup script")
+            else:
+                # Fallback to manual server startup
+                logger.info("🔄 Using fallback server startup (managed system startup script not found)")
+                
+                # Start FastAPI server from managed system
+                api_cmd = [
+                    sys.executable, "-m", "uvicorn", "app.main:app",
+                    "--host", Config.API_HOST, "--port", str(Config.API_PORT), "--reload"
+                ]
+                subprocess.Popen(api_cmd, cwd=managed_system_path)
+                logger.info("🚀 FastAPI server started at http://%s:%s (from managed system)", 
+                           Config.API_HOST, Config.API_PORT)
+                
+                # Start Streamlit UI from managed system
+                ui_file = managed_system_path / "ui" / "app.py"
+                if ui_file.exists():
+                    ui_cmd = ["streamlit", "run", str(ui_file), "--server.port", str(Config.UI_PORT)]
+                    subprocess.Popen(ui_cmd, cwd=managed_system_path)
+                    logger.info("🎨 Streamlit UI started at http://%s:%s (from managed system)", 
+                               Config.UI_HOST, Config.UI_PORT)
+                else:
+                    logger.warning("⚠️  Managed system UI not found at %s", ui_file)
+            
+            # Log managed system information
+            info = self.managed_system_manager.get_managed_system_info()
+            logger.info("📊 Managed System Info: %d entities, structure complete: %s", 
+                       len(info["entities"]), info["structure_complete"])
             
         except Exception as e:
-            logger.error("❌ Failed to start servers: %s", str(e))
+            logger.error("❌ Failed to start servers from managed system: %s", str(e))
+            logger.info("💡 Try running the managed system manually: cd %s && ./start_servers.sh", 
+                       self.managed_system_manager.managed_system_path)
     
     def get_supported_entities_info(self) -> Dict[str, Any]:
         """Get information about all supported entities"""
