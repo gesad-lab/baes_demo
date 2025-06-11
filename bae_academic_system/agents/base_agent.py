@@ -114,7 +114,11 @@ class BaseAgent(ABC):
     
     def get_interaction_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get interaction history"""
-        interactions = self.get_memory("interactions", [])
+        interactions = self.memory.get("interactions", [])
+        if isinstance(interactions, dict) and "value" in interactions:
+            interactions = interactions["value"]
+        elif not isinstance(interactions, list):
+            interactions = []
         return interactions[-limit:] if limit else interactions
     
     def get_agent_status(self) -> Dict[str, Any]:
