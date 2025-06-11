@@ -53,6 +53,10 @@ def main():
     # Base pytest command
     cmd = ["python", "-m", "pytest"]
     
+    # Determine where the tests live (relative to this script)
+    THIS_DIR = Path(__file__).resolve().parent
+    TESTS_ROOT = THIS_DIR / "tests"
+    
     # Add verbosity
     if args.verbose:
         cmd.append("-v")
@@ -67,19 +71,19 @@ def main():
     
     # Select test paths based on test type
     if args.test_type == "all":
-        cmd.append("tests/")
+        cmd.append(str(TESTS_ROOT))
     elif args.test_type == "unit":
-        cmd.extend(["-m", "unit", "tests/unit/"])
+        cmd.extend(["-m", "unit", str(TESTS_ROOT / "unit")])
     elif args.test_type == "integration":
-        cmd.extend(["-m", "integration", "tests/integration/"])
+        cmd.extend(["-m", "integration", str(TESTS_ROOT / "integration")])
     elif args.test_type == "scenario":
-        cmd.extend(["-m", "scenario", "tests/scenarios/"])
+        cmd.extend(["-m", "scenario", str(TESTS_ROOT / "scenarios")])
     elif args.test_type == "scenario1":
-        cmd.append("tests/scenarios/test_scenario1.py")
+        cmd.append(str(TESTS_ROOT / "scenarios" / "test_scenario1.py"))
     elif args.test_type == "performance":
         cmd.extend(["-m", "performance"])
     elif args.test_type == "quick":
-        cmd.extend(["-m", "not slow", "tests/unit/"])
+        cmd.extend(["-m", "not slow", str(TESTS_ROOT / "unit")])
     
     print(f"🧪 Running BAE {args.test_type} tests...")
     print("=" * 60)
