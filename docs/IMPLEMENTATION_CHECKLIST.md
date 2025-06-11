@@ -15,78 +15,78 @@
 
 ### Day 3-4: Core Components
 - [ ] Implement `BaseAgent` class (`agents/base_agent.py`)
-- [ ] Create `OpenAIClient` wrapper (`llm/openai_client.py`)
-- [ ] Set up prompt templates in `llm/prompts/` directory
-- [ ] Test basic LLM integration
+- [ ] Create `OpenAIClient` wrapper (`llm/openai_client.py`) using GPT-4o-mini
+- [ ] Set up prompt templates in `llm/prompts/` directory with domain entity focus
+- [ ] Test basic LLM integration with OpenAI GPT-4o-mini
 
 ### Day 5-7: Agent Implementation
-- [ ] Implement `StudentBAE` class (`agents/student_bae.py`)
-- [ ] Create basic `RuntimeKernel` (`core/runtime_kernel.py`)
+- [ ] Implement `StudentBAE` class (`agents/student_bae.py`) as domain entity representative
+- [ ] Create basic `RuntimeKernel` (`core/runtime_kernel.py`) with BAE-centered orchestration
 - [ ] Test agent instantiation and basic communication
-- [ ] Verify schema generation functionality
+- [ ] Verify schema generation functionality with semantic coherence validation
 
 ---
 
 ## 📅 **WEEK 2: Dynamic Generation & Integration**
 
 ### Day 8-10: SWEA Agents
-- [ ] Implement `ProgrammerAgent` (`agents/programmer_agent.py`)
-- [ ] Implement `FrontendAgent` (`agents/frontend_agent.py`)
-- [ ] Create code generation templates (Jinja2)
-- [ ] Test individual agent code generation
+- [ ] Implement `ProgrammerAgent` (`agents/programmer_agent.py`) as SWEA coordinated by BAEs
+- [ ] Implement `FrontendAgent` (`agents/frontend_agent.py`) as SWEA coordinated by BAEs
+- [ ] Create code generation templates (Jinja2) with domain coherence emphasis
+- [ ] Test individual agent code generation maintaining semantic alignment
 
 ### Day 11-12: Runtime System
-- [ ] Enhance `RuntimeKernel` with workflow execution
-- [ ] Implement dynamic file generation
-- [ ] Create `ContextStore` for agent memory
-- [ ] Test agent collaboration workflows
+- [ ] Enhance `RuntimeKernel` with BAE-orchestrated workflow execution
+- [ ] Implement dynamic file generation with domain entity focus
+- [ ] Create `ContextStore` for agent memory and domain knowledge preservation
+- [ ] Test BAE-SWEA collaboration workflows
 
 ### Day 13-14: API & UI Integration
-- [ ] Create FastAPI main server (`api/main.py`)
-- [ ] Implement dynamic route loading
-- [ ] Create Streamlit UI (`ui/app.py`)
-- [ ] Test end-to-end system generation
+- [ ] Create FastAPI main server (`api/main.py`) with domain-focused routing
+- [ ] Implement dynamic route loading coordinated by BAEs
+- [ ] Create Streamlit UI (`ui/app.py`) reflecting business vocabulary
+- [ ] Test end-to-end system generation with semantic coherence validation
 
 ---
 
 ## 📅 **WEEK 3: Testing, Docker & Documentation**
 
 ### Day 15-17: Testing & Error Handling
-- [ ] Create comprehensive test suite (`tests/`)
-- [ ] Add error handling and validation
-- [ ] Implement logging and monitoring
-- [ ] Test runtime system evolution
+- [ ] Create comprehensive test suite (`tests/`) for BAE domain entity autonomy
+- [ ] Add error handling and validation with semantic coherence checks
+- [ ] Implement logging and monitoring for BAE-SWEA interactions
+- [ ] Test runtime system evolution maintaining domain knowledge
 
 ### Day 18-19: Containerization
-- [ ] Create `Dockerfile`
-- [ ] Set up `docker-compose.yml`
-- [ ] Test Docker deployment
-- [ ] Verify container networking
+- [ ] Create `Dockerfile` with OpenAI GPT-4o-mini environment variables
+- [ ] Set up `docker-compose.yml` with proper BAE system configuration
+- [ ] Test Docker deployment with full BAE functionality
+- [ ] Verify container networking for domain entity communications
 
 ### Day 20-21: Documentation & Demo
-- [ ] Complete `README.md` with usage instructions
-- [ ] Create demo script and test scenarios
-- [ ] Prepare presentation materials
-- [ ] Final system testing and validation
+- [ ] Complete `README.md` with usage instructions emphasizing domain entity approach
+- [ ] Create demo script showcasing BAE autonomy and test scenarios
+- [ ] Prepare presentation materials highlighting semantic coherence benefits
+- [ ] Final system testing and validation of domain entity representation
 
 ---
 
 ## 🎯 **KEY VALIDATION POINTS**
 
 ### ✅ Milestone 1 (End of Week 1)
-- **Basic agent communication works**
-- **StudentBAE generates valid Pydantic models**
-- **OpenAI integration is stable**
+- **Basic BAE-SWEA communication works with domain entity focus**
+- **StudentBAE generates valid Pydantic models with semantic coherence**
+- **OpenAI GPT-4o-mini integration is stable and properly configured**
 
 ### ✅ Milestone 2 (End of Week 2)  
-- **Complete system generation works (API + UI + DB)**
-- **Runtime workflow execution functions**
-- **Dynamic file generation is operational**
+- **Complete system generation works (API + UI + DB) under BAE coordination**
+- **Runtime workflow execution functions with domain entity autonomy**
+- **Dynamic file generation is operational with semantic alignment**
 
 ### ✅ Milestone 3 (End of Week 3)
-- **System can evolve at runtime**
-- **Docker deployment is successful**
-- **Demo scenarios work end-to-end**
+- **System can evolve at runtime while preserving domain knowledge**
+- **Docker deployment is successful with full BAE functionality**
+- **Demo scenarios work end-to-end with semantic coherence validation**
 
 ---
 
@@ -124,22 +124,26 @@
 **OpenAI API Issues:**
 - [ ] Verify API key is valid and has credits
 - [ ] Check rate limits and retry logic
-- [ ] Test with different models (gpt-4o-mini vs gpt-4)
+- [ ] Test with OpenAI GPT-4o-mini model specifically
+- [ ] Validate domain entity reasoning capabilities
 
 **Code Generation Issues:**
-- [ ] Validate prompt templates are correctly formatted
+- [ ] Validate prompt templates are correctly formatted for domain entities
 - [ ] Check generated code syntax before execution
-- [ ] Implement fallback/retry mechanisms
+- [ ] Implement fallback/retry mechanisms for BAE coordination
+- [ ] Verify semantic coherence in generated artifacts
 
 **Dynamic Loading Issues:**
-- [ ] Ensure proper Python path management
+- [ ] Ensure proper Python path management for BAE modules
 - [ ] Validate generated file permissions
-- [ ] Check for import conflicts
+- [ ] Check for import conflicts between BAE and SWEA agents
+- [ ] Test domain knowledge preservation across reloads
 
 **Docker Issues:**
 - [ ] Verify port mappings (8000, 8501)
-- [ ] Check environment variable passing
-- [ ] Validate volume mounts for generated files
+- [ ] Check environment variable passing for OpenAI GPT-4o-mini
+- [ ] Validate volume mounts for generated files and domain knowledge
+- [ ] Test BAE functionality within containerized environment
 
 ---
 
