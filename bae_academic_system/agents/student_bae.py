@@ -247,7 +247,7 @@ class StudentBAE(BaseAgent):
             {
                 "step": 3,  
                 "agent": "DatabaseSWEA",
-                "task": "generate_database",
+                "task": "setup_database",
                 "payload": {
                     "entity": "Student",
                     "context": context,

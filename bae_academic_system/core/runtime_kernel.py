@@ -19,8 +19,9 @@ except ModuleNotFoundError:
 
 logger = logging.getLogger(__name__)
 
-# Mapping of SWEA agent names to their classes
-SWEA_REGISTRY: Dict[str, Type] = {
+# Mapping of agent names to their classes
+AGENT_REGISTRY: Dict[str, Type] = {
+    "StudentBAE": StudentBAE,
     "ProgrammerSWEA": ProgrammerSWEA,
     "DatabaseSWEA": DatabaseSWEA,
     "FrontendSWEA": FrontendSWEA,
@@ -56,26 +57,60 @@ class RuntimeKernel:
             "interpret_business_request",
             {"request": natural_language_request, "context": context},
         )
+        
+        # Check for interpretation errors
+        if interpretation.get("success") is False or "error" in interpretation:
+            error_msg = interpretation.get("error", "Unknown interpretation error")
+            logger.error("❌ Failed to interpret business request: %s", error_msg)
+            
+            # Log additional debug information if available
+            if "raw_response" in interpretation:
+                logger.debug("Raw OpenAI response: %s", interpretation["raw_response"])
+            
+            logger.error("🛑 Stopping execution due to interpretation failure")
+            return
+        
         coordination_plan = interpretation.get("coordination_plan", [])
         attributes = interpretation.get("domain_attributes", [])
         business_vocab = interpretation.get("business_vocabulary", [])
 
-        # 2. Execute coordination plan sequentially (future: parallelise here)
-        for task in coordination_plan:
-            agent_name = task.get("swea_agent") or task.get("agent")
-            task_type = task.get("task_type")
-            AgentCls = SWEA_REGISTRY.get(agent_name)
-            if AgentCls is None:
-                logger.warning("Unknown SWEA agent in plan: %s", agent_name)
-                continue
-            agent = AgentCls()
-            payload = {
-                "entity": "Student",  # Scenario 1 focus
-                "attributes": attributes,
-                "context": context,
-            }
-            logger.info("⚙️  Executing %s.%s", agent_name, task_type)
-            agent.handle_task(task_type, payload)
+        # Check if we have a valid coordination plan
+        if not coordination_plan:
+            logger.warning("⚠️  No coordination plan generated, skipping SWEA execution")
+        else:
+            # 2. Execute coordination plan sequentially (future: parallelise here)
+            for task in coordination_plan:
+                agent_name = task.get("swea_agent") or task.get("agent")
+                task_type = task.get("task_type") or task.get("task")
+                AgentCls = AGENT_REGISTRY.get(agent_name)
+                if AgentCls is None:
+                    logger.warning("⚠️  Unknown agent in plan: %s", agent_name)
+                    continue
+                
+                # Use existing student_bae instance for StudentBAE tasks, create new instances for SWEA agents
+                if agent_name == "StudentBAE":
+                    agent = self.student_bae
+                else:
+                    agent = AgentCls()
+                
+                # Build payload with all necessary data
+                task_payload = task.get("payload", {})
+                task_payload.update({
+                    "entity": "Student",  # Scenario 1 focus
+                    "attributes": attributes,
+                    "context": context,
+                })
+                
+                logger.info("⚙️  Executing %s.%s", agent_name, task_type)
+                result = agent.handle_task(task_type, task_payload)
+                
+                # Check for task execution errors
+                if result.get("success") is False or (result.get("error") and result.get("error") != False):
+                    error_msg = result.get("error_message") or result.get("error", "Unknown task execution error")
+                    logger.error("❌ Task execution failed for %s.%s: %s", agent_name, task_type, error_msg)
+                    # Continue with other tasks rather than stopping completely
+                else:
+                    logger.info("✅ Task %s.%s completed successfully", agent_name, task_type)
 
         # 3. Persist domain knowledge & vocab
         self.context_store.preserve_domain_knowledge("Student", {

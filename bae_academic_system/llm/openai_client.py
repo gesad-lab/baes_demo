@@ -7,6 +7,7 @@ except ModuleNotFoundError:
 from typing import Optional, Dict, Any
 import json
 import logging
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +23,23 @@ class OpenAIClient:
         self.client = openai.OpenAI(api_key=Config.OPENAI_API_KEY)
         self.model = Config.OPENAI_MODEL
         logger.info(f"Initialized OpenAI client with model: {self.model}")
+    
+    def _extract_json_from_response(self, response: str) -> str:
+        """Extract JSON from response that might be wrapped in markdown code blocks"""
+        # Remove markdown code blocks if present
+        if "```json" in response:
+            # Extract content between ```json and ```
+            match = re.search(r'```json\s*(.*?)\s*```', response, re.DOTALL)
+            if match:
+                return match.group(1).strip()
+        elif "```" in response:
+            # Extract content between ``` and ```
+            match = re.search(r'```\s*(.*?)\s*```', response, re.DOTALL)
+            if match:
+                return match.group(1).strip()
+        
+        # Return original response if no code blocks found
+        return response.strip()
     
     def generate_response(self, prompt: str, system_prompt: Optional[str] = None, 
                          temperature: float = 0.2, max_tokens: int = 2000) -> str:
@@ -125,12 +143,15 @@ class OpenAIClient:
         response = self.generate_domain_entity_response(prompt, entity)
         
         try:
-            return json.loads(response)
-        except json.JSONDecodeError:
+            json_content = self._extract_json_from_response(response)
+            return json.loads(json_content)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse semantic coherence validation as JSON: {str(e)}")
+            logger.error(f"Raw OpenAI response: {response}")
             return {
                 "is_semantically_coherent": False,
                 "coherence_score": 0,
-                "error": "Failed to parse validation response",
+                "error": f"Failed to parse validation response: {str(e)}",
                 "raw_response": response
             }
     
@@ -164,10 +185,13 @@ class OpenAIClient:
         response = self.generate_domain_entity_response(prompt, context=context)
         
         try:
-            return json.loads(response)
-        except json.JSONDecodeError:
+            json_content = self._extract_json_from_response(response)
+            return json.loads(json_content)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse business request interpretation as JSON: {str(e)}")
+            logger.error(f"Raw OpenAI response: {response}")
             return {
                 "intent": "parse_error",
-                "error": "Failed to parse business request",
+                "error": f"Failed to parse business request: {str(e)}",
                 "raw_response": response
             } 
