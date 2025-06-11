@@ -160,6 +160,12 @@ generated/routes/*.py
 generated/ui/*.py
 !generated/*/.gitkeep
 
+# Also ignore generated artefacts inside package directory
+bae_academic_system/generated/models/*.py
+bae_academic_system/generated/routes/*.py
+bae_academic_system/generated/ui/*.py
+!bae_academic_system/generated/*/.gitkeep
+
 # LLM API logs and temporary files
 llm/logs/
 *.openai.log
