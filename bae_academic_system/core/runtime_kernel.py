@@ -7,11 +7,9 @@ from typing import Dict, Type
 import argparse
 import logging
 
-from bae_academic_system.agents.student_bae import StudentBAE
-from bae_academic_system.agents.programmer_swea import ProgrammerSWEA
-from bae_academic_system.agents.database_swea import DatabaseSWEA
-from bae_academic_system.agents.frontend_swea import FrontendSWEA
-from bae_academic_system.core.context_store import ContextStore
+from core.enhanced_runtime_kernel import EnhancedRuntimeKernel
+from core.bae_registry import EnhancedBAERegistry
+from core.entity_recognizer import EntityRecognizer
 try:
     from bae_academic_system.config import Config
 except ModuleNotFoundError:
@@ -19,165 +17,53 @@ except ModuleNotFoundError:
 
 logger = logging.getLogger(__name__)
 
-# Mapping of agent names to their classes
-AGENT_REGISTRY: Dict[str, Type] = {
-    "StudentBAE": StudentBAE,
-    "ProgrammerSWEA": ProgrammerSWEA,
-    "DatabaseSWEA": DatabaseSWEA,
-    "FrontendSWEA": FrontendSWEA,
-}
-
-
 class RuntimeKernel:
-    """Simple sequential runtime kernel for Scenario 1.
-
-    Flow:
-    1. Interpret NL request with Student BAE.
-    2. Execute coordination plan sequentially via SWEA agents.
-    3. Persist domain knowledge & evolution to ContextStore.
-    4. Reload API/UI loaders so artefacts are live.
-    5. Start (or restart) FastAPI + Streamlit servers (optional).
-
-    Note: steps 2 & 5 are clear extension points for concurrency or
-    more advanced orchestration. See TODO markers below.
+    """
+    Legacy wrapper for Enhanced Runtime Kernel to maintain backward compatibility.
+    Delegates to EnhancedRuntimeKernel which supports multiple BAEs with entity recognition.
     """
 
     def __init__(self, context_store_path: str = "database/context_store.json"):
-        self.context_store = ContextStore(context_store_path)
-        self.student_bae = StudentBAE()
+        self.enhanced_kernel = EnhancedRuntimeKernel(context_store_path)
+        logger.info("RuntimeKernel initialized with Enhanced BAE support")
 
     # ------------------------------------------------------------------
-    # Public API
+    # Public API - Legacy compatibility methods
     # ------------------------------------------------------------------
     def run(self, natural_language_request: str, context: str = "academic", start_servers: bool = True):
-        logger.info("📥 Received request: %s", natural_language_request)
-
-        # 1. Business interpretation
-        interpretation = self.student_bae.handle_task(
-            "interpret_business_request",
-            {"request": natural_language_request, "context": context},
+        """Legacy compatibility method that delegates to Enhanced Runtime Kernel"""
+        logger.info("📥 Legacy run method - delegating to Enhanced Runtime Kernel")
+        
+        result = self.enhanced_kernel.process_natural_language_request(
+            natural_language_request, context, start_servers
         )
         
-        # Check for interpretation errors
-        if interpretation.get("success") is False or "error" in interpretation:
-            error_msg = interpretation.get("error", "Unknown interpretation error")
-            logger.error("❌ Failed to interpret business request: %s", error_msg)
-            
-            # Log additional debug information if available
-            if "raw_response" in interpretation:
-                logger.debug("Raw OpenAI response: %s", interpretation["raw_response"])
-            
-            logger.error("🛑 Stopping execution due to interpretation failure")
+        if not result.get("success", False):
+            logger.error("❌ Enhanced kernel processing failed: %s", result.get("message", "Unknown error"))
             return
         
-        coordination_plan = interpretation.get("coordination_plan", [])
-        attributes = interpretation.get("domain_attributes", [])
-        business_vocab = interpretation.get("business_vocabulary", [])
-
-        # Check if we have a valid coordination plan
-        if not coordination_plan:
-            logger.warning("⚠️  No coordination plan generated, skipping SWEA execution")
-        else:
-            # 2. Execute coordination plan sequentially (future: parallelise here)
-            for task in coordination_plan:
-                agent_name = task.get("swea_agent") or task.get("agent")
-                task_type = task.get("task_type") or task.get("task")
-                AgentCls = AGENT_REGISTRY.get(agent_name)
-                if AgentCls is None:
-                    logger.warning("⚠️  Unknown agent in plan: %s", agent_name)
-                    continue
-                
-                # Use existing student_bae instance for StudentBAE tasks, create new instances for SWEA agents
-                if agent_name == "StudentBAE":
-                    agent = self.student_bae
-                else:
-                    agent = AgentCls()
-                
-                # Build payload with all necessary data
-                task_payload = task.get("payload", {})
-                task_payload.update({
-                    "entity": "Student",  # Scenario 1 focus
-                    "attributes": attributes,
-                    "context": context,
-                })
-                
-                logger.info("⚙️  Executing %s.%s", agent_name, task_type)
-                result = agent.handle_task(task_type, task_payload)
-                
-                # Check for task execution errors
-                if result.get("success") is False or (result.get("error") and result.get("error") != False):
-                    error_msg = result.get("error_message") or result.get("error", "Unknown task execution error")
-                    logger.error("❌ Task execution failed for %s.%s: %s", agent_name, task_type, error_msg)
-                    # Continue with other tasks rather than stopping completely
-                else:
-                    logger.info("✅ Task %s.%s completed successfully", agent_name, task_type)
-
-        # 3. Persist domain knowledge & vocab
-        self.context_store.preserve_domain_knowledge("Student", {
-            "entity": "Student",
-            "core_attributes": attributes,
-            "business_rules": interpretation.get("business_rules", []),
-            "context": context,
-        })
-        self.context_store.store_business_vocabulary(context, business_vocab, "Student")
-
-        # 4. Reload loaders so new artefacts are available
-        self._reload_api_loader()
-        self._reload_ui_loader()
-
-        # 5. Optionally start servers (skipped in test mode)
-        if start_servers and not os.getenv("SKIP_SERVER_START"):
-            self._start_servers()
-
-        logger.info("✅ Scenario 1 generation completed.")
+        logger.info("✅ Legacy run method completed successfully via Enhanced Runtime Kernel")
 
     # ------------------------------------------------------------------
-    # Helpers
+    # Legacy Compatibility Properties
     # ------------------------------------------------------------------
-    def _reload_api_loader(self):
-        try:
-            from api import main as api_main
-        except ImportError:
-            logger.debug("FastAPI not installed or api.main unavailable; skipping reload.")
-            return
-        importlib.reload(api_main)
-        logger.info("🔄 API routes reloaded")
-
-    def _reload_ui_loader(self):
-        try:
-            from ui import app as ui_app
-        except ImportError:
-            logger.debug("Streamlit not installed or ui.app unavailable; skipping reload.")
-            return
-        importlib.reload(ui_app)
-        logger.info("🔄 UI modules reloaded")
-
-    def _start_servers(self):
-        # Simple subprocess calls; could be replaced by supervisor/async logic.
-        # NOTE: In production we may run these under a process manager.
-        project_root = Path(__file__).resolve().parents[2]
-
-        # Start/reload FastAPI server
-        api_cmd = [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "api.main:app",
-            "--host",
-            Config.API_HOST,
-            "--port",
-            str(Config.API_PORT),
-            "--reload",
-        ]
-        # Restart if already running? For now, we spawn a new one.
-        subprocess.Popen(api_cmd, cwd=project_root)  # pylint: disable=subprocess-popen-preexec-fn
-        logger.info("🚀 FastAPI server started at http://%s:%s", Config.API_HOST, Config.API_PORT)
-
-        # Start Streamlit UI
-        ui_file = project_root / "bae_academic_system" / "ui" / "app.py"
-        ui_cmd = ["streamlit", "run", str(ui_file), "--server.port", str(Config.UI_PORT)]
-        subprocess.Popen(ui_cmd, cwd=project_root)
-        logger.info("🎨 Streamlit UI started at http://%s:%s", Config.UI_HOST, Config.UI_PORT)
+    @property
+    def context_store(self):
+        """Legacy compatibility property"""
+        return self.enhanced_kernel.context_store
+    
+    @property
+    def student_bae(self):
+        """Legacy compatibility property for accessing StudentBAE"""
+        return self.enhanced_kernel.bae_registry.get_bae("student")
+    
+    def get_supported_entities(self):
+        """Get information about supported entities"""
+        return self.enhanced_kernel.get_supported_entities_info()
+    
+    def validate_request(self, request: str):
+        """Validate if a request can be handled"""
+        return self.enhanced_kernel.validate_entity_request(request)
 
 
 # ----------------------------------------------------------------------

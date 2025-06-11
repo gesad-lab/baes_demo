@@ -1,32 +1,38 @@
 import streamlit as st
 import requests
 
-st.title("Student Management System")
+API_URL = "http://localhost:8000/students"
 
-def add_student(name, registration_number, course):
-    response = requests.post("http://localhost:8000/students", json={
-        "name": name,
-        "registration_number": registration_number,
-        "course": course
-    })
+def create_student(student_data):
+    response = requests.post(API_URL, json=student_data)
     return response.status_code, response.json()
 
 def main():
-    st.header("Add New Student")
-    
-    name = st.text_input("Student Name", max_chars=50)
-    registration_number = st.text_input("Registration Number", max_chars=20)
-    course = st.selectbox("Course", ["Computer Science", "Mathematics", "Physics", "Chemistry", "Biology"])
-    
-    if st.button("Submit"):
-        if name and registration_number:
-            status_code, response = add_student(name, registration_number, course)
-            if status_code == 201:
-                st.success("Student added successfully!")
+    st.title("Student Management System")
+
+    with st.form(key='student_form'):
+        name = st.text_input("Student Name", max_chars=100)
+        code = st.text_input("Student Code", max_chars=10)
+        credits = st.number_input("Credits", min_value=1, max_value=30)
+        instructor = st.text_input("Instructor Name", max_chars=100)
+
+        submit_button = st.form_submit_button("Add Student")
+
+        if submit_button:
+            if not name or not code or not instructor:
+                st.error("Please fill in all fields.")
             else:
-                st.error("Failed to add student: " + response.get("detail", "Unknown error"))
-        else:
-            st.error("Please fill in all required fields.")
+                student_data = {
+                    "name": name,
+                    "code": code,
+                    "credits": credits,
+                    "instructor": instructor
+                }
+                status_code, response = create_student(student_data)
+                if status_code == 201:
+                    st.success("Student added successfully!")
+                else:
+                    st.error("Error adding student: " + response.get("detail", "Unknown error"))
 
 if __name__ == "__main__":
     main()

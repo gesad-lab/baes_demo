@@ -1,46 +1,47 @@
-from fastapi import FastAPI, HTTPException, Path
-from pydantic import BaseModel, Field, constr
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel, Field, constr, conint
 from typing import List
 
 app = FastAPI()
 
 class Student(BaseModel):
     name: constr(min_length=1, max_length=100) = Field(..., description="The full name of the student")
-    registration_number: constr(min_length=1, max_length=20) = Field(..., description="Unique registration number for the student")
-    course: constr(min_length=1, max_length=100) = Field(..., description="The course the student is enrolled in")
+    code: constr(min_length=1, max_length=10) = Field(..., description="Unique code identifying the student")
+    credits: conint(ge=0) = Field(..., description="Total credits earned by the student")
+    instructor: constr(min_length=1, max_length=100) = Field(..., description="Name of the instructor assigned to the student")
 
 students_db = []
 
 @app.post("/students/", response_model=Student, status_code=201)
 async def create_student(student: Student):
-    if any(s.registration_number == student.registration_number for s in students_db):
-        raise HTTPException(status_code=400, detail="Registration number already exists")
+    if any(s.code == student.code for s in students_db):
+        raise HTTPException(status_code=400, detail="Student code already exists")
     students_db.append(student)
     return student
 
 @app.get("/students/", response_model=List[Student])
-async def get_students():
-    return students_db
+async def read_students(skip: int = Query(0, ge=0), limit: int = Query(10, gt=0)):
+    return students_db[skip: skip + limit]
 
-@app.get("/students/{registration_number}", response_model=Student)
-async def get_student(registration_number: str = Path(..., description="The registration number of the student")):
+@app.get("/students/{student_code}", response_model=Student)
+async def read_student(student_code: str):
     for student in students_db:
-        if student.registration_number == registration_number:
+        if student.code == student_code:
             return student
     raise HTTPException(status_code=404, detail="Student not found")
 
-@app.put("/students/{registration_number}", response_model=Student)
-async def update_student(registration_number: str, updated_student: Student):
+@app.put("/students/{student_code}", response_model=Student)
+async def update_student(student_code: str, updated_student: Student):
     for index, student in enumerate(students_db):
-        if student.registration_number == registration_number:
+        if student.code == student_code:
             students_db[index] = updated_student
             return updated_student
     raise HTTPException(status_code=404, detail="Student not found")
 
-@app.delete("/students/{registration_number}", status_code=204)
-async def delete_student(registration_number: str):
+@app.delete("/students/{student_code}", status_code=204)
+async def delete_student(student_code: str):
     for index, student in enumerate(students_db):
-        if student.registration_number == registration_number:
+        if student.code == student_code:
             del students_db[index]
             return
     raise HTTPException(status_code=404, detail="Student not found")

@@ -7,7 +7,7 @@ from core.runtime_kernel import RuntimeKernel
 
 
 @pytest.mark.integration
-@patch('agents.student_bae.OpenAIClient')
+@patch('llm.openai_client.OpenAIClient')
 @patch('agents.programmer_swea.OpenAIClient')
 @patch('agents.frontend_swea.OpenAIClient')
 def test_full_scenario1_flow(mock_frontend_client, mock_programmer_client, mock_student_client, tmp_path, monkeypatch):
