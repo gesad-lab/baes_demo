@@ -1,0 +1,28 @@
+{
+  "domain_contexts": {},
+  "agent_memories": {},
+  "agents": {},
+  "business_vocabularies": {
+    "academic_Student": {
+      "context": "academic",
+      "entity_focus": "Student",
+      "vocabulary": [],
+      "timestamp": "2025-06-11T14:56:41.711139"
+    }
+  },
+  "entity_relationships": {},
+  "evolution_history": [],
+  "domain_knowledge": {
+    "Student": {
+      "entity": "Student",
+      "knowledge": {
+        "entity": "Student",
+        "core_attributes": [],
+        "business_rules": [],
+        "context": "academic"
+      },
+      "timestamp": "2025-06-11T14:56:41.710880"
+    }
+  },
+  "last_saved": "2025-06-11T14:56:41.711144"
+}

@@ -1,5 +1,5 @@
-from agents.base_agent import BaseAgent
-from llm.openai_client import OpenAIClient
+from bae_academic_system.agents.base_agent import BaseAgent
+from bae_academic_system.llm.openai_client import OpenAIClient
 from typing import Dict, Any, List
 import os
 

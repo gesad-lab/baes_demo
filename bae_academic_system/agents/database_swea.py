@@ -1,4 +1,4 @@
-from agents.base_agent import BaseAgent
+from bae_academic_system.agents.base_agent import BaseAgent
 from typing import Dict, Any, List
 import os
 import sqlite3

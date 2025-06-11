@@ -1,5 +1,9 @@
 from agents.base_agent import BaseAgent
-from llm.openai_client import OpenAIClient
+try:
+    from bae_academic_system.llm.openai_client import OpenAIClient
+except ModuleNotFoundError:
+    # Fallback for environments where 'bae_academic_system' isn't on sys.path
+    from llm.openai_client import OpenAIClient
 from typing import Dict, Any, List, Optional
 import json
 import logging

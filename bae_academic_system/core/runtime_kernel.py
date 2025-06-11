@@ -7,12 +7,15 @@ from typing import Dict, Type
 import argparse
 import logging
 
-from agents.student_bae import StudentBAE
-from agents.programmer_swea import ProgrammerSWEA
-from agents.database_swea import DatabaseSWEA
-from agents.frontend_swea import FrontendSWEA
-from core.context_store import ContextStore
-from config import Config
+from bae_academic_system.agents.student_bae import StudentBAE
+from bae_academic_system.agents.programmer_swea import ProgrammerSWEA
+from bae_academic_system.agents.database_swea import DatabaseSWEA
+from bae_academic_system.agents.frontend_swea import FrontendSWEA
+from bae_academic_system.core.context_store import ContextStore
+try:
+    from bae_academic_system.config import Config
+except ModuleNotFoundError:
+    from config import Config
 
 logger = logging.getLogger(__name__)
 

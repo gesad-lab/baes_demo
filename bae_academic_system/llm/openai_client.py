@@ -1,5 +1,9 @@
 import openai
-from config import Config
+
+try:
+    from bae_academic_system.config import Config
+except ModuleNotFoundError:
+    from config import Config
 from typing import Optional, Dict, Any
 import json
 import logging

@@ -12,8 +12,10 @@ import sys
 from unittest.mock import Mock, patch
 from typing import Dict, Any
 
-# Add the project root to Python path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Ensure repository root (two levels up) is in sys.path so 'bae_academic_system' package is importable
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
 
 @pytest.fixture
 def temp_database_path():

@@ -4,7 +4,10 @@ import glob
 import os
 from pathlib import Path
 
-from config import Config
+try:
+    from bae_academic_system.config import Config
+except ModuleNotFoundError:
+    from config import Config
 
 app = FastAPI(title="BAE Academic System API", version="0.1.0")
 

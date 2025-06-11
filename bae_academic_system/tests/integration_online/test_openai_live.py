@@ -1,7 +1,7 @@
 import re
 import pytest
 
-from llm.openai_client import OpenAIClient
+from bae_academic_system.llm.openai_client import OpenAIClient
 
 
 @pytest.mark.integration_online
