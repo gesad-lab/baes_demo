@@ -1,0 +1,126 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "baes-framework"
+version = "0.1.0"
+description = "Business Autonomous Entities Framework for adaptive system generation"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Anderson Martins Gomes", email = "your.email@example.com"}
+]
+keywords = [
+    "business-autonomous-entities", 
+    "llm-agents", 
+    "domain-driven-design",
+    "runtime-adaptation",
+    "semantic-coherence"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.3.7",
+    "pydantic>=2.5.0",
+    "python-dotenv>=1.0.0",
+    "jinja2>=3.1.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.3",
+    "pytest-mock>=3.12.0",
+    "pytest-cov>=4.1.0",
+    "pytest-xdist>=3.5.0",
+    "pytest-asyncio>=0.21.1",
+    "pytest-anyio>=3.7.1",
+]
+test = [
+    "pytest>=7.4.3",
+    "pytest-mock>=3.12.0",
+    "pytest-cov>=4.1.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/nosredna123/baes_demo"
+"Repository" = "https://github.com/nosredna123/baes_demo"
+"Documentation" = "https://github.com/nosredna123/baes_demo/blob/main/docs/"
+"Bug Tracker" = "https://github.com/nosredna123/baes_demo/issues"
+
+[project.scripts]
+baes-test = "run_tests:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["baes*"]
+exclude = ["tests*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--disable-warnings", 
+    "--tb=short",
+    "-v"
+]
+markers = [
+    "integration: Integration tests",
+    "unit: Unit tests", 
+    "scenario: Scenario tests",
+    "integration_online: Online integration tests with live API calls",
+    "slow: Slow running tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["baes"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+exclude = ["tests/"]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | \.pytest_cache
+  | __pycache__
+)/
+''' 

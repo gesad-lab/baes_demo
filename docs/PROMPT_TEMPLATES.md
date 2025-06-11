@@ -458,7 +458,7 @@ class TestStudentBAE:
     def test_generate_schema_failure(self, student_bae):
         # Test implementation
         
-    @patch('llm.openai_client.OpenAIClient.generate_response')
+    @patch('baes.llm.openai_client.OpenAIClient.generate_response')
     def test_with_mocked_llm(self, mock_response, student_bae):
         # Test implementation
 ```
