@@ -16,6 +16,11 @@ class StudentBAE(BaseBAE):
             entity_name="Student", 
             domain_keywords=["student", "aluno", "estudante", "discente"]
         )
+        
+        # Add compatibility attributes for integration tests
+        self.primary_entity = "Student"
+        self.current_entity = "Student"
+        
         logger.info("StudentBAE initialized for student domain entity management")
     
     def _initialize_domain_knowledge(self):

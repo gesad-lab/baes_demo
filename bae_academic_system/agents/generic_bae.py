@@ -1,6 +1,6 @@
-from bae_academic_system.agents.base_agent import BaseAgent
-from bae_academic_system.llm.openai_client import OpenAIClient
-from bae_academic_system.core.context_store import ContextStore
+from agents.base_agent import BaseAgent
+from llm.openai_client import OpenAIClient
+from core.context_store import ContextStore
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import logging
