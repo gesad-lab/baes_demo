@@ -125,9 +125,16 @@ class BaseBAE(BaseAgent):
         Return a JSON structure with:
         - interpreted_intent: what the business user wants
         - domain_operations: list of domain entity operations needed  
-        - swea_coordination: list of SWEA tasks to accomplish the request
+        - swea_coordination: list of SWEA task objects, each with "swea_agent" and "task_type" keys
         - business_vocabulary: key terms that must be preserved in technical implementation
         - entity_focus: confirm this is about {self.entity_name} entities
+        
+        Example swea_coordination format:
+        [
+            {{"swea_agent": "ProgrammerSWEA", "task_type": "generate_model"}},
+            {{"swea_agent": "ProgrammerSWEA", "task_type": "generate_api"}},
+            {{"swea_agent": "FrontendSWEA", "task_type": "generate_ui"}}
+        ]
         """
         
         response = self.llm.generate_domain_entity_response(prompt, self.entity_name)
@@ -136,6 +143,36 @@ class BaseBAE(BaseAgent):
         try:
             interpretation = json.loads(cleaned_response)
             interpretation["entity"] = self.entity_name
+            
+            # Ensure swea_coordination is properly formatted as list of dicts
+            if "swea_coordination" in interpretation:
+                coordination = interpretation["swea_coordination"]
+                if isinstance(coordination, list):
+                    # Fix any string items or improperly formatted items
+                    fixed_coordination = []
+                    for item in coordination:
+                        if isinstance(item, str):
+                            # Convert string to dict format
+                            fixed_coordination.append({
+                                "swea_agent": "ProgrammerSWEA",
+                                "task_type": "generate_component"
+                            })
+                        elif isinstance(item, dict):
+                            # Ensure required keys exist
+                            if "swea_agent" not in item:
+                                item["swea_agent"] = "ProgrammerSWEA"
+                            if "task_type" not in item:
+                                item["task_type"] = "generate_component"
+                            fixed_coordination.append(item)
+                    interpretation["swea_coordination"] = fixed_coordination
+            else:
+                # Provide default coordination plan
+                interpretation["swea_coordination"] = [
+                    {"swea_agent": "ProgrammerSWEA", "task_type": "generate_model"},
+                    {"swea_agent": "ProgrammerSWEA", "task_type": "generate_api"},
+                    {"swea_agent": "FrontendSWEA", "task_type": "generate_ui"}
+                ]
+            
             self.update_memory("last_interpretation", interpretation)
             return interpretation
         except json.JSONDecodeError:
@@ -304,31 +341,40 @@ class BaseBAE(BaseAgent):
         artifact_type = payload.get("artifact_type", "")
         
         prompt = f"""
-        As the {self.entity_name} BAE, validate this {artifact_type} artifact for domain rule compliance:
+        As the {self.entity_name} BAE (Business Autonomous Entity), validate this {artifact_type} artifact for domain rule compliance.
         
-        Artifact Code:
-        {artifact_code}
-        
+        VALIDATION CONTEXT:
         Entity Focus: {self.entity_name}
         Business Rules: {'; '.join(self._get_business_rules())}
+        Expected Vocabulary: {', '.join(self._extract_business_vocabulary())}
+        Domain Keywords: {', '.join(self.domain_keywords)}
         
-        Check for:
-        1. Semantic coherence with {self.entity_name} domain entity
-        2. Business vocabulary preservation
-        3. Domain rule compliance specific to {self.entity_name}
-        4. Business logic consistency
-        5. Proper focus on {self.entity_name} entity operations
+        ARTIFACT TO VALIDATE:
+        {artifact_code}
         
-        Return JSON with validation results:
+        VALIDATION CRITERIA:
+        1. Semantic coherence with {self.entity_name} domain entity representation
+        2. Business vocabulary preservation (uses {self.entity_name} terminology)
+        3. Domain rule compliance specific to {self.entity_name} business logic
+        4. Business logic consistency and data integrity
+        5. Proper focus on {self.entity_name} entity operations and behaviors
+        6. Code quality and maintainability for domain entity
+        
+        IMPORTANT: You must return a valid JSON object. Here's the exact format:
+        
         {{
-            "is_valid": boolean,
-            "entity_focus_correct": boolean,
-            "semantic_coherence_score": 0-100,
-            "business_vocabulary_preserved": boolean,
-            "domain_rules_followed": boolean,
-            "issues": [list of issues if any],
-            "recommendations": [list of improvements]
+            "is_valid": true,
+            "entity_focus_correct": true,
+            "semantic_coherence_score": 90,
+            "business_vocabulary_preserved": true,
+            "domain_rules_followed": true,
+            "issues": [],
+            "recommendations": ["Maintain focus on {self.entity_name} domain representation"],
+            "validation_summary": "Artifact maintains excellent domain coherence for {self.entity_name} entity"
         }}
+        
+        If there are issues, set the relevant boolean fields to false and include specific issues in the "issues" array.
+        Always return valid JSON that can be parsed successfully. Do not include any text outside the JSON object.
         """
         
         validation_response = self.llm.generate_domain_entity_response(prompt, self.entity_name)

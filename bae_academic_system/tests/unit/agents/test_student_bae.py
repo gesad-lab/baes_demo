@@ -27,7 +27,7 @@ class TestStudentBAE:
             assert student_bae.current_schema == {}
             assert student_bae.context_configurations == {}
     
-    @patch('llm.openai_client.OpenAIClient')
+    @patch('bae_academic_system.agents.base_bae.OpenAIClient')
     def test_interpret_business_request_success(self, mock_openai_client):
         """Test successful business request interpretation"""
         # Setup mock response
@@ -69,24 +69,25 @@ class TestStudentBAE:
                 assert "student" in business_vocab_lower
             assert result["entity"] == "Student"
     
-    @patch('llm.openai_client.OpenAIClient')
-    def test_generate_schema_success(self, mock_openai_client):
+    def test_generate_schema_success(self):
         """Test successful schema generation"""
+        # Create StudentBAE and manually mock its LLM client
+        student_bae = StudentBAE()
+        
         # Setup mock response
         mock_client_instance = Mock()
-        mock_client_instance.generate_domain_entity_response.return_value = """
-from pydantic import BaseModel
+        expected_code = """from pydantic import BaseModel
 from typing import Optional
 
 class Student(BaseModel):
     name: str
     registration_number: str
-    course: str
-"""
-        mock_openai_client.return_value = mock_client_instance
+    course: str"""
+        mock_client_instance.generate_domain_entity_response.return_value = expected_code
         
-        # Test
-        student_bae = StudentBAE()
+        # Replace the LLM client with our mock
+        student_bae.llm = mock_client_instance
+        
         payload = {
             "attributes": ["name: str", "registration_number: str", "course: str"],
             "context": "academic"
@@ -99,8 +100,11 @@ class Student(BaseModel):
         assert result["context"] == "academic"
         assert len(result["attributes"]) == 3
         assert "business_rules" in result
+        
+        # Verify the mock was called
+        mock_client_instance.generate_domain_entity_response.assert_called_once()
     
-    @patch('llm.openai_client.OpenAIClient')
+    @patch('bae_academic_system.agents.base_bae.OpenAIClient')
     @patch('builtins.open', mock_open(read_data="Template with {attributes} and {context}"))
     def test_generate_schema_with_prompt_template(self, mock_openai_client):
         """Test schema generation using prompt template"""
@@ -124,7 +128,7 @@ class Student(BaseModel):
         assert isinstance(result["code"], str)
         assert len(result["code"]) > 0
     
-    @patch('llm.openai_client.OpenAIClient')
+    @patch('bae_academic_system.agents.base_bae.OpenAIClient')
     def test_evolve_schema_success(self, mock_openai_client):
         """Test successful schema evolution"""
         # Setup mock
@@ -163,7 +167,7 @@ class Student(BaseModel):
         assert "gpa: float" in result["attributes"]
         assert "evolution_history" in result
     
-    @patch('llm.openai_client.OpenAIClient')
+    @patch('bae_academic_system.agents.base_bae.OpenAIClient')
     def test_evolve_schema_no_current_schema(self, mock_openai_client):
         """Test schema evolution without current schema - should create new schema"""
         mock_client_instance = Mock()
@@ -221,13 +225,16 @@ class Student(BaseModel):
             assert result["coordination_plan"][0]["swea_agent"] == "ProgrammerSWEA"
             assert result["coordination_plan"][1]["swea_agent"] == "FrontendSWEA"
     
-    @patch('llm.openai_client.OpenAIClient')
-    def test_validate_domain_rules_success(self, mock_openai_client):
+    def test_validate_domain_rules_success(self):
         """Test successful domain rules validation"""
-        # Setup mock response
+        # Create StudentBAE and manually mock its LLM client
+        student_bae = StudentBAE()
+        
+        # Setup mock response - ensure this exact response is used
         mock_client_instance = Mock()
         mock_response = """{
             "is_valid": true,
+            "entity_focus_correct": true,
             "semantic_coherence_score": 85,
             "business_vocabulary_preserved": true,
             "domain_rules_followed": true,
@@ -235,10 +242,10 @@ class Student(BaseModel):
             "recommendations": ["Consider adding more validation"]
         }"""
         mock_client_instance.generate_domain_entity_response.return_value = mock_response
-        mock_openai_client.return_value = mock_client_instance
         
-        # Test
-        student_bae = StudentBAE()
+        # Replace the LLM client with our mock
+        student_bae.llm = mock_client_instance
+        
         payload = {
             "artifact_code": "class Student(BaseModel): name: str",
             "artifact_type": "pydantic_model"
@@ -246,29 +253,29 @@ class Student(BaseModel):
         
         result = student_bae.handle("validate_domain_rules", payload)
         
-        # Check if the result contains error (indicating JSON parse failure) or success
-        if "error" in result:
-            # If there's a parsing error, the LLM response didn't return valid JSON
-            assert "Failed to parse validation response" in result["error"]
-            # With fallback, is_valid should be True
-            assert result["is_valid"] == True
-        else:
-            # If successful, check the expected fields
-            assert result["is_valid"] == True
-            assert result["semantic_coherence_score"] == 85
-            assert result["business_vocabulary_preserved"] == True
-            assert result["domain_rules_followed"] == True
+        # With proper mocking, the response should be exactly what we expect
+        assert result["is_valid"] == True
+        assert result["semantic_coherence_score"] == 85
+        assert result["business_vocabulary_preserved"] == True
+        assert result["domain_rules_followed"] == True
+        assert result["entity"] == "Student"
+        assert "error" not in result  # Should not have any errors with proper mock
+        
+        # Verify the mock was called
+        mock_client_instance.generate_domain_entity_response.assert_called_once()
     
-    @patch('llm.openai_client.OpenAIClient')
-    def test_validate_domain_rules_json_error(self, mock_openai_client):
+    def test_validate_domain_rules_json_error(self):
         """Test domain rules validation with JSON parsing error"""
-        # Setup mock response with invalid JSON
+        # Create StudentBAE and manually mock its LLM client
+        student_bae = StudentBAE()
+        
+        # Setup mock response with invalid JSON to trigger fallback
         mock_client_instance = Mock()
         mock_client_instance.generate_domain_entity_response.return_value = "Invalid JSON response"
-        mock_openai_client.return_value = mock_client_instance
         
-        # Test
-        student_bae = StudentBAE()
+        # Replace the LLM client with our mock
+        student_bae.llm = mock_client_instance
+        
         payload = {
             "artifact_code": "class Student(BaseModel): name: str",
             "artifact_type": "pydantic_model"
@@ -276,10 +283,15 @@ class Student(BaseModel):
         
         result = student_bae.handle("validate_domain_rules", payload)
         
-        # With fallback validation, is_valid should be True but error should be present
+        # With proper mock and fallback implementation, expect consistent response
         assert result["is_valid"] == True  # Fallback provides True
+        assert result["entity"] == "Student"
         assert "error" in result
         assert "Failed to parse validation response" in result["error"]
+        assert "raw_response" in result  # Should include raw response for debugging
+        
+        # Verify the mock was called
+        mock_client_instance.generate_domain_entity_response.assert_called_once()
     
     def test_unknown_task_handling(self):
         """Test handling of unknown tasks"""
