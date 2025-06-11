@@ -62,6 +62,10 @@ class BaseAgent(ABC):
         """Retrieve full memory item with metadata"""
         return self.memory.get(key, {})
     
+    def get_full_memory(self, key: str) -> Dict[str, Any]:
+        """Retrieve full memory item with metadata (alias for get_memory_with_metadata)"""
+        return self.get_memory_with_metadata(key)
+    
     def get_memory_keys(self) -> List[str]:
         """Get all memory keys"""
         return list(self.memory.keys())
@@ -94,13 +98,13 @@ class BaseAgent(ABC):
         
         # Store in memory
         if "interactions" not in self.memory:
-            self.memory["interactions"] = {"value": [], "timestamp": datetime.now().isoformat()}
+            self.memory["interactions"] = []
         
-        self.memory["interactions"]["value"].append(interaction)
+        self.memory["interactions"].append(interaction)
         
         # Keep only last 50 interactions to prevent memory bloat
-        if len(self.memory["interactions"]["value"]) > 50:
-            self.memory["interactions"]["value"] = self.memory["interactions"]["value"][-50:]
+        if len(self.memory["interactions"]) > 50:
+            self.memory["interactions"] = self.memory["interactions"][-50:]
         
         # Log based on success
         if success:
@@ -111,12 +115,7 @@ class BaseAgent(ABC):
     def get_interaction_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get interaction history"""
         interactions = self.get_memory("interactions", [])
-        if isinstance(interactions, list):
-            history = interactions
-        else:
-            history = interactions.get("value", [])
-        
-        return history[-limit:] if limit else history
+        return interactions[-limit:] if limit else interactions
     
     def get_agent_status(self) -> Dict[str, Any]:
         """Get current agent status and statistics"""
@@ -152,7 +151,7 @@ class BaseAgent(ABC):
         """Create standardized error response"""
         error_response = {
             "success": False,
-            "error": True,
+            "error": error_message,  # Use error message string instead of boolean
             "error_type": error_type,
             "error_message": error_message,
             "task": task,

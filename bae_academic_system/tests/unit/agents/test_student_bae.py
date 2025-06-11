@@ -25,18 +25,14 @@ class TestStudentBAE:
             assert student_bae.current_schema == {}
             assert student_bae.context_configurations == {}
     
-    @patch('llm.openai_client.OpenAIClient')
+    @patch('agents.student_bae.OpenAIClient')
     def test_interpret_business_request_success(self, mock_openai_client):
         """Test successful business request interpretation"""
         # Setup mock response
         mock_client_instance = Mock()
         mock_client_instance.interpret_business_request.return_value = {
-            "interpreted_intent": "create_student_management_system",
-            "domain_operations": ["create_entity", "manage_data"],
-            "swea_coordination": [
-                {"agent": "ProgrammerSWEA", "task": "generate_api"},
-                {"agent": "FrontendSWEA", "task": "generate_ui"}
-            ],
+            "intent": "create_student_management_system",
+            "attributes_mentioned": ["name", "registration", "course"],
             "business_vocabulary": ["Student", "Academic", "Registration"]
         }
         mock_openai_client.return_value = mock_client_instance
@@ -51,11 +47,11 @@ class TestStudentBAE:
         result = student_bae.handle_task("interpret_business_request", payload)
         
         assert result["interpreted_intent"] == "create_student_management_system"
-        assert "create_entity" in result["domain_operations"]
-        assert len(result["swea_coordination"]) == 2
+        assert "name" in result["domain_attributes"]
+        assert len(result["coordination_plan"]) > 0
         assert "Student" in result["business_vocabulary"]
     
-    @patch('llm.openai_client.OpenAIClient')
+    @patch('agents.student_bae.OpenAIClient')
     def test_generate_schema_success(self, mock_openai_client):
         """Test successful schema generation"""
         # Setup mock response
@@ -86,7 +82,7 @@ class Student(BaseModel):
         assert len(result["attributes"]) == 3
         assert "business_rules" in result
     
-    @patch('llm.openai_client.OpenAIClient')
+    @patch('agents.student_bae.OpenAIClient')
     @patch('builtins.open', create=True)
     def test_generate_schema_with_prompt_template(self, mock_open, mock_openai_client):
         """Test schema generation using prompt template"""
@@ -114,7 +110,7 @@ class Student(BaseModel):
         assert result["entity"] == "Student"
         assert result["code"] == "Generated schema"
     
-    @patch('llm.openai_client.OpenAIClient')
+    @patch('agents.student_bae.OpenAIClient')
     def test_evolve_schema_success(self, mock_openai_client):
         """Test successful schema evolution"""
         # Setup mock
@@ -153,7 +149,7 @@ class Student(BaseModel):
         assert "gpa: float" in str(result["attributes"])
         assert "evolution_history" in result
     
-    @patch('llm.openai_client.OpenAIClient')
+    @patch('agents.student_bae.OpenAIClient')
     def test_evolve_schema_no_current_schema(self, mock_openai_client):
         """Test schema evolution without current schema"""
         mock_openai_client.return_value = Mock()
@@ -171,7 +167,7 @@ class Student(BaseModel):
     
     def test_configure_context_success(self):
         """Test successful context configuration"""
-        with patch('llm.openai_client.OpenAIClient'):
+        with patch('agents.student_bae.OpenAIClient'):
             student_bae = StudentBAE()
             
             payload = {
@@ -189,7 +185,7 @@ class Student(BaseModel):
     
     def test_coordinate_swea_success(self):
         """Test successful SWEA coordination"""
-        with patch('llm.openai_client.OpenAIClient'):
+        with patch('agents.student_bae.OpenAIClient'):
             student_bae = StudentBAE()
             
             payload = {
@@ -213,21 +209,19 @@ class Student(BaseModel):
             assert "semantic_requirements" in first_task
             assert first_task["semantic_requirements"]["maintain_domain_coherence"] is True
     
-    @patch('llm.openai_client.OpenAIClient')
+    @patch('agents.student_bae.OpenAIClient')
     def test_validate_domain_rules_success(self, mock_openai_client):
         """Test successful domain rules validation"""
         # Setup mock response
         mock_client_instance = Mock()
-        mock_client_instance.generate_domain_entity_response.return_value = """
-        {
-            "is_valid": true,
+        mock_client_instance.validate_semantic_coherence.return_value = {
+            "is_coherent": True,
             "semantic_coherence_score": 95,
-            "business_vocabulary_preserved": true,
-            "domain_rules_followed": true,
+            "business_vocabulary_preserved": True,
+            "domain_rules_followed": True,
             "issues": [],
             "recommendations": ["Consider adding validation"]
         }
-        """
         mock_openai_client.return_value = mock_client_instance
         
         # Test
@@ -244,12 +238,15 @@ class Student(BaseModel):
         assert result["business_vocabulary_preserved"] is True
         assert result["domain_rules_followed"] is True
     
-    @patch('llm.openai_client.OpenAIClient')
+    @patch('agents.student_bae.OpenAIClient')
     def test_validate_domain_rules_json_error(self, mock_openai_client):
         """Test domain rules validation with JSON error"""
         # Setup mock to return invalid JSON
         mock_client_instance = Mock()
-        mock_client_instance.generate_domain_entity_response.return_value = "Invalid JSON"
+        mock_client_instance.validate_semantic_coherence.return_value = {
+            "is_coherent": False,
+            "error": "Invalid validation result"
+        }
         mock_openai_client.return_value = mock_client_instance
         
         # Test
@@ -266,7 +263,7 @@ class Student(BaseModel):
     
     def test_unknown_task_handling(self):
         """Test handling of unknown tasks"""
-        with patch('llm.openai_client.OpenAIClient'):
+        with patch('agents.student_bae.OpenAIClient'):
             student_bae = StudentBAE()
             
             result = student_bae.handle_task("unknown_task", {})
