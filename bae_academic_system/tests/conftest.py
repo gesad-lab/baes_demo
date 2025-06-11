@@ -28,7 +28,7 @@ def temp_database_path():
 @pytest.fixture
 def mock_openai_client():
     """Mock OpenAI client for testing without API calls"""
-    with patch('llm.openai_client.OpenAIClient') as mock_client:
+    with patch('agents.student_bae.OpenAIClient') as mock_client:
         mock_instance = Mock()
         
         # Mock successful responses
