@@ -167,6 +167,20 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "slow: Tests that take longer to run"
     )
+    config.addinivalue_line(
+        "markers", "integration_online: Tests that hit live external services (OpenAI)"
+    )
+
+# ---------------------------------------------------------------------------
+#  Optional online-integration control
+# ---------------------------------------------------------------------------
+
+def pytest_runtest_setup(item):
+    if "integration_online" in item.keywords:
+        if os.getenv("RUN_ONLINE", "0") != "1":
+            pytest.skip("Set RUN_ONLINE=1 to run live OpenAI tests")
+        if not os.getenv("OPENAI_API_KEY"):
+            pytest.skip("OPENAI_API_KEY not set in environment")
 
 # Scenario 1 specific fixtures
 @pytest.fixture
