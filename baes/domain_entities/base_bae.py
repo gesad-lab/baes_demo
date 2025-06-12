@@ -167,8 +167,9 @@ class BaseBae(BaseAgent):
                             fixed_coordination.append(item)
                     interpretation["swea_coordination"] = fixed_coordination
             else:
-                # Provide default coordination plan
+                # Provide default coordination plan including database setup
                 interpretation["swea_coordination"] = [
+                    {"swea_agent": "DatabaseSWEA", "task_type": "setup_database"},
                     {"swea_agent": "ProgrammerSWEA", "task_type": "generate_model"},
                     {"swea_agent": "ProgrammerSWEA", "task_type": "generate_api"},
                     {"swea_agent": "FrontendSWEA", "task_type": "generate_ui"},

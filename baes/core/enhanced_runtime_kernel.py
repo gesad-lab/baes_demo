@@ -11,6 +11,7 @@ from baes.core.bae_registry import EnhancedBAERegistry
 from baes.core.context_store import ContextStore
 from baes.core.entity_recognizer import EntityRecognizer
 from baes.core.managed_system_manager import ManagedSystemManager
+from baes.swea_agents.database_swea import DatabaseSWEA
 from baes.swea_agents.frontend_swea import FrontendSWEA
 from baes.swea_agents.programmer_swea import ProgrammerSWEA
 
@@ -64,6 +65,7 @@ class EnhancedRuntimeKernel:
         self.managed_system_manager = ManagedSystemManager()
 
         # SWEA agents (not domain-specific, coordinated by BAEs)
+        self.database_swea = DatabaseSWEA()
         self.programmer_swea = ProgrammerSWEA()
         self.frontend_swea = FrontendSWEA()
 
@@ -236,8 +238,10 @@ class EnhancedRuntimeKernel:
                 agent = self.programmer_swea
             elif swea_agent_lower in ["frontend", "frontendswea", "frontend_swea"]:
                 agent = self.frontend_swea
+            elif swea_agent_lower in ["database", "databaseswea", "database_swea"]:
+                agent = self.database_swea
             else:
-                available_agents = ["ProgrammerSWEA", "FrontendSWEA"]
+                available_agents = ["ProgrammerSWEA", "FrontendSWEA", "DatabaseSWEA"]
                 logger.error("❌ Unknown SWEA agent: %s", swea_agent)
                 raise UnknownSWEAAgentError(swea_agent, available_agents)
 
