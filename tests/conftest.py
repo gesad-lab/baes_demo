@@ -43,7 +43,24 @@ def mock_openai_client():
 
         # Mock successful responses
         mock_instance.generate_response.return_value = "Mocked response"
-        mock_instance.generate_domain_entity_response.return_value = """
+
+        # Mock for schema generation
+        def mock_generate_domain_entity_response(prompt, entity_name):
+            if "validate" in prompt.lower() and "json" in prompt.lower():
+                # Return JSON validation response
+                return """{
+                    "is_valid": true,
+                    "entity_focus_correct": true,
+                    "semantic_coherence_score": 95,
+                    "business_vocabulary_preserved": true,
+                    "domain_rules_followed": true,
+                    "issues": [],
+                    "recommendations": ["Excellent domain coherence maintained"],
+                    "validation_summary": "Artifact maintains excellent domain coherence for Student entity"
+                }"""
+            else:
+                # Return schema generation response
+                return """
 from pydantic import BaseModel
 from typing import Optional
 
@@ -52,6 +69,11 @@ class Student(BaseModel):
     registration_number: str
     course: str
 """
+
+        mock_instance.generate_domain_entity_response.side_effect = (
+            mock_generate_domain_entity_response
+        )
+
         mock_instance.interpret_business_request.return_value = {
             "intent": "create_student_management_system",
             "entity_focus": "Student",
@@ -93,13 +115,35 @@ def mock_all_openai_clients():
         # Standard responses for all clients
         mock_instance.generate_response.return_value = "# Generated code"
         mock_instance.generate_code_with_domain_focus.return_value = "# Domain-focused code"
-        mock_instance.generate_domain_entity_response.return_value = """
+
+        # Mock for schema generation and validation
+        def mock_generate_domain_entity_response(prompt, entity_name):
+            if "validate" in prompt.lower() and "json" in prompt.lower():
+                # Return JSON validation response
+                return """{
+                    "is_valid": true,
+                    "entity_focus_correct": true,
+                    "semantic_coherence_score": 95,
+                    "business_vocabulary_preserved": true,
+                    "domain_rules_followed": true,
+                    "issues": [],
+                    "recommendations": ["Excellent domain coherence maintained"],
+                    "validation_summary": "Artifact maintains excellent domain coherence for Student entity"
+                }"""
+            else:
+                # Return schema generation response
+                return """
 from pydantic import BaseModel
 
 class Student(BaseModel):
     name: str
     email: str
         """
+
+        mock_instance.generate_domain_entity_response.side_effect = (
+            mock_generate_domain_entity_response
+        )
+
         mock_instance.interpret_business_request.return_value = {
             "intent": "create_student_management_system",
             "entity_focus": "Student",
