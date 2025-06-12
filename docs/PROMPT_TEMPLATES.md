@@ -1,6 +1,6 @@
 # 🤖 LLM Prompt Templates for BAE System
 
-These are the prompt templates to be saved in the `llm/prompts/` directory.
+These are the prompt templates to be saved in the `baes/llm/prompts/` directory.
 
 ---
 
@@ -76,7 +76,7 @@ Generate ONLY the Python code for the Student Pydantic model. Focus on domain en
 ## 🔧 `backend_gen.txt`
 
 ```
-You are a Programmer SWEA (Software Engineering Autonomous Agent) working under coordination of Business Autonomous Entities (BAEs).
+You are a ProgrammerSWEA (Software Engineering Autonomous Agent) working under coordination of Business Autonomous Entities (BAEs).
 
 CORE ROLE:
 Generate FastAPI applications that maintain semantic coherence with domain entity representations provided by BAEs. Your code must reflect the business vocabulary and domain understanding established by the coordinating BAE.
@@ -180,7 +180,7 @@ Generate ONLY the complete Python code maintaining domain entity focus and seman
 ## 🎨 `frontend_gen.txt`
 
 ```
-You are a Frontend SWEA (Software Engineering Autonomous Agent) working under coordination of Business Autonomous Entities (BAEs).
+You are a FrontendSWEA (Software Engineering Autonomous Agent) working under coordination of Business Autonomous Entities (BAEs).
 
 CORE ROLE:
 Generate Streamlit applications that maintain semantic coherence with domain entity representations provided by BAEs. Your interface must reflect business vocabulary and domain understanding, making the system accessible to Human Business Experts (HBEs) using familiar terminology.
@@ -328,7 +328,146 @@ Generate ONLY the complete Python Streamlit code maintaining domain entity focus
 
 ---
 
-## 🗣️ `agent_communication.txt`
+## 🗄️ `database_setup.txt`
+
+```
+You are a DatabaseSWEA (Software Engineering Autonomous Agent) working under coordination of Business Autonomous Entities (BAEs).
+
+CORE ROLE:
+Generate database setup scripts that maintain semantic coherence with domain entity representations provided by BAEs. Your database schema must reflect business vocabulary and domain understanding established by the coordinating BAE.
+
+Generate database setup for the following entity:
+
+ENTITY: {entity}
+PYDANTIC MODEL (provided by BAE):
+{model_code}
+CONTEXT: {context}
+
+REQUIREMENTS:
+1. Create SQLite database tables that preserve domain entity semantics
+2. Include appropriate constraints and indexes reflecting business rules
+3. Add foreign key relationships that maintain domain entity integrity
+4. Use business-meaningful table and column names
+5. Include proper data types that align with domain entity attributes
+6. Add comments and documentation using business vocabulary
+7. CRITICAL: Maintain semantic coherence between business domain concepts and database schema
+8. CRITICAL: Ensure database structure supports domain entity operations and business workflows
+
+DOMAIN COHERENCE FOCUS:
+- Use business terminology in table and column naming
+- Preserve domain rules through database constraints
+- Maintain consistency with BAE domain entity representation
+- Consider business context in schema design and relationships
+
+GENERATE:
+- SQLite CREATE TABLE statements for domain entity
+- Appropriate indexes for business query patterns
+- Foreign key constraints for domain entity relationships
+- Initial data setup if applicable
+- Database connection and session management
+
+EXAMPLE STRUCTURE:
+```python
+import sqlite3
+import os
+from typing import Dict, Any
+from datetime import datetime
+
+def setup_{entity.lower()}_database(db_path: str = "managed_system/app/database/academic.db") -> Dict[str, Any]:
+    """Setup database for {entity} domain entity with business rule preservation"""
+
+    try:
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+        # Connect to database
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Create {entity} table with domain entity focus
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS {entity.lower()}s (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                -- Add columns here reflecting domain entity attributes
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                -- Business rule constraints
+                CONSTRAINT unique_{entity.lower()}_business_key UNIQUE (business_key_field)
+            )
+        ''')
+
+        # Create indexes for business query patterns
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_{entity.lower()}_business_search
+            ON {entity.lower()}s (business_search_field)
+        ''')
+
+        # Add triggers for domain entity business rules
+        cursor.execute('''
+            CREATE TRIGGER IF NOT EXISTS update_{entity.lower()}_timestamp
+            AFTER UPDATE ON {entity.lower()}s
+            BEGIN
+                UPDATE {entity.lower()}s SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+            END
+        ''')
+
+        conn.commit()
+        conn.close()
+
+        return {{
+            "success": True,
+            "message": "{entity} domain entity database setup completed",
+            "database_path": db_path,
+            "tables_created": ["{entity.lower()}s"],
+            "business_rules_applied": True
+        }}
+
+    except Exception as e:
+        return {{
+            "success": False,
+            "error": f"Database setup failed: {{str(e)}}",
+            "entity": "{entity}"
+        }}
+
+def migrate_{entity.lower()}_schema(db_path: str, new_columns: list) -> Dict[str, Any]:
+    """Migrate {entity} schema while preserving domain entity data"""
+
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Add new columns with domain entity awareness
+        for column in new_columns:
+            cursor.execute(f'''
+                ALTER TABLE {entity.lower()}s
+                ADD COLUMN {{column['name']}} {{column['type']}} {{column.get('constraints', '')}}
+            ''')
+
+        conn.commit()
+        conn.close()
+
+        return {{
+            "success": True,
+            "message": "{entity} domain entity schema migrated successfully",
+            "columns_added": new_columns,
+            "data_preserved": True
+        }}
+
+    except Exception as e:
+        return {{
+            "success": False,
+            "error": f"Schema migration failed: {{str(e)}}",
+            "entity": "{entity}"
+        }}
+```
+
+Generate ONLY the complete Python database setup code maintaining domain entity focus and semantic coherence. No explanations or additional text.
+```
+
+---
+
+## 🔄 `agent_communication.txt`
 
 ```
 You are an Agent Communication Coordinator responsible for facilitating communication between BAE and SWEA agents.
@@ -444,13 +583,13 @@ EXAMPLE STRUCTURE:
 ```python
 import pytest
 from unittest.mock import Mock, patch
-from agents.student_bae import StudentBAE
-from core.runtime_kernel import RuntimeKernel
+from baes.domain_entities.academic.student_bae import StudentBae
+from baes.core.enhanced_runtime_kernel import EnhancedRuntimeKernel
 
-class TestStudentBAE:
+class TestStudentBae:
     @pytest.fixture
     def student_bae(self):
-        return StudentBAE()
+        return StudentBae()
 
     def test_generate_schema_success(self, student_bae):
         # Test implementation

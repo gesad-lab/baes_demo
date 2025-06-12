@@ -22,15 +22,16 @@ For complete scenario details, see: `docs/PROOF_OF_CONCEPT.md`
 ## 🏗️ ARCHITECTURE OVERVIEW
 
 ```
-HBE (Human Business Expert) → Runtime Kernel → [Student BAE] → [SWEA Agents] → Generated System
-                                                      ↓
-                                               [Programmer Agent]
-                                               [Frontend Agent]
-                                                      ↓
-                                               [FastAPI + Streamlit + SQLite]
+HBE (Human Business Expert) → Enhanced Runtime Kernel → [Student BAE] → [SWEA Agents] → Managed System
+                                                              ↓
+                                                       [DatabaseSWEA]
+                                                       [ProgrammerSWEA]
+                                                       [FrontendSWEA]
+                                                              ↓
+                                                       [FastAPI + Streamlit + SQLite]
 ```
 
-**Key Innovation**: Unlike traditional LMA systems that simulate software engineering roles, this architecture centers on Business Autonomous Entities (BAEs) that represent domain entities (like "Student", "Course", "Professor") as autonomous agents responsible for their semantic modeling, persistence, interface generation, and coordination with auxiliary agents.
+**Key Innovation**: Unlike traditional LMA systems that simulate software engineering roles, this architecture centers on Business Autonomous Entities (BAEs) that represent domain entities (like "Student", "Course", "Teacher") as autonomous agents responsible for their semantic modeling, persistence, interface generation, and coordination with auxiliary agents.
 
 ---
 
@@ -38,37 +39,50 @@ HBE (Human Business Expert) → Runtime Kernel → [Student BAE] → [SWEA Agent
 
 ### 1. Directory Structure
 ```
-bae_academic_system/
-├── agents/
-│   ├── __init__.py
-│   ├── base_agent.py
-│   ├── student_bae.py
-│   ├── programmer_agent.py
-│   └── frontend_agent.py
-├── core/
-│   ├── __init__.py
-│   ├── runtime_kernel.py
-│   └── context_store.py
-├── llm/
-│   ├── __init__.py
-│   ├── openai_client.py
-│   └── prompts/
-│       ├── student_schema.txt
-│       ├── backend_gen.txt
-│       └── frontend_gen.txt
-├── generated/
-│   ├── models/
-│   ├── routes/
+baes_demo/
+├── baes/
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   └── base_agent.py
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── enhanced_runtime_kernel.py
+│   │   ├── bae_registry.py
+│   │   ├── context_store.py
+│   │   └── managed_system_manager.py
+│   ├── domain_entities/
+│   │   ├── __init__.py
+│   │   ├── base_bae.py
+│   │   ├── generic_bae.py
+│   │   └── academic/
+│   │       ├── __init__.py
+│   │       ├── student_bae.py
+│   │       ├── course_bae.py
+│   │       └── teacher_bae.py
+│   ├── llm/
+│   │   ├── __init__.py
+│   │   ├── openai_client.py
+│   │   └── prompts/
+│   │       └── (prompt templates)
+│   └── swea_agents/
+│       ├── __init__.py
+│       ├── database_swea.py
+│       ├── programmer_swea.py
+│       └── frontend_swea.py
+├── managed_system/
+│   ├── app/
+│   │   ├── models/
+│   │   ├── routes/
+│   │   └── database/
 │   └── ui/
-├── api/
-│   └── main.py
-├── ui/
-│   └── app.py
+│       └── pages/
+├── tests/
+│   ├── unit/
+│   └── integration/
 ├── database/
-│   └── academic.db
 ├── requirements.txt
-├── .env
-├── Dockerfile
+├── config.py
+├── run_tests.py
 └── README.md
 ```
 
@@ -79,12 +93,12 @@ uvicorn==0.24.0
 streamlit==1.28.1
 openai==1.3.7
 pydantic==2.5.0
-jinja2==3.1.2
 python-dotenv==1.0.0
-sqlite3
 requests==2.31.0
 pytest==7.4.3
-docker==6.1.3
+pytest-cov==4.1.0
+sqlalchemy==2.0.23
+sqlite3
 ```
 
 ### 3. Environment Setup (.env)
@@ -102,17 +116,19 @@ UI_PORT=8501
 
 ## 🤖 CORE COMPONENTS
 
-### 1. Base Agent (`agents/base_agent.py`)
+### 1. Base Agent (`baes/agents/base_agent.py`)
 ```python
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import json
+from datetime import datetime
 
 class BaseAgent(ABC):
     def __init__(self, name: str, role: str):
         self.name = name
         self.role = role
         self.memory = {}
+        self.creation_time = datetime.now()
 
     @abstractmethod
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -125,7 +141,7 @@ class BaseAgent(ABC):
         return self.memory.get(key)
 ```
 
-### 2. OpenAI Client (`llm/openai_client.py`)
+### 2. OpenAI Client (`baes/llm/openai_client.py`)
 ```python
 import openai
 import os
@@ -152,16 +168,16 @@ class OpenAIClient:
         return response.choices[0].message.content
 ```
 
-### 3. Student BAE (`agents/student_bae.py`)
+### 3. Student BAE (`baes/domain_entities/academic/student_bae.py`)
 ```python
-from agents.base_agent import BaseAgent
-from llm.openai_client import OpenAIClient
+from baes.domain_entities.base_bae import BaseBae
+from baes.llm.openai_client import OpenAIClient
 from typing import Dict, Any
 import json
 
-class StudentBAE(BaseAgent):
+class StudentBae(BaseBae):
     def __init__(self):
-        super().__init__("StudentBAE", "Domain Entity Representative")
+        super().__init__("Student", "academic")
         self.llm_client = OpenAIClient()
         self.current_schema = {}
         self.domain_knowledge = {}
@@ -179,270 +195,209 @@ class StudentBAE(BaseAgent):
             return {"error": f"Unknown task: {task}"}
 
     def _generate_schema(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        with open("llm/prompts/student_schema.txt", "r") as f:
-            prompt = f.read().format(**payload)
-
-        system_prompt = """You are a Student BAE (Business Autonomous Entity) responsible for representing the "Student" domain entity as a living, autonomous agent within the system. Your role is to maintain semantic coherence between the business domain vocabulary and the technical artifacts generated. Focus on domain entity representation, not software engineering roles."""
-
-        schema_code = self.llm_client.generate_response(prompt, system_prompt)
-
-        self.current_schema = {
-            "entity": "Student",
-            "code": schema_code,
-            "attributes": payload.get("attributes", []),
-            "domain_context": payload.get("context", "academic")
-        }
-
-        self.update_memory("current_schema", self.current_schema)
-        self._update_domain_knowledge(payload)
-        return self.current_schema
+        """Generate Pydantic schema maintaining domain entity focus"""
+        # Implementation details...
+        pass
 
     def _evolve_schema(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        current = self.get_memory("current_schema")
-        new_attributes = payload.get("new_attributes", [])
-
-        prompt = f"""
-        Current Student entity schema:
-        {current.get('code', '')}
-
-        Evolution request: Add these new attributes: {new_attributes}
-        Context: {current.get('domain_context', 'academic')}
-
-        As the Student BAE, update the schema while maintaining semantic coherence between business domain concepts and technical implementation. Ensure the evolution preserves existing domain knowledge while extending capabilities.
-
-        Return the updated Pydantic model code.
-        """
-
-        evolved_code = self.llm_client.generate_response(prompt)
-
-        self.current_schema = {
-            "entity": "Student",
-            "code": evolved_code,
-            "attributes": current.get("attributes", []) + new_attributes,
-            "domain_context": current.get("domain_context", "academic")
-        }
-
-        self.update_memory("current_schema", self.current_schema)
-        return self.current_schema
-
-    def _configure_context(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Configure BAE for different domain contexts while preserving core entity knowledge"""
-        context = payload.get("context", "academic")
-        modifications = payload.get("modifications", [])
-
-        self.domain_knowledge[context] = modifications
-        return {"configured_context": context, "modifications": modifications}
-
-    def _update_domain_knowledge(self, payload: Dict[str, Any]):
-        """Maintain domain knowledge for reusability across contexts"""
-        context = payload.get("context", "default")
-        self.domain_knowledge[context] = payload.get("attributes", [])
+        """Evolve schema while preserving domain knowledge"""
+        # Implementation details...
+        pass
 ```
 
-### 4. Programmer Agent (`agents/programmer_agent.py`)
+### 4. DatabaseSWEA (`baes/swea_agents/database_swea.py`)
 ```python
-from agents.base_agent import BaseAgent
-from llm.openai_client import OpenAIClient
+from baes.agents.base_agent import BaseAgent
 from typing import Dict, Any
+import sqlite3
+import os
 
-class ProgrammerAgent(BaseAgent):
+class DatabaseSWEA(BaseAgent):
     def __init__(self):
-        super().__init__("ProgrammerAgent", "Software Engineering Autonomous Agent")
-        self.llm_client = OpenAIClient()
+        super().__init__("DatabaseSWEA", "Database Management SWEA")
 
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        if task == "generate_api":
-            return self._generate_api(payload)
-        elif task == "generate_database":
-            return self._generate_database(payload)
+        if task == "setup_database":
+            return self._setup_database(payload)
         elif task == "migrate_schema":
             return self._migrate_schema(payload)
         else:
             return {"error": f"Unknown task: {task}"}
 
-    def _generate_api(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        with open("llm/prompts/backend_gen.txt", "r") as f:
-            prompt = f.read().format(**payload)
-
-        system_prompt = """You are a Programmer SWEA (Software Engineering Autonomous Agent) working under coordination of BAEs. Generate FastAPI code that maintains semantic coherence with the domain entity representation provided by the BAE. Include proper error handling and SQLAlchemy models."""
-
-        api_code = self.llm_client.generate_response(prompt, system_prompt)
-
-        return {
-            "type": "api",
-            "code": api_code,
-            "filename": f"{payload.get('entity', 'student').lower()}_routes.py"
-        }
-
-    def _migrate_schema(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle runtime schema evolution while preserving data integrity"""
-        current_schema = payload.get("current_schema", "")
-        new_schema = payload.get("new_schema", "")
-
-        prompt = f"""
-        Generate SQLAlchemy migration script to evolve database schema from:
-        CURRENT: {current_schema}
-        TO: {new_schema}
-
-        Ensure data preservation and referential integrity during runtime evolution.
-        """
-
-        migration_code = self.llm_client.generate_response(prompt)
-
-        return {
-            "type": "migration",
-            "code": migration_code,
-            "filename": "migration_script.py"
-        }
+    def _setup_database(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Setup database tables for domain entities"""
+        # Implementation details...
+        pass
 ```
 
-### 5. Runtime Kernel (`core/runtime_kernel.py`)
+### 5. ProgrammerSWEA (`baes/swea_agents/programmer_swea.py`)
 ```python
-from agents.student_bae import StudentBAE
-from agents.programmer_agent import ProgrammerAgent
-from agents.frontend_agent import FrontendAgent
-from typing import List, Dict, Any
-import os
+from baes.agents.base_agent import BaseAgent
+from baes.llm.openai_client import OpenAIClient
+from typing import Dict, Any
 
-class RuntimeKernel:
+class ProgrammerSWEA(BaseAgent):
+    def __init__(self):
+        super().__init__("ProgrammerSWEA", "Programming SWEA")
+        self.llm_client = OpenAIClient()
+
+    def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        if task == "generate_model":
+            return self._generate_model(payload)
+        elif task == "generate_api":
+            return self._generate_api(payload)
+        else:
+            return {"error": f"Unknown task: {task}"}
+
+    def _generate_model(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate Pydantic models for domain entities"""
+        # Implementation details...
+        pass
+
+    def _generate_api(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate FastAPI routes for domain entities"""
+        # Implementation details...
+        pass
+```
+
+### 6. Enhanced Runtime Kernel (`baes/core/enhanced_runtime_kernel.py`)
+```python
+from baes.domain_entities.academic.student_bae import StudentBae
+from baes.domain_entities.academic.course_bae import CourseBae
+from baes.domain_entities.academic.teacher_bae import TeacherBae
+from baes.swea_agents.database_swea import DatabaseSWEA
+from baes.swea_agents.programmer_swea import ProgrammerSWEA
+from baes.swea_agents.frontend_swea import FrontendSWEA
+from baes.core.bae_registry import EnhancedBAERegistry
+from baes.core.managed_system_manager import ManagedSystemManager
+from typing import Dict, Any
+import logging
+
+logger = logging.getLogger(__name__)
+
+class EnhancedRuntimeKernel:
     """
     Orchestrates interaction between HBEs, BAEs, and SWEAs to enable runtime-adaptive system generation.
     Maintains the dynamic flow where BAEs coordinate with SWEAs based on domain entity needs.
     """
-    def __init__(self):
-        self.agents = {
-            "student_bae": StudentBAE(),
-            "programmer": ProgrammerAgent(),
-            "frontend": FrontendAgent()
-        }
+    def __init__(self, context_store_path: str = "database/context_store.json"):
+        # BAE registry for multi-entity support
+        self.bae_registry = EnhancedBAERegistry()
+        self.bae_registry.register_bae("student", StudentBae())
+        self.bae_registry.register_bae("course", CourseBae())
+        self.bae_registry.register_bae("teacher", TeacherBae())
+
+        # SWEA agents (coordinated by BAEs)
+        self.database_swea = DatabaseSWEA()
+        self.programmer_swea = ProgrammerSWEA()
+        self.frontend_swea = FrontendSWEA()
+
+        # Managed system manager
+        self.managed_system_manager = ManagedSystemManager()
+
         self.execution_history = []
-        self.active_baes = {}
 
-    def process_natural_language_input(self, input_text: str, hbe_context: str = "academic") -> Dict[str, Any]:
+    def process_natural_language_request(self, request: str, start_servers: bool = True) -> Dict[str, Any]:
         """Process HBE natural language input and route to appropriate BAE"""
-        # Simple routing logic - in practice, this would be more sophisticated
-        if "student" in input_text.lower():
-            return self.route_to_bae("student_bae", input_text, hbe_context)
-        else:
-            return {"error": "No appropriate BAE found for input"}
+        try:
+            # Determine entity type from request
+            entity_type = self._determine_entity_type(request)
 
-    def route_to_bae(self, bae_name: str, input_text: str, context: str) -> Dict[str, Any]:
-        """Route HBE input to specific BAE for interpretation and orchestration"""
-        if bae_name in self.agents:
-            bae = self.agents[bae_name]
-            # BAE interprets the natural language and determines required SWEA coordination
-            interpretation = self._interpret_domain_request(input_text, context, bae)
-            return self.execute_bae_workflow(interpretation)
-        return {"error": f"BAE {bae_name} not found"}
+            if not entity_type:
+                return {"error": "Could not determine entity type from request", "success": False}
 
-    def execute_bae_workflow(self, workflow: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Execute workflow coordinated by BAE, maintaining semantic coherence"""
-        results = {}
+            # Get appropriate BAE
+            bae = self.bae_registry.get_bae(entity_type)
+            if not bae:
+                return {"error": f"No BAE found for entity type: {entity_type}", "success": False}
 
-        for step in workflow:
-            agent_name = step["agent"]
-            task = step["task"]
-            payload = step["payload"]
+            # BAE interprets request and creates coordination plan
+            interpretation = bae.interpret_business_request(request)
 
-            if agent_name in self.agents:
-                agent = self.agents[agent_name]
-                result = agent.handle_task(task, payload)
-                results[f"{agent_name}_{task}"] = result
+            # Execute coordination plan
+            execution_results = self._execute_coordination_plan(
+                interpretation.get("swea_coordination", []),
+                entity_type
+            )
 
-                # Pass results to next step if needed
-                if "next_payload_key" in step:
-                    next_step_index = workflow.index(step) + 1
-                    if next_step_index < len(workflow):
-                        workflow[next_step_index]["payload"][step["next_payload_key"]] = result
+            # Generate managed system files
+            if execution_results:
+                self.managed_system_manager.generate_managed_system(execution_results, entity_type)
 
-                self.execution_history.append({
-                    "agent": agent_name,
-                    "task": task,
-                    "payload": payload,
-                    "result": result,
-                    "timestamp": self._get_timestamp()
+            # Start servers if requested
+            if start_servers and execution_results:
+                self.managed_system_manager.start_servers()
+
+            return {
+                "success": True,
+                "entity": entity_type,
+                "interpretation": interpretation,
+                "execution_results": execution_results
+            }
+
+        except Exception as e:
+            logger.error(f"Error processing request: {str(e)}")
+            return {"error": str(e), "success": False}
+
+    def _execute_coordination_plan(self, coordination_plan: list, entity_type: str) -> list:
+        """Execute SWEA coordination plan created by BAE"""
+        results = []
+
+        for task in coordination_plan:
+            swea_agent = task.get("swea_agent", "")
+            task_type = task.get("task_type", "")
+            payload = task.get("payload", {})
+
+            # Route to appropriate SWEA agent
+            swea_agent_lower = swea_agent.lower()
+            if swea_agent_lower in ["database", "databaseswea", "database_swea"]:
+                agent = self.database_swea
+            elif swea_agent_lower in ["programmer", "programmingswea", "programmer_swea", "programmerswea"]:
+                agent = self.programmer_swea
+            elif swea_agent_lower in ["frontend", "frontendswea", "frontend_swea"]:
+                agent = self.frontend_swea
+            else:
+                available_agents = ["ProgrammerSWEA", "FrontendSWEA", "DatabaseSWEA"]
+                logger.error("❌ Unknown SWEA agent: %s", swea_agent)
+                results.append({
+                    "task": f"{swea_agent}.{task_type}",
+                    "success": False,
+                    "error": f"Unknown SWEA agent: {swea_agent}",
+                    "available_agents": available_agents
+                })
+                continue
+
+            # Execute task
+            try:
+                result = agent.handle_task(task_type, payload)
+                results.append({
+                    "task": f"{swea_agent}.{task_type}",
+                    "success": True,
+                    "result": result
+                })
+                logger.info("✅ Executed: %s.%s", swea_agent, task_type)
+            except Exception as e:
+                logger.error("❌ Failed: %s.%s - %s", swea_agent, task_type, str(e))
+                results.append({
+                    "task": f"{swea_agent}.{task_type}",
+                    "success": False,
+                    "error": str(e)
                 })
 
         return results
 
-    def evolve_system_runtime(self, evolution_request: str, entity: str = "student") -> Dict[str, Any]:
-        """Handle runtime system evolution requests through BAE coordination"""
-        bae_name = f"{entity}_bae"
-        if bae_name in self.agents:
-            bae = self.agents[bae_name]
-            # BAE handles evolution while maintaining domain coherence
-            evolution_workflow = self._create_evolution_workflow(evolution_request, bae)
-            return self.execute_bae_workflow(evolution_workflow)
-        return {"error": f"BAE for {entity} not found"}
+    def _determine_entity_type(self, request: str) -> str:
+        """Determine entity type from natural language request"""
+        request_lower = request.lower()
 
-    def generate_files(self, results: Dict[str, Any]):
-        """Generate actual files from agent results"""
-        for key, result in results.items():
-            if isinstance(result, dict) and "code" in result:
-                filename = result.get("filename", f"{key}.py")
-                filepath = f"generated/{self._get_directory(key)}/{filename}"
+        if any(word in request_lower for word in ["student", "aluno", "estudante"]):
+            return "student"
+        elif any(word in request_lower for word in ["course", "curso", "disciplina"]):
+            return "course"
+        elif any(word in request_lower for word in ["teacher", "professor", "instrutor"]):
+            return "teacher"
 
-                os.makedirs(os.path.dirname(filepath), exist_ok=True)
-                with open(filepath, "w") as f:
-                    f.write(result["code"])
-
-    def _interpret_domain_request(self, input_text: str, context: str, bae) -> List[Dict[str, Any]]:
-        """BAE interprets domain request and creates SWEA coordination workflow"""
-        # Simplified interpretation - real implementation would use LLM
-        if "create" in input_text.lower() or "generate" in input_text.lower():
-            return [
-                {
-                    "agent": bae.name.lower(),
-                    "task": "generate_schema",
-                    "payload": {"context": context, "input": input_text}
-                },
-                {
-                    "agent": "programmer",
-                    "task": "generate_api",
-                    "payload": {"entity": "Student"}
-                },
-                {
-                    "agent": "frontend",
-                    "task": "generate_ui",
-                    "payload": {"entity": "Student"}
-                }
-            ]
-        elif "add" in input_text.lower() or "modify" in input_text.lower():
-            return [
-                {
-                    "agent": bae.name.lower(),
-                    "task": "evolve_schema",
-                    "payload": {"context": context, "input": input_text}
-                }
-            ]
-        return []
-
-    def _create_evolution_workflow(self, request: str, bae) -> List[Dict[str, Any]]:
-        """Create workflow for runtime evolution"""
-        return [
-            {
-                "agent": bae.name.lower(),
-                "task": "evolve_schema",
-                "payload": {"evolution_request": request}
-            },
-            {
-                "agent": "programmer",
-                "task": "migrate_schema",
-                "payload": {"entity": "Student"}
-            }
-        ]
-
-    def _get_directory(self, key: str) -> str:
-        if "api" in key or "routes" in key:
-            return "routes"
-        elif "ui" in key or "frontend" in key:
-            return "ui"
-        else:
-            return "models"
-
-    def _get_timestamp(self):
-        import datetime
-        return datetime.datetime.now().isoformat()
+        return "student"  # Default to student for POC
 ```
 
 ---
@@ -454,32 +409,16 @@ class RuntimeKernel:
 # Example HBE interaction with domain entity focus
 hbe_input = "Create a system to manage students with name, email, age, and enrollment_date"
 
-# Runtime Kernel routes to Student BAE for domain interpretation
-kernel = RuntimeKernel()
-result = kernel.process_natural_language_input(hbe_input, context="university")
+# Enhanced Runtime Kernel routes to Student BAE for domain interpretation
+kernel = EnhancedRuntimeKernel()
+result = kernel.process_natural_language_request(hbe_input)
 
 # Student BAE orchestrates SWEA agents while maintaining domain coherence
-workflow = [
-    {
-        "agent": "student_bae",
-        "task": "generate_schema",
-        "payload": {
-            "attributes": ["name: str", "email: str", "age: int", "enrollment_date: datetime"],
-            "context": "university"
-        },
-        "next_payload_key": "schema"
-    },
-    {
-        "agent": "programmer",
-        "task": "generate_api",
-        "payload": {"entity": "Student"}
-    },
-    {
-        "agent": "frontend",
-        "task": "generate_ui",
-        "payload": {"entity": "Student"}
-    }
-]
+# Coordination plan includes:
+# 1. DatabaseSWEA.setup_database
+# 2. ProgrammerSWEA.generate_model
+# 3. ProgrammerSWEA.generate_api
+# 4. FrontendSWEA.generate_ui
 ```
 
 ### Phase 2: Runtime Evolution Example
@@ -488,15 +427,10 @@ workflow = [
 evolution_request = "Add birth date and grade point average to student"
 
 # Student BAE handles evolution while preserving domain knowledge
-evolution_result = kernel.evolve_system_runtime(evolution_request, "student")
+evolution_result = kernel.process_natural_language_request(evolution_request)
 
 # System adapts dynamically without losing semantic coherence
-kernel.generate_files(evolution_result)
-
-# Restart services to reflect changes
-import subprocess
-subprocess.Popen(["uvicorn", "api.main:app", "--reload"])
-subprocess.Popen(["streamlit", "run", "ui/app.py"])
+# Managed system files are regenerated and servers restarted
 ```
 
 ---
@@ -538,7 +472,7 @@ COPY . .
 
 EXPOSE 8000 8501
 
-CMD ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "managed_system.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ### docker-compose.yml
@@ -554,7 +488,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_MODEL=gpt-4o-mini
     volumes:
-      - ./generated:/app/generated
+      - ./managed_system:/app/managed_system
       - ./database:/app/database
 ```
 
@@ -566,7 +500,7 @@ services:
 
 1. **Initial Request**: "Create a system to manage students with name, email, and course"
 2. **Student BAE Response**: Interprets domain requirements and coordinates SWEA agents
-3. **System Generation**: API + UI + Database created automatically with domain focus
+3. **System Generation**: Database + API + UI created automatically with domain focus
 4. **Evolution Request**: "Add grade point average and enrollment status to student entity"
 5. **Runtime Adaptation**: Student BAE evolves system without restart, maintaining domain coherence
 6. **Validation**: Demonstrate semantic consistency between business vocabulary and technical artifacts
@@ -579,14 +513,15 @@ services:
 2. **Runtime Adaptability**: System evolves without restart while preserving domain knowledge
 3. **BAE Autonomy**: Domain entities operate as autonomous agents coordinating SWEAs
 4. **Natural Language Processing**: HBEs interact using business vocabulary
-5. **Reusability**: Student BAE configurable across different academic contexts (university, open courses, etc.)
+5. **Reusability**: Student BAE configurable across different academic contexts
+6. **Test Coverage**: 100% coverage target with percentage-based reporting
 
 ---
 
 ## 🚀 NEXT STEPS
 
-1. **Week 1**: Implement core BAE agents and runtime kernel with domain focus
-2. **Week 2**: Add dynamic code generation and SWEA coordination
+1. **Week 1**: Implement core BAE agents and enhanced runtime kernel with domain focus
+2. **Week 2**: Add dynamic code generation and SWEA coordination with DatabaseSWEA integration
 3. **Week 3**: Complete integration, testing, and Docker setup with full runtime evolution
 
 This proof-of-concept demonstrates the feasibility of BAEs as autonomous domain entity representatives, validating the innovative architecture proposed in the thesis and providing empirical evidence for the research questions about entity autonomy, reusability, and runtime adaptation.
