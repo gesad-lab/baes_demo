@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
 """
-Test Script for BAE Scenario 1: Initial System Generation
+BAE Scenario 1 Test: Initial System Generation - Legacy Version
 
-This script tests the core components of the BAE architecture for validating
-that the Student BAE can interpret business requests and coordinate with SWEA
-agents to generate a functional system.
-
-Usage: python test_scenario1.py
+This test validates the core BAE components needed for Scenario 1
+without full integration, focusing on domain entity autonomy.
 """
 
 import logging
-import os
 import sys
 from datetime import datetime
 
+from baes.core.context_store import ContextStore
+from baes.domain_entities.academic.student_bae import StudentBae as StudentBAE
+from baes.llm.openai_client import OpenAIClient
+
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
@@ -28,8 +26,6 @@ def test_openai_client():
     print("=" * 60)
 
     try:
-        from baes.llm.openai_client import OpenAIClient
-
         client = OpenAIClient()
         print(f"✅ OpenAI Client initialized with model: {client.model}")
 
@@ -51,8 +47,6 @@ def test_context_store():
     print("=" * 60)
 
     try:
-        from baes.core.context_store import ContextStore
-
         # Initialize context store
         context_store = ContextStore("database/test_context_store.json")
         print("✅ Context Store initialized")
@@ -153,9 +147,6 @@ def test_student_bae():
     print("=" * 60)
 
     try:
-        from baes.domain_entities.academic.student_bae import StudentBae as StudentBAE
-
-        # Initialize Student BAE
         student_bae = StudentBAE()
         print(f"✅ Student BAE initialized: {student_bae}")
 
@@ -174,7 +165,6 @@ def test_student_bae():
         )
 
         # Mock the interpretation since we don't have OpenAI API key yet
-        mock_payload = {"request": test_request, "context": "academic"}
 
         print(f"✅ Student BAE ready to interpret: '{test_request}'")
         print("   🎯 Entity Focus: Student")
@@ -183,9 +173,8 @@ def test_student_bae():
 
         # Test schema generation preparation
         test_attributes = ["name: str", "registration_number: str", "course: str"]
-        schema_payload = {"attributes": test_attributes, "context": "academic"}
 
-        print(f"✅ Student BAE ready for schema generation")
+        print("✅ Student BAE ready for schema generation")
         print(f"   📋 Attributes: {test_attributes}")
 
         # Test coordination plan creation via business request interpretation
@@ -222,10 +211,6 @@ def test_scenario1_workflow():
     print("=" * 60)
 
     try:
-        from baes.core.context_store import ContextStore
-        from baes.domain_entities.academic.student_bae import StudentBae as StudentBAE
-
-        # Initialize components
         student_bae = StudentBAE()
         context_store = ContextStore("database/scenario1_test.json")
 
@@ -306,17 +291,17 @@ def test_scenario1_workflow():
 
         # Summary
         print("\n📊 Scenario 1 Test Summary:")
-        print(f"   🎯 Entity: Student (Domain Entity Representative)")
-        print(f"   📖 Context: Academic")
+        print("   🎯 Entity: Student (Domain Entity Representative)")
+        print("   📖 Context: Academic")
         print(
             f"   🔧 Operations: {len(mock_interpretation['requested_operations'])} domain operations"
         )
         print(f"   👥 SWEA Agents: {len(required_agents)} coordinated agents")
         print(f"   📚 Business Vocabulary: {len(mock_interpretation['business_vocabulary'])} terms")
-        print(f"   ⏱️  Ready for <3 minute generation (Scenario 1 success criteria)")
+        print("   ⏱️  Ready for <3 minute generation (Scenario 1 success criteria)")
 
-        assert context_stored == True
-        assert vocab_stored == True
+        assert context_stored is True
+        assert vocab_stored is True
         assert len(coordination_plan) >= 2
 
     except Exception as e:

@@ -1,26 +1,14 @@
 """
-Scenario 1 Test: Initial System Generation
+Unit Test for Scenario 1: Initial System Generation
 
-This test validates the proof of concept Scenario 1 which demonstrates
-automatic creation of a functional system from natural language input
-where the Student BAE acts as an autonomous domain entity representative.
-
-Success Criteria:
-- Generation time < 3 minutes
-- 100% functional system without manual intervention
-- Generated code follows programming best practices
-- Maintains domain entity focus throughout generated artifacts
+Tests the core BAE capability for automatic system generation from
+natural language input with domain entity focus.
 """
-
-import time
-from unittest.mock import Mock, patch
 
 import pytest
 
-from baes.agents.base_agent import BaseAgent
 from baes.core.context_store import ContextStore
 from baes.domain_entities.academic.student_bae import StudentBae as StudentBAE
-from baes.llm.openai_client import OpenAIClient
 
 
 @pytest.mark.scenario

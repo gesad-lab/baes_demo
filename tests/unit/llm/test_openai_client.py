@@ -5,7 +5,7 @@ Tests the OpenAI client wrapper functionality including domain entity operations
 business request interpretation, and semantic coherence validation.
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 

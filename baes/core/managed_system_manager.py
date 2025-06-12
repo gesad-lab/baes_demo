@@ -1,12 +1,8 @@
-import json
 import logging
 import os
-import shutil
 import subprocess  # nosec B404
 import sys
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from config import Config
 

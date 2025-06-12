@@ -1,10 +1,8 @@
 import logging
-import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from ..agents.base_agent import BaseAgent
-from ..core.context_store import ContextStore
 from ..llm.openai_client import OpenAIClient
 
 logger = logging.getLogger(__name__)

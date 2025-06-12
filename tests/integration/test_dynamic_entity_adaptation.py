@@ -279,7 +279,6 @@ class Book(BaseModel):
         mock_openai_client.return_value = mock_client_instance
 
         student_bae = StudentBAE()
-        original_vocab = student_bae.business_vocabulary.copy()
 
         result = student_bae.handle(
             "interpret_business_request",

@@ -1,6 +1,8 @@
 """
-Test suite for Managed System functionality.
-Validates the transition from legacy generated/ directory to managed system approach.
+Test managed system functionality.
+
+This module provides a basic test framework to validate that the managed
+system is working correctly.
 """
 
 import os
@@ -8,10 +10,10 @@ import shutil
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from baes.core.managed_system_manager import ManagedSystemManager
 from config import Config
+
+logger = None
 
 
 class TestManagedSystemManager:

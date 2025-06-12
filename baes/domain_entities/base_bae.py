@@ -2,7 +2,7 @@ import json
 import logging
 from abc import abstractmethod
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from ..agents.base_agent import BaseAgent
 from ..llm.openai_client import OpenAIClient

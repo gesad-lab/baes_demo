@@ -8,10 +8,15 @@ in the BAE (Business Autonomous Entities) test suite.
 import os
 import sys
 import tempfile
-from typing import Any, Dict
+from pathlib import Path
+from typing import Dict
 from unittest.mock import Mock, patch
 
 import pytest
+
+# Add the project root to Python path for imports
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 # Ensure repository root (two levels up) is in sys.path so 'bae_academic_system' package is importable
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))

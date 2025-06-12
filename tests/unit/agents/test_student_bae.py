@@ -252,10 +252,10 @@ class Student(BaseModel):
         result = student_bae.handle("validate_domain_rules", payload)
 
         # With proper mocking, the response should be exactly what we expect
-        assert result["is_valid"] == True
+        assert result["is_valid"] is True
         assert result["semantic_coherence_score"] == 85
-        assert result["business_vocabulary_preserved"] == True
-        assert result["domain_rules_followed"] == True
+        assert result["business_vocabulary_preserved"] is True
+        assert result["domain_rules_followed"] is True
         assert result["entity"] == "Student"
         assert "error" not in result  # Should not have any errors with proper mock
 
@@ -282,7 +282,7 @@ class Student(BaseModel):
         result = student_bae.handle("validate_domain_rules", payload)
 
         # With proper mock and fallback implementation, expect consistent response
-        assert result["is_valid"] == True  # Fallback provides True
+        assert result["is_valid"] is True  # Fallback provides True
         assert result["entity"] == "Student"
         assert "error" in result
         assert "Failed to parse validation response" in result["error"]
@@ -307,9 +307,6 @@ class Student(BaseModel):
         """Test business rules extraction"""
         with patch("baes.llm.openai_client.OpenAIClient"):
             student_bae = StudentBAE()
-
-            attributes = ["name: str", "email: str", "age: int", "registration: str"]
-            context = "academic"
 
             rules = student_bae._get_business_rules()
 

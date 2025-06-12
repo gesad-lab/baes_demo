@@ -1,5 +1,5 @@
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from baes.llm.openai_client import OpenAIClient
 
