@@ -1,12 +1,10 @@
 import argparse
 import importlib
-import json
 import logging
 import os
 import subprocess  # nosec B404
 import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, List
 
 from baes.core.bae_registry import EnhancedBAERegistry
@@ -28,6 +26,17 @@ except ImportError:
 
 
 logger = logging.getLogger(__name__)
+
+
+class UnknownSWEAAgentError(Exception):
+    """Raised when an unknown SWEA agent is requested in coordination plan"""
+
+    def __init__(self, agent_name: str, available_agents: List[str]):
+        self.agent_name = agent_name
+        self.available_agents = available_agents
+        super().__init__(
+            f"Unknown SWEA agent '{agent_name}'. Available agents: {', '.join(available_agents)}"
+        )
 
 
 class EnhancedRuntimeKernel:
@@ -121,9 +130,27 @@ class EnhancedRuntimeKernel:
 
         if coordination_plan:
             logger.info("⚙️  Executing coordination plan with %d tasks", len(coordination_plan))
-            execution_results = self._execute_coordination_plan(
-                coordination_plan, target_bae, context
-            )
+            try:
+                execution_results = self._execute_coordination_plan(
+                    coordination_plan, target_bae, context
+                )
+            except UnknownSWEAAgentError as e:
+                logger.error("❌ Coordination plan execution failed: %s", str(e))
+                return {
+                    "success": False,
+                    "error": "UNKNOWN_SWEA_AGENT",
+                    "message": f"Required SWEA agent not available: {e.agent_name}",
+                    "details": {
+                        "requested_agent": e.agent_name,
+                        "available_agents": e.available_agents,
+                        "coordination_plan": coordination_plan,
+                    },
+                    "entity": detected_entity,
+                    "help": (
+                        f"Please ensure all required SWEA agents are implemented. "
+                        f"Available: {', '.join(e.available_agents)}"
+                    ),
+                }
 
         # Step 6: Preserve domain knowledge
         self._preserve_domain_knowledge(detected_entity, interpretation_result, context)
@@ -199,20 +226,20 @@ class EnhancedRuntimeKernel:
             logger.info("⚙️  Executing %s.%s for %s entity", swea_agent, task_type, entity)
 
             # Route to appropriate SWEA agent
-            if swea_agent.lower() in ["programmer", "programmingswea", "programmer_swea"]:
+            swea_agent_lower = swea_agent.lower()
+            if swea_agent_lower in [
+                "programmer",
+                "programmingswea",
+                "programmer_swea",
+                "programmerswea",
+            ]:
                 agent = self.programmer_swea
-            elif swea_agent.lower() in ["frontend", "frontendswea", "frontend_swea"]:
+            elif swea_agent_lower in ["frontend", "frontendswea", "frontend_swea"]:
                 agent = self.frontend_swea
             else:
-                logger.warning("⚠️  Unknown SWEA agent: %s", swea_agent)
-                results.append(
-                    {
-                        "task": f"{swea_agent}.{task_type}",
-                        "success": False,
-                        "error": f"Unknown SWEA agent: {swea_agent}",
-                    }
-                )
-                continue
+                available_agents = ["ProgrammerSWEA", "FrontendSWEA"]
+                logger.error("❌ Unknown SWEA agent: %s", swea_agent)
+                raise UnknownSWEAAgentError(swea_agent, available_agents)
 
             # Execute task with proper payload
             task_payload = task.get("payload", {})
