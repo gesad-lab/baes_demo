@@ -1,9 +1,5 @@
-import json
 import os
-import shutil
-import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 
@@ -18,37 +14,8 @@ class TestDynamicEntityAdaptation:
     Tests core functionality without redundant scenarios.
     """
 
-    def setup_method(self):
-        """Setup for each test method"""
-        self.test_dir = tempfile.mkdtemp(prefix="bae_integration_", dir="tests")
-        self.original_cwd = os.getcwd()
-        os.chdir(self.test_dir)
-
-        # Create minimal required structure
-        os.makedirs("llm/prompts", exist_ok=True)
-        with open("llm/prompts/student_schema.txt", "w") as f:
-            f.write("Generate a Pydantic model for {entity} entity with attributes: {attributes}")
-
-    def teardown_method(self):
-        """Cleanup after each test method"""
-        os.chdir(self.original_cwd)
-        shutil.rmtree(self.test_dir, ignore_errors=True)
-
-    @patch("baes.llm.openai_client.OpenAIClient")
-    def test_entity_adaptation_flow(self, mock_openai_client):
+    def test_entity_adaptation_flow(self, mock_all_openai_clients):
         """Test complete BAE entity adaptation with different entity requests"""
-
-        mock_client_instance = Mock()
-        mock_client_instance.generate_domain_entity_response.return_value = json.dumps(
-            {
-                "interpreted_intent": "manage academic entities",
-                "entity_focus": "Student",
-                "domain_operations": ["create", "read", "update", "delete"],
-                "swea_coordination": [{"agent": "ProgrammerSWEA", "task": "generate_api"}],
-                "business_vocabulary": ["student", "academic", "learning"],
-            }
-        )
-        mock_openai_client.return_value = mock_client_instance
 
         student_bae = StudentBAE()
 
@@ -72,19 +39,8 @@ class TestDynamicEntityAdaptation:
                 # Graceful error handling is acceptable
                 assert result["entity"] == "Student"
 
-    @patch("baes.llm.openai_client.OpenAIClient")
-    def test_schema_generation_and_evolution(self, mock_openai_client):
+    def test_schema_generation_and_evolution(self, mock_all_openai_clients):
         """Test schema generation and evolution capabilities"""
-
-        mock_client_instance = Mock()
-        mock_client_instance.generate_domain_entity_response.return_value = """
-from pydantic import BaseModel
-
-class Student(BaseModel):
-    name: str
-    email: str
-        """
-        mock_openai_client.return_value = mock_client_instance
 
         student_bae = StudentBAE()
 
@@ -136,22 +92,7 @@ class Student(BaseModel):
 class TestDynamicEntityAdaptationLive:
     """Live integration tests with actual OpenAI API calls"""
 
-    def setup_method(self):
-        """Setup for live tests"""
-        self.test_dir = tempfile.mkdtemp(prefix="bae_live_", dir="tests")
-        self.original_cwd = os.getcwd()
-        os.chdir(self.test_dir)
-
-        os.makedirs("llm/prompts", exist_ok=True)
-        with open("llm/prompts/student_schema.txt", "w") as f:
-            f.write("Generate a Pydantic model for {entity} entity with attributes: {attributes}")
-
-    def teardown_method(self):
-        """Cleanup after live tests"""
-        os.chdir(self.original_cwd)
-        shutil.rmtree(self.test_dir, ignore_errors=True)
-
-    def test_live_entity_consistency(self):
+    def test_live_entity_consistency(self, temp_test_directory):
         """Test BAE maintains entity consistency with live API"""
 
         student_bae = StudentBAE()
@@ -172,14 +113,14 @@ class TestDynamicEntityAdaptationLive:
         assert student_bae.current_entity == "Student"
         assert student_bae.primary_entity == "Student"
 
-    def test_live_runtime_kernel_integration(self):
+    def test_live_runtime_kernel_integration(self, temp_test_directory):
         """Test runtime kernel with live API integration"""
 
         os.environ["SKIP_SERVER_START"] = "1"
 
         try:
             kernel = RuntimeKernel(
-                context_store_path=os.path.join(self.test_dir, "context_store.json")
+                context_store_path=os.path.join(temp_test_directory, "context_store.json")
             )
 
             # Test with single representative case

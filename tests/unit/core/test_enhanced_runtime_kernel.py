@@ -5,9 +5,6 @@ Tests the enhanced runtime kernel functionality including entity recognition,
 BAE coordination, SWEA agent routing, and error handling for unknown agents.
 """
 
-import json
-import os
-import tempfile
 from unittest.mock import Mock, patch
 
 import pytest
@@ -23,24 +20,10 @@ class TestEnhancedRuntimeKernel:
     """Test suite for Enhanced Runtime Kernel functionality"""
 
     @pytest.fixture
-    def mock_context_store_path(self):
-        """Create a temporary context store path for testing"""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-            initial_data = {"agents": {}, "domain_knowledge": {}, "evolution_history": []}
-            json.dump(initial_data, f)
-            temp_path = f.name
-
-        yield temp_path
-
-        # Cleanup
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)
-
-    @pytest.fixture
-    def kernel(self, mock_context_store_path):
+    def kernel(self, temp_database_path):
         """Create a kernel instance for testing"""
         with patch("baes.core.enhanced_runtime_kernel.Config"):
-            kernel = EnhancedRuntimeKernel(context_store_path=mock_context_store_path)
+            kernel = EnhancedRuntimeKernel(context_store_path=temp_database_path)
             return kernel
 
     def test_unknown_swea_agent_error_creation(self):
