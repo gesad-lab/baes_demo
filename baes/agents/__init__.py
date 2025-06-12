@@ -1,12 +1,11 @@
 """
 BAES Agents Package
 
-Contains Business Autonomous Entities (BAEs) and Software Engineering Autonomous Agents (SWEAs).
+This package contains the base agent architecture.
+BAEs have been moved to domain_entities/ and SWEAs to swea_agents/
+for better architectural organization.
 
-BAEs represent domain entities as autonomous agents that maintain semantic coherence
-between business vocabulary and technical artifacts.
-
-SWEAs handle technical implementation tasks under coordination of BAEs.
+This module maintains the base agent class and backward compatibility.
 """
 
 import sys
@@ -14,15 +13,14 @@ import sys
 # Expose this package as top-level 'agents' for backward compatibility in tests
 sys.modules.setdefault('agents', sys.modules[__name__])
 
-# BAE Agents (Business Autonomous Entities)
+# Base agent class (remains in agents/)
 from .base_agent import BaseAgent
-from .student_bae import StudentBAE
 
-# Compatibility aliases for import resolution
-BaseAgent = BaseAgent
-StudentBAE = StudentBAE
+# Note: BAEs and SWEAs are now imported from their specific packages:
+# - domain_entities.academic.student_bae import StudentBae
+# - swea_agents.programmer_swea import ProgrammerSWEA
+# This prevents circular imports while maintaining clean architecture
 
 __all__ = [
     "BaseAgent",
-    "StudentBAE",
 ]

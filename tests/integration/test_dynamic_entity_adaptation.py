@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 from unittest.mock import patch, Mock
 
-from baes.agents.student_bae import StudentBAE
+from baes.domain_entities.academic.student_bae import StudentBae as StudentBAE
 from baes.core.runtime_kernel import RuntimeKernel
 
 
@@ -226,7 +226,7 @@ class Book(BaseModel):
         # Mock the OpenAI client
         mock_openai_client.return_value = Mock()
         
-        from baes.agents.generic_bae import GenericBAE
+        from baes.domain_entities.generic_bae import GenericBae as GenericBAE
         
         bae = GenericBAE()
         

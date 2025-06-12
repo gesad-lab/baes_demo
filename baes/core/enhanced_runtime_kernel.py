@@ -11,8 +11,8 @@ from baes.core.bae_registry import EnhancedBAERegistry
 from baes.core.entity_recognizer import EntityRecognizer
 from baes.core.context_store import ContextStore
 from baes.core.managed_system_manager import ManagedSystemManager
-from baes.agents.programmer_swea import ProgrammerSWEA
-from baes.agents.frontend_swea import FrontendSWEA
+from baes.swea_agents.programmer_swea import ProgrammerSWEA
+from baes.swea_agents.frontend_swea import FrontendSWEA
 
 try:
     from config import Config

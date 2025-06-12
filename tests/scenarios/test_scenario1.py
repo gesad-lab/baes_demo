@@ -19,7 +19,7 @@ from unittest.mock import patch, Mock
 from baes.llm.openai_client import OpenAIClient
 from baes.core.context_store import ContextStore
 from baes.agents.base_agent import BaseAgent
-from baes.agents.student_bae import StudentBAE
+from baes.domain_entities.academic.student_bae import StudentBae as StudentBAE
 
 
 @pytest.mark.scenario

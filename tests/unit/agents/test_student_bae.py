@@ -7,7 +7,7 @@ business request interpretation, schema generation, and SWEA coordination.
 
 import pytest
 from unittest.mock import Mock, patch, mock_open
-from baes.agents.student_bae import StudentBAE
+from baes.domain_entities.academic.student_bae import StudentBae as StudentBAE
 
 
 @pytest.mark.unit
@@ -27,7 +27,7 @@ class TestStudentBAE:
             assert student_bae.current_schema == {}
             assert student_bae.context_configurations == {}
     
-    @patch('baes.agents.base_bae.OpenAIClient')
+    @patch('baes.domain_entities.base_bae.OpenAIClient')
     def test_interpret_business_request_success(self, mock_openai_client):
         """Test successful business request interpretation"""
         # Setup mock response
@@ -104,7 +104,7 @@ class Student(BaseModel):
         # Verify the mock was called
         mock_client_instance.generate_domain_entity_response.assert_called_once()
     
-    @patch('baes.agents.base_bae.OpenAIClient')
+    @patch('baes.domain_entities.base_bae.OpenAIClient')
     @patch('builtins.open', mock_open(read_data="Template with {attributes} and {context}"))
     def test_generate_schema_with_prompt_template(self, mock_openai_client):
         """Test schema generation using prompt template"""
@@ -128,7 +128,7 @@ class Student(BaseModel):
         assert isinstance(result["code"], str)
         assert len(result["code"]) > 0
     
-    @patch('baes.agents.base_bae.OpenAIClient')
+    @patch('baes.domain_entities.base_bae.OpenAIClient')
     def test_evolve_schema_success(self, mock_openai_client):
         """Test successful schema evolution"""
         # Setup mock
@@ -167,7 +167,7 @@ class Student(BaseModel):
         assert "gpa: float" in result["attributes"]
         assert "evolution_history" in result
     
-    @patch('baes.agents.base_bae.OpenAIClient')
+    @patch('baes.domain_entities.base_bae.OpenAIClient')
     def test_evolve_schema_no_current_schema(self, mock_openai_client):
         """Test schema evolution without current schema - should create new schema"""
         mock_client_instance = Mock()

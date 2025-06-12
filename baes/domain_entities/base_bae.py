@@ -1,5 +1,5 @@
-from baes.agents.base_agent import BaseAgent
-from baes.llm.openai_client import OpenAIClient
+from ..agents.base_agent import BaseAgent
+from ..llm.openai_client import OpenAIClient
 from typing import Dict, Any, List, Optional
 from abc import abstractmethod
 import json
@@ -8,7 +8,7 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-class BaseBAE(BaseAgent):
+class BaseBae(BaseAgent):
     """
     Base class for all Business Autonomous Entities (BAEs).
     

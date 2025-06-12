@@ -17,11 +17,58 @@ __author__ = "Anderson Martins Gomes"
 __email__ = "your.email@example.com"
 __description__ = "Business Autonomous Entities Framework for adaptive system generation"
 
-# Core imports for easy access
-from baes.agents.student_bae import StudentBAE
-from baes.core.context_store import ContextStore
+# Core imports for easy access - updated for new structure
+from .core.context_store import ContextStore
+
+# Base agents
+from .agents.base_agent import BaseAgent
+
+# Domain Entities (BAEs) - direct imports to avoid circular dependencies
+from .domain_entities.base_bae import BaseBae
+from .domain_entities.generic_bae import GenericBae
+from .domain_entities.academic.student_bae import StudentBae
+from .domain_entities.academic.teacher_bae import TeacherBae
+from .domain_entities.academic.course_bae import CourseBae
+
+# SWEA Agents - using actual class names (with SWEA suffix)
+from .swea_agents.programmer_swea import ProgrammerSWEA
+from .swea_agents.frontend_swea import FrontendSWEA
+from .swea_agents.database_swea import DatabaseSWEA
+
+# Backward compatibility aliases (old naming convention)
+StudentBAE = StudentBae
+TeacherBAE = TeacherBae
+CourseBAE = CourseBae
+
+# New naming aliases for consistency
+ProgrammerSwea = ProgrammerSWEA
+FrontendSwea = FrontendSWEA  
+DatabaseSwea = DatabaseSWEA
 
 __all__ = [
-    "StudentBAE",
+    # Core components
     "ContextStore",
+    "BaseAgent",
+    
+    # Domain Entities (BAEs) - new naming
+    "BaseBae",
+    "GenericBae",
+    "StudentBae",
+    "TeacherBae",
+    "CourseBae",
+    
+    # SWEA Agents - actual class names
+    "ProgrammerSWEA",
+    "FrontendSWEA", 
+    "DatabaseSWEA",
+    
+    # New naming aliases
+    "ProgrammerSwea",
+    "FrontendSwea",
+    "DatabaseSwea",
+    
+    # Backward compatibility - old naming
+    "StudentBAE",
+    "TeacherBAE",
+    "CourseBAE",
 ] 

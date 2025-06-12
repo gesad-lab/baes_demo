@@ -1,10 +1,10 @@
-from baes.agents.base_bae import BaseBAE
+from ..base_bae import BaseBae
 from typing import Dict, Any, List
 import logging
 
 logger = logging.getLogger(__name__)
 
-class TeacherBAE(BaseBAE):
+class TeacherBae(BaseBae):
     """
     Business Autonomous Entity representing the Teacher domain entity.
     Specialized BAE for managing teacher-related operations, instruction management,

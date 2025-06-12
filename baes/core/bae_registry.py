@@ -1,8 +1,8 @@
 from typing import Dict, List, Optional, Any
-from baes.agents.base_bae import BaseBAE
-from baes.agents.student_bae import StudentBAE
-from baes.agents.course_bae import CourseBAE
-from baes.agents.teacher_bae import TeacherBAE
+from baes.domain_entities.base_bae import BaseBae as BaseBAE
+from baes.domain_entities.academic.student_bae import StudentBae as StudentBAE
+from baes.domain_entities.academic.course_bae import CourseBae as CourseBAE
+from baes.domain_entities.academic.teacher_bae import TeacherBae as TeacherBAE
 import logging
 
 logger = logging.getLogger(__name__)

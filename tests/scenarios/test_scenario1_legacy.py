@@ -150,7 +150,7 @@ def test_student_bae():
     print("="*60)
     
     try:
-        from agents.student_bae import StudentBAE
+        from baes.domain_entities.academic.student_bae import StudentBae as StudentBAE
         
         # Initialize Student BAE
         student_bae = StudentBAE()
@@ -218,7 +218,7 @@ def test_scenario1_workflow():
     print("="*60)
     
     try:
-        from baes.agents.student_bae import StudentBAE
+        from baes.domain_entities.academic.student_bae import StudentBae as StudentBAE
         from baes.core.context_store import ContextStore
         
         # Initialize components

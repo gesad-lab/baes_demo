@@ -1,6 +1,6 @@
-from baes.agents.base_agent import BaseAgent
-from baes.llm.openai_client import OpenAIClient
-from baes.core.managed_system_manager import ManagedSystemManager
+from ..agents.base_agent import BaseAgent
+from ..llm.openai_client import OpenAIClient
+from ..core.managed_system_manager import ManagedSystemManager
 from typing import Dict, Any, List
 import os
 

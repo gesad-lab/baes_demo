@@ -1,10 +1,10 @@
-from agents.base_bae import BaseBAE
+from ..base_bae import BaseBae
 from typing import Dict, Any, List
 import logging
 
 logger = logging.getLogger(__name__)
 
-class CourseBAE(BaseBAE):
+class CourseBae(BaseBae):
     """
     Business Autonomous Entity representing the Course domain entity.
     Specialized BAE for managing course-related operations, curriculum management,

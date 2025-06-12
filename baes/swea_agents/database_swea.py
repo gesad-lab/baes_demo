@@ -1,5 +1,5 @@
-from baes.agents.base_agent import BaseAgent
-from baes.core.managed_system_manager import ManagedSystemManager
+from ..agents.base_agent import BaseAgent
+from ..core.managed_system_manager import ManagedSystemManager
 from typing import Dict, Any, List
 import os
 import sqlite3
