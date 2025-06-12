@@ -101,6 +101,19 @@ def mock_openai_client():
                     "recommendations": ["Excellent domain coherence maintained"],
                     "validation_summary": "Artifact maintains excellent domain coherence for Student entity"
                 }"""
+            elif "interpret" in prompt.lower() and "business request" in prompt.lower():
+                # Return business request interpretation response
+                return """{
+                    "interpreted_intent": "create_student_management_system",
+                    "entity_focus": "Student",
+                    "domain_operations": ["create", "read", "update", "delete"],
+                    "swea_coordination": [
+                        {"agent": "DatabaseSWEA", "task": "setup_database"},
+                        {"agent": "ProgrammerSWEA", "task": "generate_api"},
+                        {"agent": "FrontendSWEA", "task": "generate_ui"}
+                    ],
+                    "business_vocabulary": ["student", "academic", "learning", "registration"]
+                }"""
             else:
                 # Return schema generation response
                 return """
@@ -172,6 +185,19 @@ def mock_all_openai_clients():
                     "issues": [],
                     "recommendations": ["Excellent domain coherence maintained"],
                     "validation_summary": "Artifact maintains excellent domain coherence for Student entity"
+                }"""
+            elif "interpret" in prompt.lower() and "business request" in prompt.lower():
+                # Return business request interpretation response
+                return """{
+                    "interpreted_intent": "create_student_management_system",
+                    "entity_focus": "Student",
+                    "domain_operations": ["create", "read", "update", "delete"],
+                    "swea_coordination": [
+                        {"agent": "DatabaseSWEA", "task": "setup_database"},
+                        {"agent": "ProgrammerSWEA", "task": "generate_api"},
+                        {"agent": "FrontendSWEA", "task": "generate_ui"}
+                    ],
+                    "business_vocabulary": ["student", "academic", "learning", "registration"]
                 }"""
             else:
                 # Return schema generation response

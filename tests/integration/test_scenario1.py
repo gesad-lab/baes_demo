@@ -18,7 +18,7 @@ class TestScenario1:
 
     def test_scenario1_complete_workflow(
         self,
-        mock_openai_client,
+        mock_all_openai_clients,
         temp_database_path,
         clean_test_environment,
         performance_tracker,
@@ -165,7 +165,9 @@ class TestScenario1:
         print(f"🤖 SWEA agents coordinated: {len(coordination_plan)}")
         print(f"📚 Domain knowledge preserved: {bool(preserved_knowledge)}")
 
-    def test_student_bae_autonomous_operation(self, mock_openai_client, clean_test_environment):
+    def test_student_bae_autonomous_operation(
+        self, mock_all_openai_clients, clean_test_environment
+    ):
         """Test that Student BAE operates autonomously as domain entity representative"""
 
         student_bae = StudentBAE()
@@ -200,7 +202,7 @@ class TestScenario1:
 
         print("✅ Student BAE demonstrated autonomous domain entity representation")
 
-    def test_semantic_coherence_maintenance(self, mock_openai_client, clean_test_environment):
+    def test_semantic_coherence_maintenance(self, mock_all_openai_clients, clean_test_environment):
         """Test that semantic coherence is maintained between business vocabulary and technical artifacts"""
 
         student_bae = StudentBAE()
@@ -240,7 +242,7 @@ class TestScenario1:
         )
 
     def test_domain_knowledge_reusability_preparation(
-        self, mock_openai_client, temp_database_path, clean_test_environment
+        self, mock_all_openai_clients, temp_database_path, clean_test_environment
     ):
         """Test that domain knowledge is preserved for future reusability (prepares for Scenario 3)"""
 
