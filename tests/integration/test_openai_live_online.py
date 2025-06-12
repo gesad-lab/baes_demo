@@ -5,6 +5,7 @@ import pytest
 from baes.llm.openai_client import OpenAIClient
 
 
+@pytest.mark.integration
 @pytest.mark.integration_online
 def test_openai_client_live_echo():
     """Simple live-call smoke test against GPT-4o-mini to verify connectivity."""

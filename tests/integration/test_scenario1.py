@@ -11,7 +11,7 @@ from baes.core.context_store import ContextStore
 from baes.domain_entities.academic.student_bae import StudentBae as StudentBAE
 
 
-@pytest.mark.scenario
+@pytest.mark.integration
 @pytest.mark.slow
 class TestScenario1:
     """Test suite for Scenario 1: Initial System Generation"""

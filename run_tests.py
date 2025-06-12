@@ -33,8 +33,6 @@ def main():
             "all",
             "unit",
             "integration",
-            "scenario",
-            "scenario1",
             "performance",
             "quick",
             "online",
@@ -73,16 +71,12 @@ def main():
         cmd.extend(["-m", "unit", str(TESTS_ROOT / "unit")])
     elif args.test_type == "integration":
         cmd.extend(["-m", "integration", str(TESTS_ROOT / "integration")])
-    elif args.test_type == "scenario":
-        cmd.extend(["-m", "scenario", str(TESTS_ROOT / "scenarios")])
-    elif args.test_type == "scenario1":
-        cmd.append(str(TESTS_ROOT / "scenarios" / "test_scenario1.py"))
     elif args.test_type == "performance":
         cmd.extend(["-m", "performance"])
     elif args.test_type == "online":
         # Ensure env variable is set for live tests
         os.environ["RUN_ONLINE"] = "1"
-        cmd.extend(["-m", "integration_online", str(TESTS_ROOT / "integration_online")])
+        cmd.extend(["-m", "integration_online", str(TESTS_ROOT / "integration")])
     elif args.test_type == "quick":
         cmd.extend(["-m", "not slow", str(TESTS_ROOT / "unit")])
 
