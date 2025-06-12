@@ -1,5 +1,5 @@
 import os
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -7,10 +7,12 @@ from baes.core.runtime_kernel import RuntimeKernel
 
 
 @pytest.mark.integration
-@patch('baes.llm.openai_client.OpenAIClient')
-@patch('baes.swea_agents.programmer_swea.OpenAIClient')
-@patch('baes.swea_agents.frontend_swea.OpenAIClient')
-def test_full_scenario1_flow(mock_frontend_client, mock_programmer_client, mock_student_client, tmp_path, monkeypatch):
+@patch("baes.llm.openai_client.OpenAIClient")
+@patch("baes.swea_agents.programmer_swea.OpenAIClient")
+@patch("baes.swea_agents.frontend_swea.OpenAIClient")
+def test_full_scenario1_flow(
+    mock_frontend_client, mock_programmer_client, mock_student_client, tmp_path, monkeypatch
+):
     """Run the runtime kernel end-to-end (without starting servers)."""
 
     # Mock OpenAI responses to avoid API calls
@@ -35,9 +37,12 @@ def test_full_scenario1_flow(mock_frontend_client, mock_programmer_client, mock_
 
     # Run kernel
     kernel = RuntimeKernel(context_store_path=str(tmp_path / "ctx.json"))
-    kernel.run("Create a system to manage students with name, registration number, and course", start_servers=False)
+    kernel.run(
+        "Create a system to manage students with name, registration number, and course",
+        start_servers=False,
+    )
 
     # Assert artefacts exist in managed system (skip for now since we use managed system)
     # The runtime kernel now creates files in separate managed system directory
     # These assertions are no longer relevant for the current baes_demo structure
-    print("Runtime kernel test completed - generated files now go to managed system") 
+    print("Runtime kernel test completed - generated files now go to managed system")

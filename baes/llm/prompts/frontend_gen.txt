@@ -12,4 +12,4 @@ Requirements:
 1. Use Streamlit best practices (forms, tables).
 2. Call the REST endpoints exposed at /{entity_lower}s.
 3. Preserve business vocabulary in labels and titles.
-4. Return ONLY executable Python code – no markdown or explanations. 
+4. Return ONLY executable Python code – no markdown or explanations.

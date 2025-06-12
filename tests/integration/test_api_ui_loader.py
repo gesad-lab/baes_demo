@@ -1,6 +1,7 @@
 # Provide a lightweight stub for fastapi if not installed in the test environment
 import sys
 from types import ModuleType
+
 try:
     import fastapi  # type: ignore
 except ModuleNotFoundError:
@@ -18,6 +19,7 @@ except ModuleNotFoundError:
             def decorator(func):
                 self.routes.append(_StubRoute(path))
                 return func
+
             return decorator
 
     class FastAPI:  # type: ignore
@@ -33,8 +35,8 @@ except ModuleNotFoundError:
     sys.modules["fastapi"] = fake_fastapi
 
 import os
-from pathlib import Path
 from importlib import reload
+from pathlib import Path
 
 import pytest
 
@@ -44,9 +46,11 @@ class TestApiAndUiLoader:
     def teardown_method(self):
         """Cleanup test generated directories"""
         import shutil
+
         test_generated_dir = Path("tests") / "test_generated"
         if test_generated_dir.exists():
             shutil.rmtree(test_generated_dir, ignore_errors=True)
+
     def _create_dummy_route_module(self):
         # Create test route module in tests directory
         test_routes_dir = Path("tests") / "test_generated" / "routes"
@@ -80,4 +84,4 @@ def render():\n    st.write('Dummy UI')\n"""
     @pytest.mark.skip(reason="ui module removed - now handled by managed system")
     def test_ui_loader(self):
         # This test is no longer relevant since ui/ directory was moved to managed system
-        pass 
+        pass

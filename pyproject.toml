@@ -12,8 +12,8 @@ authors = [
     {name = "Anderson Martins Gomes", email = "your.email@example.com"}
 ]
 keywords = [
-    "business-autonomous-entities", 
-    "llm-agents", 
+    "business-autonomous-entities",
+    "llm-agents",
     "domain-driven-design",
     "runtime-adaptation",
     "semantic-coherence"
@@ -73,13 +73,13 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
     "--strict-markers",
-    "--disable-warnings", 
+    "--disable-warnings",
     "--tb=short",
     "-v"
 ]
 markers = [
     "integration: Integration tests",
-    "unit: Unit tests", 
+    "unit: Unit tests",
     "scenario: Scenario tests",
     "integration_online: Online integration tests with live API calls",
     "slow: Slow running tests",
@@ -123,4 +123,4 @@ exclude = '''
   | \.pytest_cache
   | __pycache__
 )/
-''' 
+'''

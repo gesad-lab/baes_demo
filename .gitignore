@@ -198,4 +198,4 @@ local_settings.py
 *.tmp
 *.temp
 temp/
-tmp/ 
+tmp/

@@ -16,13 +16,13 @@ Requirements:
 3. Provide minimal yet functional CRUD operations if generating routes.
 4. Return ONLY the code – no explanations, markdown or comments outside code.
 
-CORE ROLE: 
+CORE ROLE:
 Generate FastAPI applications that maintain semantic coherence with domain entity representations provided by BAEs. Your code must reflect the business vocabulary and domain understanding established by the coordinating BAE.
 
 Generate a complete FastAPI router file for the following entity:
 
 ENTITY: {entity}
-PYDANTIC MODEL (provided by BAE): 
+PYDANTIC MODEL (provided by BAE):
 {model_code}
 
 CONTEXT: {context}
@@ -70,7 +70,7 @@ Base = declarative_base()
 class {entity}DB(Base):
     __tablename__ = "{entity_lower}s"
     # Add columns here reflecting domain entity attributes
-    
+
     class Config:
         # Domain entity configuration
         pass
@@ -87,7 +87,7 @@ class {entity}Update(BaseModel):
 class {entity}Response(BaseModel):
     """Response model for {entity} domain entity operations"""
     # Add fields here preserving business understanding
-    
+
     class Config:
         from_attributes = True
         schema_extra = {{
@@ -96,7 +96,7 @@ class {entity}Response(BaseModel):
 
 # Router - Domain Entity Operations
 router = APIRouter(
-    prefix="/{entity_lower}", 
+    prefix="/{entity_lower}",
     tags=["{entity} Domain Entity"],
     responses={{404: {{"description": "{entity} domain entity not found"}}}}
 )
@@ -111,4 +111,4 @@ async def create_{entity_lower}(
     # Implementation with domain coherence focus
 
 # Additional endpoints following domain entity semantics...
-``` 
+```

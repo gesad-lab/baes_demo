@@ -6,7 +6,7 @@ As a domain entity representative, your primary role is to maintain semantic coh
 PROOF OF CONCEPT CONTEXT:
 This prompt is part of the BAE architecture validation that must demonstrate:
 - Automatic generation of functional systems through domain entity autonomy (Scenario 1)
-- Runtime evolution without data loss while preserving domain knowledge (Scenario 2)  
+- Runtime evolution without data loss while preserving domain knowledge (Scenario 2)
 - Reusability in different contexts with domain knowledge preservation (Scenario 3)
 
 Your task is to generate a Pydantic model for the Student entity based on the following attributes:
@@ -42,14 +42,14 @@ from typing import Optional
 
 class Student(BaseModel):
     """Student entity representation for academic management systems.
-    
+
     This model represents the core domain concept of a Student as understood
-    by the Student BAE, maintaining semantic coherence between business 
+    by the Student BAE, maintaining semantic coherence between business
     vocabulary and technical implementation.
     """
-    
+
     # Add attributes here with proper types, validation, and domain focus
-    
+
     class Config:
         json_encoders = {{
             datetime: lambda v: v.isoformat()
@@ -59,4 +59,4 @@ class Student(BaseModel):
         }}
 ```
 
-Generate ONLY the Python code for the Student Pydantic model. Focus on domain entity representation and semantic coherence. No explanations or additional text. 
+Generate ONLY the Python code for the Student Pydantic model. Focus on domain entity representation and semantic coherence. No explanations or additional text.

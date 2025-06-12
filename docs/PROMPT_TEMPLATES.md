@@ -15,7 +15,7 @@ As a domain entity representative, your primary role is to maintain semantic coh
 PROOF OF CONCEPT CONTEXT:
 This prompt is part of the BAE architecture validation that must demonstrate:
 - Automatic generation of functional systems through domain entity autonomy (Scenario 1)
-- Runtime evolution without data loss while preserving domain knowledge (Scenario 2)  
+- Runtime evolution without data loss while preserving domain knowledge (Scenario 2)
 - Reusability in different contexts with domain knowledge preservation (Scenario 3)
 
 Your task is to generate a Pydantic model for the Student entity based on the following attributes:
@@ -51,14 +51,14 @@ from typing import Optional
 
 class Student(BaseModel):
     """Student entity representation for academic management systems.
-    
+
     This model represents the core domain concept of a Student as understood
-    by the Student BAE, maintaining semantic coherence between business 
+    by the Student BAE, maintaining semantic coherence between business
     vocabulary and technical implementation.
     """
-    
+
     # Add attributes here with proper types, validation, and domain focus
-    
+
     class Config:
         json_encoders = {
             datetime: lambda v: v.isoformat()
@@ -78,13 +78,13 @@ Generate ONLY the Python code for the Student Pydantic model. Focus on domain en
 ```
 You are a Programmer SWEA (Software Engineering Autonomous Agent) working under coordination of Business Autonomous Entities (BAEs).
 
-CORE ROLE: 
+CORE ROLE:
 Generate FastAPI applications that maintain semantic coherence with domain entity representations provided by BAEs. Your code must reflect the business vocabulary and domain understanding established by the coordinating BAE.
 
 Generate a complete FastAPI router file for the following entity:
 
 ENTITY: {entity}
-PYDANTIC MODEL (provided by BAE): 
+PYDANTIC MODEL (provided by BAE):
 {model_code}
 
 REQUIREMENTS:
@@ -129,7 +129,7 @@ Base = declarative_base()
 class {entity}DB(Base):
     __tablename__ = "{entity.lower()}s"
     # Add columns here reflecting domain entity attributes
-    
+
     class Config:
         # Domain entity configuration
         pass
@@ -146,7 +146,7 @@ class {entity}Update(BaseModel):
 class {entity}Response(BaseModel):
     """Response model for {entity} domain entity operations"""
     # Add fields here preserving business understanding
-    
+
     class Config:
         from_attributes = True
         schema_extra = {{
@@ -155,7 +155,7 @@ class {entity}Response(BaseModel):
 
 # Router - Domain Entity Operations
 router = APIRouter(
-    prefix="/{entity.lower()}", 
+    prefix="/{entity.lower()}",
     tags=["{entity} Domain Entity"],
     responses={{404: {{"description": "{entity} domain entity not found"}}}}
 )
@@ -193,7 +193,7 @@ PYDANTIC MODEL (provided by BAE):
 
 API ENDPOINTS (coordinated by BAE):
 - POST /api/{entity.lower()}/ (create domain entity)
-- GET /api/{entity.lower()}s/ (list all domain entities)  
+- GET /api/{entity.lower()}s/ (list all domain entities)
 - GET /api/{entity.lower()}/{{id}} (retrieve domain entity)
 - PUT /api/{entity.lower()}/{{id}} (update domain entity)
 - DELETE /api/{entity.lower()}/{{id}} (remove domain entity)
@@ -241,18 +241,18 @@ def main():
         page_icon="🎓",
         layout="wide"
     )
-    
+
     st.title("{entity} Management System")
     st.markdown("Domain Entity Management Interface for Business Users")
-    
+
     # Sidebar for navigation using business terminology
     st.sidebar.title("Business Operations")
     page = st.sidebar.selectbox(
-        "Choose Operation", 
+        "Choose Operation",
         ["View All {entity}s", "Add New {entity}", "Manage {entity}s"],
         help="Select the business operation you want to perform"
     )
-    
+
     if page == "View All {entity}s":
         show_all_{entity.lower()}s()
     elif page == "Add New {entity}":
@@ -264,7 +264,7 @@ def show_all_{entity.lower()}s():
     """Display all {entity} domain entities in business-friendly format"""
     st.header("All {entity}s")
     st.markdown("Overview of all {entity.lower()} entities in the system")
-    
+
     try:
         response = requests.get(f"{{API_BASE_URL}}/{entity.lower()}s/")
         if response.status_code == 200:
@@ -273,7 +273,7 @@ def show_all_{entity.lower()}s():
                 # Convert to DataFrame with business-friendly columns
                 df = pd.DataFrame({entity.lower()}s)
                 st.dataframe(
-                    df, 
+                    df,
                     use_container_width=True,
                     column_config={{
                         # Configure columns with business terminology
@@ -285,26 +285,26 @@ def show_all_{entity.lower()}s():
             st.error("Failed to retrieve {entity.lower()}s from the system.")
     except Exception as e:
         st.error(f"Error connecting to the system: {{str(e)}}")
-    
+
 def add_new_{entity.lower()}():
     """Create new {entity} domain entity with business form"""
     st.header("Add New {entity}")
     st.markdown("Enter {entity.lower()} information using the form below")
-    
+
     with st.form("new_{entity.lower()}_form"):
         # Form fields reflecting domain entity attributes with business labels
         # Implementation here with business vocabulary
-        
+
         submitted = st.form_submit_button("Create {entity}")
         if submitted:
             # Handle domain entity creation with business feedback
             pass
-    
+
 def edit_delete_{entity.lower()}():
     """Manage existing {entity} domain entities"""
     st.header("Manage {entity}s")
     st.markdown("Select a {entity.lower()} to update or remove")
-    
+
     # Implementation here with business workflow focus
     pass
 
@@ -354,7 +354,7 @@ MESSAGE FORMAT:
 ```json
 {
   "from_agent": "agent_name",
-  "to_agent": "target_agent", 
+  "to_agent": "target_agent",
   "task": "task_name",
   "payload": {
     "data": "relevant_data",
@@ -400,7 +400,7 @@ WORKFLOW FORMAT:
     {
       "step": 1,
       "agent": "agent_name",
-      "task": "task_name", 
+      "task": "task_name",
       "payload": "task_payload"
     }
   ],
@@ -426,7 +426,7 @@ Test Type: {test_type}
 
 GENERATE TESTS FOR:
 1. Unit tests for individual functions
-2. Integration tests for agent interactions  
+2. Integration tests for agent interactions
 3. End-to-end tests for complete workflows
 4. Business logic validation tests
 5. Error handling tests
@@ -451,17 +451,17 @@ class TestStudentBAE:
     @pytest.fixture
     def student_bae(self):
         return StudentBAE()
-    
+
     def test_generate_schema_success(self, student_bae):
         # Test implementation
-        
+
     def test_generate_schema_failure(self, student_bae):
         # Test implementation
-        
+
     @patch('baes.llm.openai_client.OpenAIClient.generate_response')
     def test_with_mocked_llm(self, mock_response, student_bae):
         # Test implementation
 ```
 
 Generate comprehensive test code for the specified component.
-``` 
+```

@@ -1,18 +1,20 @@
-import os
-import sys
-import subprocess
-import importlib
-from pathlib import Path
-from typing import Dict, Type
 import argparse
+import importlib
+import json
 import logging
+import os
+import subprocess  # nosec B404
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-from baes.core.enhanced_runtime_kernel import EnhancedRuntimeKernel
 from baes.core.bae_registry import EnhancedBAERegistry
+from baes.core.enhanced_runtime_kernel import EnhancedRuntimeKernel
 from baes.core.entity_recognizer import EntityRecognizer
 from config import Config
 
 logger = logging.getLogger(__name__)
+
 
 class RuntimeKernel:
     """
@@ -27,18 +29,22 @@ class RuntimeKernel:
     # ------------------------------------------------------------------
     # Public API - Legacy compatibility methods
     # ------------------------------------------------------------------
-    def run(self, natural_language_request: str, context: str = "academic", start_servers: bool = True):
+    def run(
+        self, natural_language_request: str, context: str = "academic", start_servers: bool = True
+    ):
         """Legacy compatibility method that delegates to Enhanced Runtime Kernel"""
         logger.info("📥 Legacy run method - delegating to Enhanced Runtime Kernel")
-        
+
         result = self.enhanced_kernel.process_natural_language_request(
             natural_language_request, context, start_servers
         )
-        
+
         if not result.get("success", False):
-            logger.error("❌ Enhanced kernel processing failed: %s", result.get("message", "Unknown error"))
+            logger.error(
+                "❌ Enhanced kernel processing failed: %s", result.get("message", "Unknown error")
+            )
             return
-        
+
         logger.info("✅ Legacy run method completed successfully via Enhanced Runtime Kernel")
 
     # ------------------------------------------------------------------
@@ -48,16 +54,16 @@ class RuntimeKernel:
     def context_store(self):
         """Legacy compatibility property"""
         return self.enhanced_kernel.context_store
-    
+
     @property
     def student_bae(self):
         """Legacy compatibility property for accessing StudentBAE"""
         return self.enhanced_kernel.bae_registry.get_bae("student")
-    
+
     def get_supported_entities(self):
         """Get information about supported entities"""
         return self.enhanced_kernel.get_supported_entities_info()
-    
+
     def validate_request(self, request: str):
         """Validate if a request can be handled"""
         return self.enhanced_kernel.validate_entity_request(request)
@@ -67,12 +73,15 @@ class RuntimeKernel:
 # CLI
 # ----------------------------------------------------------------------
 
+
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Runtime Kernel for BAE Academic System – Scenario 1 initial generation",
     )
     parser.add_argument("request", help="Natural-language request from the HBE")
-    parser.add_argument("--context", default="academic", help="Business context (default: academic)")
+    parser.add_argument(
+        "--context", default="academic", help="Business context (default: academic)"
+    )
     parser.add_argument(
         "--no-server",
         action="store_true",
@@ -90,4 +99,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main() 
+    main()

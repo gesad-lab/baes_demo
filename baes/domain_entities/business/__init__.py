@@ -1,7 +1,7 @@
 """
 Business Domain BAEs
 
-This package is reserved for future BAE implementations 
+This package is reserved for future BAE implementations
 for business domain entities like Customer, Product, Order, etc.
 """
 
@@ -12,4 +12,4 @@ for business domain entities like Customer, Product, Order, etc.
 
 __all__ = [
     # Future business BAEs
-] 
+]

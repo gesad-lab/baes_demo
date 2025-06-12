@@ -11,7 +11,7 @@ This module maintains the base agent class and backward compatibility.
 import sys
 
 # Expose this package as top-level 'agents' for backward compatibility in tests
-sys.modules.setdefault('agents', sys.modules[__name__])
+sys.modules.setdefault("agents", sys.modules[__name__])
 
 # Base agent class (remains in agents/)
 from .base_agent import BaseAgent

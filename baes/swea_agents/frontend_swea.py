@@ -1,8 +1,10 @@
-from ..agents.base_agent import BaseAgent
-from ..llm.openai_client import OpenAIClient
-from ..core.managed_system_manager import ManagedSystemManager
-from typing import Dict, Any, List
 import os
+from typing import Any, Dict, List
+
+from ..agents.base_agent import BaseAgent
+from ..core.managed_system_manager import ManagedSystemManager
+from ..llm.openai_client import OpenAIClient
+
 
 class FrontendSWEA(BaseAgent):
     """SWEA responsible for generating Streamlit UI code for domain entities."""
@@ -12,16 +14,14 @@ class FrontendSWEA(BaseAgent):
         self.llm_client = OpenAIClient()
         self.managed_system_manager = ManagedSystemManager()
 
-    _SUPPORTED_TASKS = {
-        "generate_ui": "_generate_ui"
-    }
+    _SUPPORTED_TASKS = {"generate_ui": "_generate_ui"}
 
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if task not in self._SUPPORTED_TASKS:
             return self.create_error_response(
                 task,
                 f"Unknown task. Supported tasks: {list(self._SUPPORTED_TASKS.keys())}",
-                "invalid_task"
+                "invalid_task",
             )
         method = getattr(self, self._SUPPORTED_TASKS[task])
         try:
@@ -45,20 +45,20 @@ class FrontendSWEA(BaseAgent):
             entity=entity,
             entity_lower=entity.lower(),
             attributes=", ".join(attributes),
-            context=context
+            context=context,
         )
 
     def _write_to_managed_system(self, entity: str, code: str) -> str:
         """Write UI code to the managed system instead of the legacy generated directory."""
         # Ensure managed system structure exists
         self.managed_system_manager.ensure_managed_system_structure()
-        
+
         # Write the UI artifact to managed system
         file_path = self.managed_system_manager.write_entity_artifact(entity, "ui", code)
-        
+
         # Update main system files to include new entity
         self.managed_system_manager.update_system_files()
-        
+
         return file_path
 
     def _generate_ui(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -73,9 +73,11 @@ class FrontendSWEA(BaseAgent):
             entity_context={
                 "entity": entity,
                 "attributes": attributes,
-                "business_rules": payload.get("business_rules", [])
+                "business_rules": payload.get("business_rules", []),
             },
         )
 
         file_path = self._write_to_managed_system(entity, code)
-        return self.create_success_response("generate_ui", {"file_path": file_path, "code": code, "managed_system": True}) 
+        return self.create_success_response(
+            "generate_ui", {"file_path": file_path, "code": code, "managed_system": True}
+        )
