@@ -1,0 +1,71 @@
+# Pre-commit configuration for BAE project
+# Ensures code quality and testing before commits and pushes
+
+repos:
+  # Code formatting and linting
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+        name: Format code with Black
+        language_version: python3
+        args: [--line-length=88]
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        name: Sort imports with isort
+        args: [--profile=black]
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.1.1
+    hooks:
+      - id: flake8
+        name: Lint with flake8
+        args: [--max-line-length=88, --extend-ignore=E203,W503]
+
+  # Security check
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.8
+    hooks:
+      - id: bandit
+        name: Security check with bandit
+        args: [-r, ., -x, tests/,venv/,.venv/]
+
+  # Basic file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        name: Remove trailing whitespace
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: check-yaml
+        name: Check YAML syntax
+      - id: check-added-large-files
+        name: Check for large files
+        args: [--maxkb=1000]
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+
+  # BAE-specific testing hooks
+  - repo: local
+    hooks:
+      # Unit tests for commits
+      - id: bae-unit-tests
+        name: 🧪 BAE Unit Tests (Pre-commit)
+        entry: python run_tests.py unit
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+        verbose: true
+
+      # Full test suite for pushes
+      - id: bae-full-tests
+        name: 🚀 BAE Full Test Suite (Pre-push)
+        entry: ./scripts/run_full_tests.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        verbose: true
