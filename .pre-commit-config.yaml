@@ -58,6 +58,7 @@ repos:
         entry: python run_tests.py unit
         language: system
         pass_filenames: false
+        always_run: true
         stages: [pre-commit]
         verbose: true
 
@@ -67,5 +68,6 @@ repos:
         entry: python run_tests.py all
         language: system
         pass_filenames: false
+        always_run: true
         stages: [pre-push]
         verbose: true
