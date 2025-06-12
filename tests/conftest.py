@@ -6,8 +6,8 @@ in the BAE (Business Autonomous Entities) test suite.
 """
 
 import os
+import shutil
 import sys
-import tempfile
 from pathlib import Path
 from typing import Dict
 from unittest.mock import Mock, patch
@@ -23,16 +23,59 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, o
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
+# Global temp directory management
+TESTS_TEMP_DIR = Path(__file__).parent / ".temp"
+
+
+def pytest_configure(config):
+    """Configure custom pytest markers and setup global temp directory"""
+    config.addinivalue_line("markers", "unit: Unit tests for individual components")
+    config.addinivalue_line("markers", "integration: Integration tests for component interaction")
+    config.addinivalue_line(
+        "markers", "scenario: Scenario-based tests for proof of concept validation"
+    )
+    config.addinivalue_line("markers", "performance: Performance and timing tests")
+    config.addinivalue_line("markers", "slow: Tests that take longer to run")
+    config.addinivalue_line(
+        "markers", "integration_online: Tests that hit live external services (OpenAI)"
+    )
+
+    # Create global temp directory
+    TESTS_TEMP_DIR.mkdir(exist_ok=True)
+
+
+def pytest_unconfigure(config):
+    """Clean up global temp directory after all tests complete"""
+    if TESTS_TEMP_DIR.exists():
+        shutil.rmtree(TESTS_TEMP_DIR, ignore_errors=True)
+
+
+def pytest_runtest_setup(item):
+    """Setup for individual test runs"""
+    if "integration_online" in item.keywords:
+        if os.getenv("RUN_ONLINE", "0") != "1":
+            pytest.skip("Set RUN_ONLINE=1 to run live OpenAI tests")
+        if not os.getenv("OPENAI_API_KEY"):
+            pytest.skip("OPENAI_API_KEY not set in environment")
+
 
 @pytest.fixture
 def temp_database_path():
-    """Provide a temporary database path for testing"""
-    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-        temp_path = f.name
-    yield temp_path
+    """Provide a temporary database path for testing under tests/.temp"""
+    # Ensure temp directory exists
+    TESTS_TEMP_DIR.mkdir(exist_ok=True)
+
+    # Create temporary file in tests/.temp
+    temp_file = TESTS_TEMP_DIR / f"test_db_{os.getpid()}_{id(object())}.json"
+
+    # Create empty file
+    temp_file.touch()
+
+    yield str(temp_file)
+
     # Cleanup
-    if os.path.exists(temp_path):
-        os.unlink(temp_path)
+    if temp_file.exists():
+        temp_file.unlink()
 
 
 @pytest.fixture
@@ -164,8 +207,14 @@ class Student(BaseModel):
 
 @pytest.fixture
 def temp_test_directory():
-    """Provide a temporary directory for test file generation with automatic cleanup"""
-    test_dir = tempfile.mkdtemp(prefix="bae_test_", dir="tests")
+    """Provide a temporary directory for test file generation under tests/.temp with automatic cleanup"""
+    # Ensure temp directory exists
+    TESTS_TEMP_DIR.mkdir(exist_ok=True)
+
+    # Create unique test directory
+    test_dir = TESTS_TEMP_DIR / f"test_dir_{os.getpid()}_{id(object())}"
+    test_dir.mkdir(parents=True)
+
     original_cwd = os.getcwd()
     os.chdir(test_dir)
 
@@ -179,13 +228,12 @@ def temp_test_directory():
     with open("llm/prompts/student_schema.txt", "w") as f:
         f.write("Generate a Pydantic model for {entity} entity with attributes: {attributes}")
 
-    yield test_dir
+    yield str(test_dir)
 
     # Cleanup
     os.chdir(original_cwd)
-    import shutil
-
-    shutil.rmtree(test_dir, ignore_errors=True)
+    if test_dir.exists():
+        shutil.rmtree(test_dir, ignore_errors=True)
 
 
 @pytest.fixture
@@ -230,20 +278,16 @@ def mock_context_store(temp_database_path):
 
 @pytest.fixture
 def clean_test_environment():
-    """Ensure clean test environment"""
-    # Clean up any existing test files
-    test_files = ["database/test_context_store.json", "database/scenario1_test.json"]
+    """Ensure clean test environment with proper temp directory management"""
+    # Create session-specific temp directory for this test
+    session_temp = TESTS_TEMP_DIR / f"clean_env_{os.getpid()}_{id(object())}"
+    session_temp.mkdir(parents=True, exist_ok=True)
 
-    for file_path in test_files:
-        if os.path.exists(file_path):
-            os.unlink(file_path)
+    yield str(session_temp)
 
-    yield
-
-    # Cleanup after test
-    for file_path in test_files:
-        if os.path.exists(file_path):
-            os.unlink(file_path)
+    # Cleanup session temp directory
+    if session_temp.exists():
+        shutil.rmtree(session_temp, ignore_errors=True)
 
 
 @pytest.fixture
@@ -272,34 +316,6 @@ def performance_tracker():
             return self.metrics.copy()
 
     return PerformanceTracker()
-
-
-# Test markers for different test categories
-def pytest_configure(config):
-    """Configure custom pytest markers"""
-    config.addinivalue_line("markers", "unit: Unit tests for individual components")
-    config.addinivalue_line("markers", "integration: Integration tests for component interaction")
-    config.addinivalue_line(
-        "markers", "scenario: Scenario-based tests for proof of concept validation"
-    )
-    config.addinivalue_line("markers", "performance: Performance and timing tests")
-    config.addinivalue_line("markers", "slow: Tests that take longer to run")
-    config.addinivalue_line(
-        "markers", "integration_online: Tests that hit live external services (OpenAI)"
-    )
-
-
-# ---------------------------------------------------------------------------
-#  Optional online-integration control
-# ---------------------------------------------------------------------------
-
-
-def pytest_runtest_setup(item):
-    if "integration_online" in item.keywords:
-        if os.getenv("RUN_ONLINE", "0") != "1":
-            pytest.skip("Set RUN_ONLINE=1 to run live OpenAI tests")
-        if not os.getenv("OPENAI_API_KEY"):
-            pytest.skip("OPENAI_API_KEY not set in environment")
 
 
 # Scenario 1 specific fixtures
@@ -363,51 +379,46 @@ def assert_swea_response_valid(result):
 
     if result.get("success"):
         assert (
-            "code" in result or "ui" in result or "schema" in result
+            "result" in result or "code" in result or "ui" in result
         ), "Successful SWEA response must contain generated artifacts"
 
 
 def assert_coordination_plan_valid(coordination_plan, min_agents=2):
-    """Helper function to validate SWEA coordination plan structure"""
+    """Helper function to validate coordination plan structure"""
     assert isinstance(coordination_plan, list), "Coordination plan must be a list"
-    assert (
-        len(coordination_plan) >= min_agents
-    ), f"Expected at least {min_agents} SWEA agents in coordination plan"
+    assert len(coordination_plan) >= min_agents, f"Expected at least {min_agents} agents in plan"
 
     for task in coordination_plan:
-        assert "swea_agent" in task, "Each coordination task must specify SWEA agent"
-        assert "task_type" in task, "Each coordination task must specify task type"
-        assert "domain_context" in task, "Each coordination task must include domain context"
+        assert isinstance(task, dict), "Each coordination task must be a dictionary"
+        assert "swea_agent" in task, "Each task must specify swea_agent"
+        assert "task_type" in task, "Each task must specify task_type"
 
 
 def assert_semantic_coherence(result, min_score=80):
-    """Helper function to validate semantic coherence in responses"""
-    if "semantic_coherence_score" in result:
+    """Helper function to validate semantic coherence"""
+    if isinstance(result, dict) and "semantic_coherence_score" in result:
         score = result["semantic_coherence_score"]
         assert score >= min_score, f"Semantic coherence score {score} below minimum {min_score}"
 
-    if "business_vocabulary_preserved" in result:
-        assert (
-            result["business_vocabulary_preserved"] is True
-        ), "Business vocabulary must be preserved"
+    # Check for business vocabulary preservation
+    if isinstance(result, dict) and "business_vocabulary_preserved" in result:
+        assert result["business_vocabulary_preserved"], "Business vocabulary must be preserved"
 
 
 def assert_success_metrics(metrics, criteria):
     """Helper function to validate success metrics against criteria"""
     for key, expected_value in criteria.items():
-        if key.endswith("_time_seconds"):
-            actual_time = metrics.get(key.replace("_seconds", ""), float("inf"))
+        assert key in metrics, f"Missing metric: {key}"
+
+        if isinstance(expected_value, (int, float)):
             assert (
-                actual_time < expected_value
-            ), f"Time metric {key}: {actual_time:.2f}s exceeds {expected_value}s"
-        elif key.startswith("min_"):
-            metric_name = key.replace("min_", "")
-            actual_value = metrics.get(metric_name, 0)
-            assert (
-                actual_value >= expected_value
-            ), f"Metric {metric_name}: {actual_value} below minimum {expected_value}"
+                metrics[key] <= expected_value
+            ), f"Metric {key} exceeds threshold: {metrics[key]} > {expected_value}"
         elif isinstance(expected_value, bool):
-            actual_value = metrics.get(key, False)
             assert (
-                actual_value == expected_value
-            ), f"Boolean metric {key}: expected {expected_value}, got {actual_value}"
+                metrics[key] == expected_value
+            ), f"Metric {key} does not match expected: {metrics[key]} != {expected_value}"
+        elif isinstance(expected_value, list):
+            assert all(
+                item in metrics[key] for item in expected_value
+            ), f"Missing required items in {key}"

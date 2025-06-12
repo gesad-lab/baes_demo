@@ -14,15 +14,21 @@ import pytest
 from baes.core.managed_system_manager import ManagedSystemManager
 from config import Config
 
+# Use centralized temp directory from conftest
+TESTS_TEMP_DIR = Path(__file__).parent.parent / ".temp"
+
 
 @pytest.mark.unit
 class TestManagedSystemManager:
     """Test the ManagedSystemManager functionality."""
 
     def setup_method(self):
-        """Set up a temporary MANAGED_SYSTEM_PATH for each test."""
-        # Create a unique temporary directory and point the env-var to it
-        self.temp_dir = Path.cwd() / "tests" / "managed_system_tmp"
+        """Set up a temporary MANAGED_SYSTEM_PATH for each test under tests/.temp"""
+        # Ensure tests/.temp exists
+        TESTS_TEMP_DIR.mkdir(exist_ok=True)
+
+        # Create a unique temporary directory under tests/.temp
+        self.temp_dir = TESTS_TEMP_DIR / f"managed_system_test_{os.getpid()}_{id(self)}"
         if self.temp_dir.exists():
             shutil.rmtree(self.temp_dir)
         self.temp_dir.mkdir(parents=True)
@@ -41,7 +47,9 @@ class TestManagedSystemManager:
         else:
             os.environ.pop("MANAGED_SYSTEM_PATH", None)
 
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        # Clean up the specific temp directory for this test
+        if self.temp_dir.exists():
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     # ---------------------------------------------------------------------
     #  Actual tests

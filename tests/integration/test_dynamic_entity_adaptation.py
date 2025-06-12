@@ -6,6 +6,9 @@ import pytest
 from baes.core.runtime_kernel import RuntimeKernel
 from baes.domain_entities.academic.student_bae import StudentBae as StudentBAE
 
+# Use centralized temp directory from conftest
+TESTS_TEMP_DIR = Path(__file__).parent.parent / ".temp"
+
 
 @pytest.mark.integration
 class TestDynamicEntityAdaptation:
@@ -115,10 +118,16 @@ class TestDynamicEntityAdaptationLive:
 
     def test_live_runtime_kernel_integration(self, temp_test_directory):
         """Test runtime kernel with live API integration"""
-
-        os.environ["SKIP_SERVER_START"] = "1"
+        # Ensure we're using tests/.temp for file operations
+        TESTS_TEMP_DIR.mkdir(exist_ok=True)
+        original_cwd = os.getcwd()
 
         try:
+            # Change to temp_test_directory which is already in tests/.temp
+            os.chdir(temp_test_directory)
+
+            os.environ["SKIP_SERVER_START"] = "1"
+
             kernel = RuntimeKernel(
                 context_store_path=os.path.join(temp_test_directory, "context_store.json")
             )
@@ -130,8 +139,8 @@ class TestDynamicEntityAdaptationLive:
                 start_servers=False,
             )
 
-            # Verify at least some artifacts were created
-            generated_dir = Path("test_generated")
+            # Verify at least some artifacts were created in the temp directory
+            generated_dir = Path(temp_test_directory) / "test_generated"
             if generated_dir.exists():
                 # Check for any generated files
                 generated_files = list(generated_dir.rglob("*.py"))
@@ -142,6 +151,7 @@ class TestDynamicEntityAdaptationLive:
                         assert len(content.strip()) > 0, f"Generated file {file_path} is empty"
 
         finally:
+            os.chdir(original_cwd)
             if "SKIP_SERVER_START" in os.environ:
                 del os.environ["SKIP_SERVER_START"]
 

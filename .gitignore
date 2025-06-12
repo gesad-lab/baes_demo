@@ -157,7 +157,8 @@ database/*.sqlite3
 # Generated code is now handled by managed_system_demo
 # These entries kept for reference but directories are removed
 
-# Test generated directories (temporary test artifacts)
+# Test temporary files and directories
+tests/.temp/                    # Centralized temp directory for all tests
 tests/test_generated/
 tests/bae_test_*/
 tests/bae_live_test_*/
@@ -166,7 +167,7 @@ tests/bae_live_test_*/
 llm/logs/
 *.openai.log
 
-# Test temporary files
+# Test temporary files (legacy patterns - now handled by tests/.temp)
 test_*.json
 *_test.json
 test_output/
@@ -198,4 +199,3 @@ local_settings.py
 *.tmp
 *.temp
 temp/
-tmp/
