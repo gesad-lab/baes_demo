@@ -1,6 +1,9 @@
 # Pre-commit configuration for BAE project
 # Ensures code quality and testing before commits and pushes
 
+# Stop on first failure to avoid wasting time
+fail_fast: true
+
 repos:
   # Code formatting and linting
   - repo: https://github.com/psf/black
