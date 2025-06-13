@@ -52,7 +52,7 @@ def generate_and_preserve_system():
 
         # Check what was generated
         if managed_system_path.exists():
-            print(f"\n📂 Generated files:")
+            print("\n📂 Generated files:")
             for file_path in managed_system_path.rglob("*.py"):
                 if "venv" not in str(file_path):
                     print(f"  - {file_path.relative_to(managed_system_path)}")
@@ -60,7 +60,7 @@ def generate_and_preserve_system():
             # Check database
             db_path = managed_system_path / "app" / "database" / "academic.db"
             if db_path.exists():
-                print(f"\n🗄️ Database schema:")
+                print("\n🗄️ Database schema:")
                 conn = sqlite3.connect(str(db_path))
                 cursor = conn.cursor()
                 cursor.execute("PRAGMA table_info(students);")
