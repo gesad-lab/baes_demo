@@ -6,21 +6,19 @@ natural language input with real OpenAI API calls, actual file generation,
 real servers, and complete CRUD validation.
 """
 
-import json
 import os
 import shutil
 import sqlite3
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Dict
 
 import pytest
 import requests
 
 from baes.core.context_store import ContextStore
 from baes.core.enhanced_runtime_kernel import EnhancedRuntimeKernel
-from baes.domain_entities.academic.student_bae import StudentBae as StudentBAE
 
 # Use centralized temp directory from conftest (consistent with other tests)
 TESTS_TEMP_DIR = Path(__file__).parent.parent / ".temp"
@@ -51,7 +49,7 @@ class TestScenario1RealWorld:
             "Create a system to manage students with name, registration number, and course"
         )
 
-        print(f"\n🚀 Starting real system generation...")
+        print("\n🚀 Starting real system generation...")
         print(f"📝 Business Request: {business_request}")
         print(f"📁 Temp Directory: {temp_dir}")
 
@@ -209,7 +207,7 @@ class TestScenario1RealWorld:
         response = requests.get(root_url, timeout=5)
         assert response.status_code in [200, 404], f"API root check failed: {response.status_code}"
 
-        print(f"✅ FastAPI server is running and accessible")
+        print("✅ FastAPI server is running and accessible")
 
     def test_05_streamlit_server_startup(self, real_system_fixtures, server_manager):
         """Test Streamlit server starts and is accessible"""
@@ -231,7 +229,7 @@ class TestScenario1RealWorld:
             "streamlit" in response.text.lower() or "student" in response.text.lower()
         ), "Response doesn't contain expected Streamlit content"
 
-        print(f"✅ Streamlit server is running and accessible")
+        print("✅ Streamlit server is running and accessible")
 
     # ==========================================
     # 3. API FUNCTIONALITY TESTS
@@ -315,7 +313,7 @@ class TestScenario1RealWorld:
         fastapi_port, _ = running_servers
         base_url = f"http://localhost:{fastapi_port}/api"
 
-        print(f"\n🔍 Testing API data validation...")
+        print("\n🔍 Testing API data validation...")
 
         # Test missing required fields
         invalid_student = {"name": "John"}  # Missing required fields
@@ -345,7 +343,7 @@ class TestScenario1RealWorld:
         _, streamlit_port = running_servers
         base_url = f"http://localhost:{streamlit_port}"
 
-        print(f"\n🖥️ Testing Streamlit basic accessibility...")
+        print("\n🖥️ Testing Streamlit basic accessibility...")
 
         # Homepage accessibility
         response = requests.get(base_url, timeout=10)
@@ -367,7 +365,7 @@ class TestScenario1RealWorld:
         _, streamlit_port = running_servers
         base_url = f"http://localhost:{streamlit_port}"
 
-        print(f"\n🤖 Testing Streamlit student creation with Selenium...")
+        print("\n🤖 Testing Streamlit student creation with Selenium...")
 
         driver = selenium_driver
         driver.get(base_url)
@@ -430,7 +428,7 @@ class TestScenario1RealWorld:
         _, streamlit_port = running_servers
         base_url = f"http://localhost:{streamlit_port}"
 
-        print(f"\n🔧 Testing Streamlit management workflow with Selenium...")
+        print("\n🔧 Testing Streamlit management workflow with Selenium...")
 
         driver = selenium_driver
         driver.get(base_url)
@@ -439,10 +437,10 @@ class TestScenario1RealWorld:
         try:
             # Navigate through different pages/tabs if they exist
             # Look for navigation elements
-            nav_elements = driver.find_elements("css selector", "button, .tab, .sidebar button")
+            driver.find_elements("css selector", "button, .tab, .sidebar button")
 
             # Check if we can view student lists
-            page_source = driver.page_source.lower()
+            driver.page_source.lower()
 
             # Look for table or list elements
             tables = driver.find_elements(
@@ -473,7 +471,7 @@ class TestScenario1RealWorld:
         api_base = f"http://localhost:{fastapi_port}/api"
         ui_base = f"http://localhost:{streamlit_port}"
 
-        print(f"\n🔗 Testing end-to-end workflow integration...")
+        print("\n🔗 Testing end-to-end workflow integration...")
 
         # Create student via API
         test_student = {
@@ -519,7 +517,7 @@ class TestScenario1RealWorld:
     ):
         """Validate Scenario 1 success criteria are met"""
 
-        print(f"\n📊 Validating Scenario 1 success criteria...")
+        print("\n📊 Validating Scenario 1 success criteria...")
 
         # Performance was already validated in test_01, but let's check the criteria
         criteria = scenario1_success_criteria
@@ -543,7 +541,7 @@ class TestScenario1RealWorld:
                 ).exists(), f"Missing artifact: {artifact}"
 
         print(f"✅ All expected artifacts present: {expected_artifacts}")
-        print(f"✅ Scenario 1 success criteria validated")
+        print("✅ Scenario 1 success criteria validated")
 
 
 # ==========================================
@@ -617,8 +615,7 @@ def server_manager(real_system_fixtures):
     )
 
     # Start FastAPI server
-    fastapi_process = None
-    streamlit_process = None
+    # Start Streamlit server
 
     # Store original working directory for server startup
     original_cwd = os.getcwd()
@@ -631,7 +628,7 @@ def server_manager(real_system_fixtures):
             env = os.environ.copy()
             env["PYTHONPATH"] = str(managed_system_dir)
 
-            fastapi_process = subprocess.Popen(
+            subprocess.Popen(
                 [
                     "python",
                     "-m",
@@ -657,7 +654,7 @@ def server_manager(real_system_fixtures):
             ui_dir = managed_system_dir / "ui"
             os.chdir(ui_dir)
 
-            streamlit_process = subprocess.Popen(
+            subprocess.Popen(
                 [
                     "python",
                     "-m",
@@ -688,7 +685,7 @@ def server_manager(real_system_fixtures):
 
         # DO NOT cleanup servers - they should persist for inspection
         # Servers will be cleaned up by run_tests.py before next test cycle
-        print(f"🔍 Servers remain running for inspection:")
+        print("🔍 Servers remain running for inspection:")
         print(f"   • FastAPI: http://localhost:{fastapi_port}")
         print(f"   • Streamlit: http://localhost:{streamlit_port}")
         print("   • Servers will be stopped before next realworld test cycle")
@@ -721,7 +718,6 @@ def selenium_driver():
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
         from selenium.webdriver.chrome.service import Service
-        from selenium.webdriver.common.by import By
         from webdriver_manager.chrome import ChromeDriverManager
     except ImportError:
         pytest.skip(
@@ -830,3 +826,7 @@ def _wait_for_server(url: str, timeout: int = 30):
         time.sleep(1)
 
     raise TimeoutError(f"Server at {url} did not become available within {timeout} seconds")
+
+
+if __name__ == "__main__":
+    pytest.main()
