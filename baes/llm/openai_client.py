@@ -1,11 +1,13 @@
 import json
 import logging
+import os
 import re
 from typing import Any, Dict, Optional
 
 import openai
+from dotenv import load_dotenv
 
-from config import Config
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -19,8 +21,8 @@ class OpenAIClient:
     """
 
     def __init__(self):
-        self.client = openai.OpenAI(api_key=Config.OPENAI_API_KEY)
-        self.model = Config.OPENAI_MODEL
+        self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
         logger.info(f"Initialized OpenAI client with model: {self.model}")
 
     def _extract_json_from_response(self, response: str) -> str:

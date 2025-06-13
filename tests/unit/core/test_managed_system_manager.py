@@ -10,9 +10,27 @@ import shutil
 from pathlib import Path
 
 import pytest
+from dotenv import load_dotenv
 
 from baes.core.managed_system_manager import ManagedSystemManager
-from config import Config
+
+load_dotenv()
+
+
+# Default config values if environment variables are not set
+class Config:
+    @staticmethod
+    def get_managed_system_path():
+        from pathlib import Path
+
+        managed_path = os.getenv("MANAGED_SYSTEM_PATH", "managed_system")
+        return Path(managed_path)
+
+    API_HOST = os.getenv("API_HOST", "127.0.0.1")
+    API_PORT = int(os.getenv("API_PORT", "8000"))
+    UI_HOST = os.getenv("UI_HOST", "127.0.0.1")
+    UI_PORT = int(os.getenv("UI_PORT", "8501"))
+
 
 # Use centralized temp directory from conftest
 TESTS_TEMP_DIR = Path(__file__).parent.parent / ".temp"

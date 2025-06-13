@@ -7,6 +7,8 @@ import sys
 from datetime import datetime
 from typing import Any, Dict, List
 
+from dotenv import load_dotenv
+
 from baes.core.bae_registry import EnhancedBAERegistry
 from baes.core.context_store import ContextStore
 from baes.core.entity_recognizer import EntityRecognizer
@@ -15,15 +17,15 @@ from baes.swea_agents.database_swea import DatabaseSWEA
 from baes.swea_agents.frontend_swea import FrontendSWEA
 from baes.swea_agents.programmer_swea import ProgrammerSWEA
 
-try:
-    from config import Config
-except ImportError:
+load_dotenv()
 
-    class Config:
-        API_HOST = "127.0.0.1"  # nosec B104
-        API_PORT = 8000
-        UI_HOST = "127.0.0.1"  # nosec B104
-        UI_PORT = 8501
+
+# Default config values if environment variables are not set
+class Config:
+    API_HOST = os.getenv("API_HOST", "127.0.0.1")
+    API_PORT = int(os.getenv("API_PORT", "8000"))
+    UI_HOST = os.getenv("UI_HOST", "127.0.0.1")
+    UI_PORT = int(os.getenv("UI_PORT", "8501"))
 
 
 logger = logging.getLogger(__name__)
