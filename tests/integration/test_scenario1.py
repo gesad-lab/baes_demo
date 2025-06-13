@@ -30,6 +30,8 @@ REALWORLD_STREAMLIT_PORT = 8600
 
 @pytest.mark.e2e
 @pytest.mark.slow
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@pytest.mark.filterwarnings("ignore::SyntaxWarning")
 class TestScenario1RealWorld:
     """End-to-end validation of Scenario 1 with real components"""
 
@@ -130,7 +132,13 @@ class TestScenario1RealWorld:
             try:
                 with open(py_file, "r") as f:
                     code = f.read()
-                compile(code, str(py_file), "exec")
+                # Suppress warnings during compilation of generated code
+                import warnings
+
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", DeprecationWarning)
+                    warnings.simplefilter("ignore", SyntaxWarning)
+                    compile(code, str(py_file), "exec")
                 print(f"✅ Valid Python syntax: {py_file.relative_to(temp_dir)}")
             except SyntaxError as e:
                 pytest.fail(f"Invalid Python syntax in {py_file}: {e}")
