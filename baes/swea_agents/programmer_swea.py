@@ -46,7 +46,7 @@ class ProgrammerSWEA(BaseAgent):
         self, entity: str, attributes: List[str], code_type: str, context: str
     ) -> str:
         """Load prompt template and format it with runtime values."""
-        template_path = os.path.join("llm", "prompts", "backend_gen.txt")
+        template_path = os.path.join("baes", "llm", "prompts", "backend_gen.txt")
         try:
             with open(template_path, "r") as f:
                 template = f.read()

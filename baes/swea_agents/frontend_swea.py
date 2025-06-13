@@ -38,7 +38,7 @@ class FrontendSWEA(BaseAgent):
 
     # ------------------------------------------------------------------
     def _build_prompt(self, entity: str, attributes: List[str], context: str) -> str:
-        template_path = os.path.join("llm", "prompts", "frontend_gen.txt")
+        template_path = os.path.join("baes", "llm", "prompts", "frontend_gen.txt")
         try:
             with open(template_path, "r") as f:
                 template = f.read()
@@ -46,6 +46,7 @@ class FrontendSWEA(BaseAgent):
             template = (
                 "You are a SWEA Frontend agent. Generate a Streamlit UI for managing {entity} data. "
                 "Attributes: {attributes}. Use proper widgets, call the FastAPI backend at /{entity_lower}s. "
+                "IMPORTANT: Wrap all UI code in a main() function that can be called by the main Streamlit app. "
                 "Return ONLY the code."
             )
         return template.format(
