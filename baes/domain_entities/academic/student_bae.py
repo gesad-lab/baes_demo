@@ -56,10 +56,6 @@ class StudentBae(BaseBae):
             "name: str",
             "registration_number: str",
             "course: str",
-            "email: str",
-            "age: int",
-            "birth_date: date",
-            "gpa: float",
         ]
 
     def _get_business_rules(self) -> List[str]:

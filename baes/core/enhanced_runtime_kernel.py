@@ -60,14 +60,16 @@ class EnhancedRuntimeKernel:
 
     def __init__(self, context_store_path: str = "database/context_store.json"):
         self.context_store = ContextStore(context_store_path)
-        self.bae_registry = EnhancedBAERegistry()
+        self.bae_registry = EnhancedBAERegistry()  # Auto-initializes all BAEs
         self.entity_recognizer = EntityRecognizer()
         self.managed_system_manager = ManagedSystemManager()
 
-        # SWEA agents (not domain-specific, coordinated by BAEs)
+        # SWEA agents (coordinated by BAEs)
         self.database_swea = DatabaseSWEA()
         self.programmer_swea = ProgrammerSWEA()
         self.frontend_swea = FrontendSWEA()
+
+        self.execution_history = []
 
         logger.info(
             "Enhanced Runtime Kernel initialized with %d BAEs",

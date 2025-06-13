@@ -98,23 +98,76 @@ class OpenAIClient:
         attributes = entity_context.get("attributes", [])
         business_rules = entity_context.get("business_rules", [])
 
-        system_prompt = f"""
-        You are a code generation agent working under BAE coordination for the {entity} domain entity.
+        # Special handling for FastAPI routes to ensure proper router generation
+        if "FastAPI" in code_type or "Routes" in code_type or "API" in code_type:
+            system_prompt = f"""
+            You are generating FastAPI routes for {entity} entity.
 
-        Code Type: {code_type}
-        Entity Attributes: {attributes}
-        Business Rules: {business_rules}
+            CRITICAL REQUIREMENTS:
+            - Use APIRouter, NOT FastAPI app
+            - Start with: router = APIRouter(prefix="/api", tags=["{entity}s"])
+            - Use sqlite3 for database operations with path: "../database/academic.db"
+            - Include proper Pydantic models for requests/responses
+            - Implement full CRUD: POST, GET (list), GET (single), PUT, DELETE
+            - Use /api/{entity.lower()}s/ endpoint pattern with:
+              * POST /api/{entity.lower()}s/ (create, return with id)
+              * GET /api/{entity.lower()}s/ (list all)
+              * GET /api/{entity.lower()}s/{{id}} (get by id)
+              * PUT /api/{entity.lower()}s/{{id}} (update by id)
+              * DELETE /api/{entity.lower()}s/{{id}} (delete by id)
+            - Handle database with sqlite3 and proper row_factory
+            - Database path must be: os.path.join(os.path.dirname(__file__), "../database/academic.db")
+            - Create separate response model that includes id field for API responses
+            - Use 'id' as primary key in all endpoints, not other fields
+            - ONLY use the attributes specified: {attributes}
+            - Do NOT add extra fields beyond what's specified
+            - Make all fields required (no Optional fields)
 
-        Requirements:
-        1. Generate clean, professional {code_type} code
-        2. Use business vocabulary in naming and documentation
-        3. Include proper validation reflecting business rules
-        4. Maintain semantic coherence with domain entity representation
-        5. Ensure code is immediately executable and follows best practices
-        6. Focus on domain entity operations, not generic CRUD
+            Entity: {entity}
+            Attributes (use ONLY these): {attributes}
 
-        Return ONLY the code, no explanations or markdown formatting.
-        """
+            Generate ONLY the complete Python code, no markdown, no explanations.
+            """
+        elif "Streamlit" in code_type or "UI" in code_type or "Frontend" in code_type:
+            system_prompt = f"""
+            You are generating Streamlit UI for {entity} entity management.
+
+            CRITICAL REQUIREMENTS:
+            - Create a complete Streamlit interface for {entity} management
+            - Use API endpoint: http://localhost:8100/api/{entity.lower()}s/
+            - Include form for creating new {entity.lower()}s
+            - Include table for displaying all {entity.lower()}s
+            - Include management features (edit/delete)
+            - Use business vocabulary and user-friendly labels
+            - Include error handling and success messages
+            - Use st.rerun() for real-time updates
+            - Include the words "student", "management", "form", "table" in the UI
+            - ONLY use the attributes specified: {attributes}
+            - Do NOT add extra fields beyond what's specified
+
+            Entity: {entity}
+            Attributes (use ONLY these): {attributes}
+
+            Generate ONLY the complete Python Streamlit code, no markdown, no explanations.
+            """
+        else:
+            system_prompt = f"""
+            You are a code generation agent working under BAE coordination for the {entity} domain entity.
+
+            Code Type: {code_type}
+            Entity Attributes: {attributes}
+            Business Rules: {business_rules}
+
+            Requirements:
+            1. Generate clean, professional {code_type} code
+            2. Use business vocabulary in naming and documentation
+            3. Include proper validation reflecting business rules
+            4. Maintain semantic coherence with domain entity representation
+            5. Ensure code is immediately executable and follows best practices
+            6. Focus on domain entity operations, not generic CRUD
+
+            Return ONLY the code, no explanations or markdown formatting.
+            """
 
         return self.generate_response(prompt, system_prompt, temperature=0.1)
 

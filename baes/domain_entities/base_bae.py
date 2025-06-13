@@ -122,20 +122,31 @@ class BaseBae(BaseAgent):
         Default Attributes: {', '.join(self._get_default_attributes())}
         Business Rules: {'; '.join(self._get_business_rules())}
 
-        Analyze what domain entity operations are needed and create a coordination plan for SWEA agents.
+        Analyze what domain entity operations are needed and extract the attributes mentioned in the request.
 
         Return a JSON structure with:
         - interpreted_intent: what the business user wants
+        - extracted_attributes: list of attributes mentioned in the request (ONLY the ones explicitly mentioned)
         - domain_operations: list of domain entity operations needed
-        - swea_coordination: list of SWEA task objects, each with "swea_agent" and "task_type" keys
+        - swea_coordination: list of SWEA task objects, each with "swea_agent", "task_type", and "payload" keys
         - business_vocabulary: key terms that must be preserved in technical implementation
         - entity_focus: confirm this is about {self.entity_name} entities
 
+        For extracted_attributes, look carefully for field names in the request like:
+        - "name" -> "name: str"
+        - "registration number" -> "registration_number: str"
+        - "course" -> "course: str"
+        - "email" -> "email: str"
+        - "age" -> "age: int"
+
+        ONLY include attributes that are explicitly mentioned in the business request. Do NOT add default attributes that aren't requested.
+
         Example swea_coordination format:
         [
-            {{"swea_agent": "ProgrammerSWEA", "task_type": "generate_model"}},
-            {{"swea_agent": "ProgrammerSWEA", "task_type": "generate_api"}},
-            {{"swea_agent": "FrontendSWEA", "task_type": "generate_ui"}}
+            {{"swea_agent": "DatabaseSWEA", "task_type": "setup_database", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}},
+            {{"swea_agent": "ProgrammerSWEA", "task_type": "generate_model", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}},
+            {{"swea_agent": "ProgrammerSWEA", "task_type": "generate_api", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}},
+            {{"swea_agent": "FrontendSWEA", "task_type": "generate_ui", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}}
         ]
         """
 
@@ -146,17 +157,30 @@ class BaseBae(BaseAgent):
             interpretation = json.loads(cleaned_response)
             interpretation["entity"] = self.entity_name
 
+            # Extract attributes from the interpretation - only use what was explicitly mentioned
+            extracted_attributes = interpretation.get("extracted_attributes", [])
+
+            # Only use defaults if NO attributes were extracted at all
+            if not extracted_attributes:
+                extracted_attributes = self._get_default_attributes()
+
             # Ensure swea_coordination is properly formatted as list of dicts
             if "swea_coordination" in interpretation:
                 coordination = interpretation["swea_coordination"]
                 if isinstance(coordination, list):
-                    # Fix any string items or improperly formatted items
+                    # Fix any string items or improperly formatted items and validate agents
                     fixed_coordination = []
+                    valid_agents = ["DatabaseSWEA", "ProgrammerSWEA", "FrontendSWEA"]
+
                     for item in coordination:
                         if isinstance(item, str):
                             # Convert string to dict format
                             fixed_coordination.append(
-                                {"swea_agent": "ProgrammerSWEA", "task_type": "generate_component"}
+                                {
+                                    "swea_agent": "ProgrammerSWEA",
+                                    "task_type": "generate_component",
+                                    "payload": {"attributes": extracted_attributes},
+                                }
                             )
                         elif isinstance(item, dict):
                             # Ensure required keys exist
@@ -164,16 +188,71 @@ class BaseBae(BaseAgent):
                                 item["swea_agent"] = "ProgrammerSWEA"
                             if "task_type" not in item:
                                 item["task_type"] = "generate_component"
-                            fixed_coordination.append(item)
+                            if "payload" not in item:
+                                item["payload"] = {}
+
+                            # Ensure attributes are in payload
+                            if "attributes" not in item["payload"]:
+                                item["payload"]["attributes"] = extracted_attributes
+
+                            # Validate agent exists and task is supported
+                            agent_name = item["swea_agent"]
+                            task_type = item["task_type"]
+
+                            # Only include valid agents
+                            if agent_name in valid_agents:
+                                # Validate task types for each agent
+                                if agent_name == "DatabaseSWEA" and task_type not in [
+                                    "setup_database"
+                                ]:
+                                    item["task_type"] = "setup_database"
+                                elif agent_name == "ProgrammerSWEA" and task_type not in [
+                                    "generate_model",
+                                    "generate_api",
+                                ]:
+                                    item["task_type"] = (
+                                        "generate_model"
+                                        if "model" in task_type.lower()
+                                        else "generate_api"
+                                    )
+                                elif agent_name == "FrontendSWEA" and task_type not in [
+                                    "generate_ui"
+                                ]:
+                                    item["task_type"] = "generate_ui"
+
+                                fixed_coordination.append(item)
+                            else:
+                                # Skip unknown agents but log for debugging
+                                print(f"⚠️  Skipping unknown SWEA agent: {agent_name}")
+
                     interpretation["swea_coordination"] = fixed_coordination
             else:
-                # Provide default coordination plan including database setup
+                # Provide default coordination plan including database setup with attributes
                 interpretation["swea_coordination"] = [
-                    {"swea_agent": "DatabaseSWEA", "task_type": "setup_database"},
-                    {"swea_agent": "ProgrammerSWEA", "task_type": "generate_model"},
-                    {"swea_agent": "ProgrammerSWEA", "task_type": "generate_api"},
-                    {"swea_agent": "FrontendSWEA", "task_type": "generate_ui"},
+                    {
+                        "swea_agent": "DatabaseSWEA",
+                        "task_type": "setup_database",
+                        "payload": {"attributes": extracted_attributes},
+                    },
+                    {
+                        "swea_agent": "ProgrammerSWEA",
+                        "task_type": "generate_model",
+                        "payload": {"attributes": extracted_attributes},
+                    },
+                    {
+                        "swea_agent": "ProgrammerSWEA",
+                        "task_type": "generate_api",
+                        "payload": {"attributes": extracted_attributes},
+                    },
+                    {
+                        "swea_agent": "FrontendSWEA",
+                        "task_type": "generate_ui",
+                        "payload": {"attributes": extracted_attributes},
+                    },
                 ]
+
+            # Store extracted attributes for future use
+            interpretation["extracted_attributes"] = extracted_attributes
 
             self.update_memory("last_interpretation", interpretation)
             return interpretation

@@ -47,8 +47,9 @@ class DatabaseSWEA(BaseAgent):
         # Map Python types → SQLite
         type_map = {"str": "TEXT", "int": "INTEGER", "float": "REAL", "date": "TEXT"}
 
-        # Build column definitions
-        columns_sql: List[str] = []
+        # Build column definitions - always start with ID column
+        columns_sql: List[str] = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
+
         for attr in attributes:
             if ":" in attr:
                 name, typ = [p.strip() for p in attr.split(":", 1)]
@@ -57,9 +58,7 @@ class DatabaseSWEA(BaseAgent):
             sql_type = type_map.get(typ.replace("Optional[", "").replace("]", ""), "TEXT")
             columns_sql.append(f"{name} {sql_type}")
 
-        columns_sql_str = (
-            ", ".join(columns_sql) if columns_sql else "id INTEGER PRIMARY KEY AUTOINCREMENT"
-        )
+        columns_sql_str = ", ".join(columns_sql)
         table_name = entity.lower() + "s"  # simple pluralisation
 
         with sqlite3.connect(db_file) as conn:

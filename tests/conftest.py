@@ -36,6 +36,8 @@ def pytest_configure(config):
     )
     config.addinivalue_line("markers", "performance: Performance and timing tests")
     config.addinivalue_line("markers", "slow: Tests that take longer to run")
+    config.addinivalue_line("markers", "e2e: End-to-end realworld tests")
+    config.addinivalue_line("markers", "selenium: Browser-based UI tests")
     config.addinivalue_line(
         "markers", "integration_online: Tests that hit live external services (OpenAI)"
     )
@@ -43,11 +45,28 @@ def pytest_configure(config):
     # Create global temp directory
     TESTS_TEMP_DIR.mkdir(exist_ok=True)
 
+    # Track if this is a realworld test run
+    config._realworld_test_run = False
+
+
+def pytest_collection_modifyitems(config, items):
+    """Modify collected items and detect realworld tests"""
+    for item in items:
+        if "e2e" in item.keywords or "selenium" in item.keywords:
+            config._realworld_test_run = True
+            break
+
 
 def pytest_unconfigure(config):
     """Clean up global temp directory after all tests complete"""
+    # Don't clean up .temp directory for realworld tests - files should persist for inspection
+    # Cleanup will be handled by run_tests.py before next realworld test cycle
     if TESTS_TEMP_DIR.exists():
-        shutil.rmtree(TESTS_TEMP_DIR, ignore_errors=True)
+        # Check if this was a realworld test run by looking for e2e marker
+        if hasattr(config, "_realworld_test_run"):
+            print(f"🔍 Preserving .temp directory for inspection: {TESTS_TEMP_DIR}")
+        else:
+            shutil.rmtree(TESTS_TEMP_DIR, ignore_errors=True)
 
 
 def pytest_runtest_setup(item):
