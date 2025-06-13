@@ -15,52 +15,61 @@ Requirements:
 4. Return ONLY executable Python code – no markdown or explanations.
 5. Include proper error handling for API calls.
 6. Use proper HTTP methods (POST for create, GET for read, PUT for update, DELETE for delete).
+7. IMPORTANT: Wrap all UI code in a main() function that can be called by the main Streamlit app.
 
-EXAMPLE STRUCTURE:
+REQUIRED STRUCTURE:
 ```python
 import streamlit as st
 import requests
 import pandas as pd
 from datetime import datetime
 
-st.title("{entity} Management System")
+def main():
+    """Main function for {entity} management interface."""
+    st.title("{entity} Management System")
 
-# API base URL
-API_BASE = "http://localhost:8000/api/{entity_lower}s"
+    # API base URL
+    API_BASE = "http://localhost:8000/api/{entity_lower}s"
 
-# Create {entity}
-with st.expander("Add New {entity}"):
-    with st.form("create_{entity_lower}"):
-        # Add form fields based on attributes
-        # Example: name = st.text_input("Name")
+    # Create {entity}
+    with st.expander("Add New {entity}"):
+        with st.form("create_{entity_lower}"):
+            # Add form fields based on attributes
+            # Example: name = st.text_input("Name")
 
-        if st.form_submit_button("Create {entity}"):
-            data = {{
-                # Map form fields to data
-            }}
-            try:
-                response = requests.post(API_BASE + "/", json=data)
-                if response.status_code == 201:
-                    st.success("{entity} created successfully!")
-                    st.rerun()
-                else:
-                    st.error(f"Error creating {entity}: {{response.text}}")
-            except Exception as e:
-                st.error(f"Connection error: {{e}}")
+            if st.form_submit_button("Create {entity}"):
+                data = {{
+                    # Map form fields to data
+                }}
+                try:
+                    response = requests.post(API_BASE + "/", json=data)
+                    if response.status_code == 201:
+                        st.success("{entity} created successfully!")
+                        st.rerun()
+                    else:
+                        st.error(f"Error creating {entity}: {{response.text}}")
+                except Exception as e:
+                    st.error(f"Connection error: {{e}}")
 
-# List {entity}s
-st.subheader("All {entity}s")
-try:
-    response = requests.get(API_BASE + "/")
-    if response.status_code == 200:
-        {entity_lower}s = response.json()
-        if {entity_lower}s:
-            df = pd.DataFrame({entity_lower}s)
-            st.dataframe(df)
+    # List {entity}s
+    st.subheader("All {entity}s")
+    try:
+        response = requests.get(API_BASE + "/")
+        if response.status_code == 200:
+            {entity_lower}s = response.json()
+            if {entity_lower}s:
+                df = pd.DataFrame({entity_lower}s)
+                st.dataframe(df)
+            else:
+                st.info("No {entity_lower}s found.")
         else:
-            st.info("No {entity_lower}s found.")
-    else:
-        st.error(f"Error fetching {entity_lower}s: {{response.text}}")
-except Exception as e:
-    st.error(f"Connection error: {{e}}")
+            st.error(f"Error fetching {entity_lower}s: {{response.text}}")
+    except Exception as e:
+        st.error(f"Connection error: {{e}}")
+
+# Allow module to be run directly for testing
+if __name__ == "__main__":
+    main()
 ```
+
+CRITICAL: Make sure ALL Streamlit UI code is inside the main() function!

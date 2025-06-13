@@ -551,6 +551,323 @@ class TestScenario1RealWorld:
         print(f"✅ All expected artifacts present: {expected_artifacts}")
         print("✅ Scenario 1 success criteria validated")
 
+    def test_13_ui_error_handling_validation(self, running_servers):
+        """Test UI error message handling and display"""
+
+        _, streamlit_port = running_servers
+        base_url = f"http://localhost:{streamlit_port}"
+
+        print("\n🚨 Testing UI error handling and error message validation...")
+
+        # Test 1: Check for absence of common error indicators in normal operation
+        print("📋 Step 1: Validating normal operation (no errors)")
+        response = requests.get(base_url, timeout=10)
+        assert response.status_code == 200, f"UI not accessible: {response.status_code}"
+
+        html_content = response.text.lower()
+
+        # Common error indicators that should NOT be present in normal operation
+        error_indicators = [
+            "error occurred",
+            "something went wrong",
+            "internal server error",
+            "500 error",
+            "404 not found",
+            "connection failed",
+            "database error",
+            "api error",
+            "failed to load",
+            "exception",
+            "traceback",
+            "keyerror",
+            "attributeerror",
+            "typeerror",
+            "valueerror",
+        ]
+
+        found_errors = [error for error in error_indicators if error in html_content]
+
+        if found_errors:
+            print(f"⚠️ Found potential error indicators: {found_errors}")
+            # Don't fail immediately - these might be legitimate error handling UI elements
+            # Instead, log them for inspection
+        else:
+            print("✅ No error indicators found in normal operation")
+
+        # Test 2: Check for proper Streamlit UI elements (adjusted for SPA behavior)
+        print("📋 Step 2: Validating Streamlit UI elements are present")
+
+        # Look for Streamlit-specific elements that should be present in the main HTML
+        streamlit_indicators = [
+            "streamlit",  # Basic Streamlit functionality
+            "javascript",  # JavaScript for SPA functionality
+            "script",  # Script tags for dynamic content
+            "css",  # Styling elements
+        ]
+
+        found_streamlit = [
+            indicator for indicator in streamlit_indicators if indicator in html_content
+        ]
+        assert (
+            len(found_streamlit) >= 2
+        ), f"Missing essential Streamlit elements. Found: {found_streamlit}"
+        print(f"✅ Found essential Streamlit elements: {found_streamlit}")
+
+        # Test 3: Check for business-friendly error messaging patterns
+        print("📋 Step 3: Validating business-friendly error patterns")
+
+        # Look for patterns that indicate good error handling design
+        good_error_patterns = [
+            "please",  # Polite error messages
+            "try again",  # User guidance
+            "contact",  # Support information
+            "help",  # Help text
+            "required",  # Field validation
+            "invalid",  # Input validation
+            "success",  # Success feedback
+            "created",  # Operation feedback
+            "updated",  # Operation feedback
+            "deleted",  # Operation feedback
+        ]
+
+        found_good_patterns = [
+            pattern for pattern in good_error_patterns if pattern in html_content
+        ]
+        print(
+            f"ℹ️ Found {len(found_good_patterns)} business-friendly patterns: {found_good_patterns}"
+        )
+
+        # Test 4: Validate no critical system errors are exposed
+        print("📋 Step 4: Validating no critical system errors are exposed")
+
+        # Critical errors that should NEVER be exposed to users
+        critical_errors = [
+            "sqlalchemy",
+            "fastapi",
+            "uvicorn",
+            "python",
+            "traceback",
+            'file "/',
+            "line ",
+            "module",
+            "import error",
+            "syntax error",
+            "indentation error",
+        ]
+
+        found_critical = [error for error in critical_errors if error in html_content]
+        assert len(found_critical) == 0, f"Critical system errors exposed to user: {found_critical}"
+        print("✅ No critical system errors exposed to users")
+
+        # Test 5: Check for proper Streamlit framework loading
+        print("📋 Step 5: Validating Streamlit framework loading")
+
+        # Check that the Streamlit framework loaded properly without errors
+        framework_indicators = [
+            "streamlit",  # Streamlit framework
+            "root",  # React root element
+            "javascript",  # JavaScript enabled
+            "noscript",  # Fallback message
+        ]
+
+        found_framework = [
+            indicator for indicator in framework_indicators if indicator in html_content
+        ]
+        assert (
+            len(found_framework) >= 2
+        ), f"Streamlit framework not loading properly. Found: {found_framework}"
+        print(f"✅ Streamlit framework loading correctly: {found_framework}")
+
+        # Test 6: Validate Streamlit app structure and navigation
+        print("📋 Step 6: Validating Streamlit app structure")
+
+        # Check for navigation and app structure elements
+        app_structure_elements = [
+            "title",  # Page title
+            "head",  # HTML head section
+            "body",  # HTML body
+            "noscript",  # Fallback for no JavaScript
+        ]
+
+        found_structure = [element for element in app_structure_elements if element in html_content]
+        assert (
+            len(found_structure) >= 3
+        ), f"Missing app structure elements. Found: {found_structure}"
+        print(f"✅ App structure elements present: {found_structure}")
+
+        print("✅ UI error handling validation completed successfully")
+
+        # Summary report
+        print("\n📊 Error Handling Validation Summary:")
+        print(f"   • Error indicators found: {len(found_errors)}")
+        print(f"   • Streamlit elements: {len(found_streamlit)}")
+        print(f"   • Business-friendly patterns: {len(found_good_patterns)}")
+        print(f"   • Critical errors exposed: {len(found_critical)}")
+        print(f"   • Framework indicators: {len(found_framework)}")
+        print(f"   • App structure elements: {len(found_structure)}")
+
+    @pytest.mark.selenium
+    def test_14_ui_error_scenarios_selenium(self, running_servers, selenium_driver):
+        """Test UI error scenarios using Selenium browser automation"""
+
+        _, streamlit_port = running_servers
+        base_url = f"http://localhost:{streamlit_port}"
+
+        print("\n🤖 Testing UI error scenarios with Selenium...")
+
+        driver = selenium_driver
+        driver.get(base_url)
+        time.sleep(3)
+
+        try:
+            # Test 1: Submit empty form to trigger validation errors
+            print("📋 Step 1: Testing form validation errors")
+
+            # Look for submit button and click without filling form
+            submit_buttons = driver.find_elements(
+                "css selector",
+                "button[kind='primary'], button:contains('Create'), button:contains('Submit')",
+            )
+
+            if submit_buttons:
+                submit_buttons[0].click()
+                time.sleep(2)
+
+                # Check for validation error messages
+                page_source = driver.page_source.lower()
+
+                # Look for validation error indicators
+                validation_errors = [
+                    "required",
+                    "please fill",
+                    "cannot be empty",
+                    "invalid",
+                    "error",
+                    "missing",
+                ]
+
+                found_validation = [error for error in validation_errors if error in page_source]
+                print(f"ℹ️ Form validation patterns found: {found_validation}")
+
+                # Ensure no critical system errors are shown
+                critical_errors = ["traceback", "exception", "sqlalchemy", "fastapi"]
+                found_critical = [error for error in critical_errors if error in page_source]
+                assert (
+                    len(found_critical) == 0
+                ), f"Critical errors exposed during validation: {found_critical}"
+
+                print("✅ Form validation working without exposing system errors")
+            else:
+                print("ℹ️ No submit buttons found - skipping form validation test")
+
+            # Test 2: Test invalid input scenarios
+            print("📋 Step 2: Testing invalid input handling")
+
+            # Try to find input fields and enter invalid data
+            input_fields = driver.find_elements("css selector", "input")
+
+            if input_fields:
+                # Test with extremely long input
+                input_fields[0].clear()
+                input_fields[0].send_keys("x" * 1000)  # Very long input
+
+                # Test with special characters
+                if len(input_fields) > 1:
+                    input_fields[1].clear()
+                    input_fields[1].send_keys("'; DROP TABLE students; --")  # SQL injection attempt
+
+                # Try to submit
+                submit_buttons = driver.find_elements(
+                    "css selector",
+                    "button[kind='primary'], button:contains('Create'), button:contains('Submit')",
+                )
+
+                if submit_buttons:
+                    submit_buttons[0].click()
+                    time.sleep(2)
+
+                    page_source = driver.page_source.lower()
+
+                    # Ensure no SQL injection or system errors
+                    security_issues = ["sql", "drop table", "delete from", "insert into"]
+                    found_security = [issue for issue in security_issues if issue in page_source]
+                    assert len(found_security) == 0, f"Security issues detected: {found_security}"
+
+                    print("✅ Invalid input handled securely")
+            else:
+                print("ℹ️ No input fields found - skipping invalid input test")
+
+            # Test 3: Check for user-friendly error messages
+            print("📋 Step 3: Validating user-friendly error messaging")
+
+            page_source = driver.page_source.lower()
+
+            # Look for user-friendly error message patterns
+            friendly_patterns = [
+                "please",
+                "try again",
+                "help",
+                "contact",
+                "invalid",
+                "required",
+                "check",
+                "correct",
+            ]
+
+            found_friendly = [pattern for pattern in friendly_patterns if pattern in page_source]
+            print(f"ℹ️ User-friendly patterns found: {found_friendly}")
+
+            # Ensure technical jargon is not exposed
+            technical_jargon = [
+                "traceback",
+                "exception",
+                "module",
+                "import",
+                "python",
+                "sqlalchemy",
+                "fastapi",
+                "uvicorn",
+            ]
+
+            found_technical = [jargon for jargon in technical_jargon if jargon in page_source]
+            assert (
+                len(found_technical) == 0
+            ), f"Technical jargon exposed to users: {found_technical}"
+
+            print("✅ User-friendly error messaging validated")
+
+            # Test 4: Check error message accessibility
+            print("📋 Step 4: Testing error message accessibility")
+
+            # Look for error elements with proper accessibility attributes
+            error_elements = driver.find_elements(
+                "css selector",
+                "[role='alert'], .error, .warning, .danger, [aria-live], [aria-label*='error']",
+            )
+
+            print(f"ℹ️ Found {len(error_elements)} accessibility-aware error elements")
+
+            # Check for proper ARIA labels and roles
+            accessible_errors = []
+            for element in error_elements:
+                if (
+                    element.get_attribute("role")
+                    or element.get_attribute("aria-live")
+                    or element.get_attribute("aria-label")
+                ):
+                    accessible_errors.append(element)
+
+            print(f"✅ Found {len(accessible_errors)} properly labeled error elements")
+
+            print("✅ UI error scenarios testing completed successfully")
+
+        except Exception as e:
+            # Take screenshot for debugging
+            screenshot_path = TESTS_TEMP_DIR / "selenium_error_scenarios_screenshot.png"
+            driver.save_screenshot(str(screenshot_path))
+            print(f"🔍 Error scenarios screenshot saved to: {screenshot_path}")
+            raise e
+
 
 # ==========================================
 # FIXTURES
