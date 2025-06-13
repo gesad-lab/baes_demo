@@ -82,14 +82,14 @@ def kill_process_on_port(port):
             print(f"⚠️ Could not find process management tools to kill process on port {port}")
 
 
-def cleanup_realworld_environment():
+def cleanup_test_environment():
     """
-    Clean up environment before realworld tests:
+    Clean up environment before running any tests:
     1. Kill existing servers on fixed ports
     2. Clean up .temp directory
     3. Handle permission issues gracefully
     """
-    print("🧹 Cleaning up realworld test environment...")
+    print("🧹 Cleaning up test environment...")
 
     # Step 1: Kill existing servers
     ports_to_clean = [REALWORLD_FASTAPI_PORT, REALWORLD_STREAMLIT_PORT]
@@ -138,7 +138,7 @@ def cleanup_realworld_environment():
         print(f"❌ Permission denied creating .temp directory: {e}")
         sys.exit(1)
 
-    print("🎉 Realworld environment cleanup completed successfully!")
+    print("🎉 Test environment cleanup completed successfully!")
     print()
 
 
@@ -178,10 +178,9 @@ def main():
 
     args = parser.parse_args()
 
-    # Clean up environment for realworld tests BEFORE running
-    realworld_test_types = ["realworld", "scenario1", "e2e", "selenium"]
-    if args.test_type in realworld_test_types:
-        cleanup_realworld_environment()
+    # Clean up environment BEFORE running any tests
+    # This ensures clean state for all test runs, preventing conflicts
+    cleanup_test_environment()
 
     # Base pytest command
     cmd = ["python", "-m", "pytest"]
@@ -235,13 +234,14 @@ def main():
         print("=" * 60)
         print(f"✅ All {args.test_type} tests passed!")
 
-        # For realworld tests, remind user about inspection
+        # For tests that generate artifacts, remind user about inspection
+        realworld_test_types = ["realworld", "scenario1", "e2e", "selenium", "all"]
         if args.test_type in realworld_test_types:
             print()
             print("🔍 INSPECTION AVAILABLE:")
-            print(f"   • Generated files: tests/.temp/scenario1_system_*/")
-            print(f"   • FastAPI server: http://localhost:{REALWORLD_FASTAPI_PORT}")
-            print(f"   • Streamlit UI: http://localhost:{REALWORLD_STREAMLIT_PORT}")
+            print("   • Generated files: tests/.temp/")
+            print(f"   • FastAPI server: http://localhost:{REALWORLD_FASTAPI_PORT} (if running)")
+            print(f"   • Streamlit UI: http://localhost:{REALWORLD_STREAMLIT_PORT} (if running)")
             print("   • Servers will remain running until next test cycle")
             print()
     else:

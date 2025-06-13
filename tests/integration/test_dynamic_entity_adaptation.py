@@ -7,7 +7,28 @@ from baes.core.runtime_kernel import RuntimeKernel
 from baes.domain_entities.academic.student_bae import StudentBae as StudentBAE
 
 # Use centralized temp directory from conftest
-TESTS_TEMP_DIR = Path(__file__).parent.parent / ".temp"
+TESTS_TEMP_DIR = Path(__file__).parent.parent / ".temp" / "dynamic_entity_adaptation"
+
+
+@pytest.fixture(autouse=True)
+def setup_managed_system_path():
+    """Set MANAGED_SYSTEM_PATH to tests/.temp before any imports happen"""
+    # Ensure tests/.temp exists
+    TESTS_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Store original value
+    original_path = os.environ.get("MANAGED_SYSTEM_PATH")
+
+    # Set to tests/.temp
+    os.environ["MANAGED_SYSTEM_PATH"] = str(TESTS_TEMP_DIR)
+
+    yield
+
+    # Restore original value
+    if original_path is not None:
+        os.environ["MANAGED_SYSTEM_PATH"] = original_path
+    elif "MANAGED_SYSTEM_PATH" in os.environ:
+        del os.environ["MANAGED_SYSTEM_PATH"]
 
 
 @pytest.mark.integration
