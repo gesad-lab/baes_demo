@@ -12,7 +12,14 @@ class FrontendSWEA(BaseAgent):
     def __init__(self):
         super().__init__("FrontendSWEA", "UI Generation Agent", "SWEA")
         self.llm_client = OpenAIClient()
-        self.managed_system_manager = ManagedSystemManager()
+        self._managed_system_manager = None  # Lazy initialization
+
+    @property
+    def managed_system_manager(self):
+        """Lazy initialization of ManagedSystemManager"""
+        if self._managed_system_manager is None:
+            self._managed_system_manager = ManagedSystemManager()
+        return self._managed_system_manager
 
     _SUPPORTED_TASKS = {"generate_ui": "_generate_ui"}
 

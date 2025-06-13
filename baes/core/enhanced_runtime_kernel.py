@@ -64,12 +64,12 @@ class EnhancedRuntimeKernel:
         self.context_store = ContextStore(context_store_path)
         self.bae_registry = EnhancedBAERegistry()  # Auto-initializes all BAEs
         self.entity_recognizer = EntityRecognizer()
-        self.managed_system_manager = ManagedSystemManager()
+        self._managed_system_manager = None  # Lazy initialization
 
-        # SWEA agents (coordinated by BAEs)
-        self.database_swea = DatabaseSWEA()
-        self.programmer_swea = ProgrammerSWEA()
-        self.frontend_swea = FrontendSWEA()
+        # SWEA agents (coordinated by BAEs) - also lazy initialization
+        self._database_swea = None
+        self._programmer_swea = None
+        self._frontend_swea = None
 
         self.execution_history = []
 
@@ -77,6 +77,34 @@ class EnhancedRuntimeKernel:
             "Enhanced Runtime Kernel initialized with %d BAEs",
             len(self.bae_registry.get_supported_entities()),
         )
+
+    @property
+    def managed_system_manager(self):
+        """Lazy initialization of ManagedSystemManager"""
+        if self._managed_system_manager is None:
+            self._managed_system_manager = ManagedSystemManager()
+        return self._managed_system_manager
+
+    @property
+    def database_swea(self):
+        """Lazy initialization of DatabaseSWEA"""
+        if self._database_swea is None:
+            self._database_swea = DatabaseSWEA()
+        return self._database_swea
+
+    @property
+    def programmer_swea(self):
+        """Lazy initialization of ProgrammerSWEA"""
+        if self._programmer_swea is None:
+            self._programmer_swea = ProgrammerSWEA()
+        return self._programmer_swea
+
+    @property
+    def frontend_swea(self):
+        """Lazy initialization of FrontendSWEA"""
+        if self._frontend_swea is None:
+            self._frontend_swea = FrontendSWEA()
+        return self._frontend_swea
 
     def process_natural_language_request(
         self, request: str, context: str = "academic", start_servers: bool = True

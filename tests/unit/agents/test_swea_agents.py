@@ -11,6 +11,33 @@ import pytest
 TESTS_TEMP_DIR = Path(__file__).parent.parent / ".temp"
 
 
+@pytest.fixture(autouse=True)
+def setup_managed_system_path():
+    """Set up MANAGED_SYSTEM_PATH for all SWEA tests to use tests/.temp"""
+    # Ensure tests/.temp exists
+    TESTS_TEMP_DIR.mkdir(exist_ok=True)
+
+    # Create unique temp directory for this test session
+    temp_dir = TESTS_TEMP_DIR / f"swea_test_{os.getpid()}"
+    temp_dir.mkdir(exist_ok=True)
+
+    # Set environment variable before any SWEA imports
+    original_env = os.environ.get("MANAGED_SYSTEM_PATH")
+    os.environ["MANAGED_SYSTEM_PATH"] = str(temp_dir / "managed_system")
+
+    yield temp_dir
+
+    # Restore environment
+    if original_env:
+        os.environ["MANAGED_SYSTEM_PATH"] = original_env
+    else:
+        os.environ.pop("MANAGED_SYSTEM_PATH", None)
+
+    # Cleanup
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 @pytest.mark.unit
 class TestProgrammerSWEA:
     """Test ProgrammerSWEA functionality."""
