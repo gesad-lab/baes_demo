@@ -546,6 +546,7 @@ class BAEConversationalCLI:
             "add teacher": "Add a teacher entity to the system",
             "list entities": self.show_system_status,
             "restart servers": self._restart_servers,
+            "start servers": self._start_servers_only,
             "show model": self._show_model_prompt,
             "show api": self._show_api_prompt,
             "show logs": self.show_server_logs,
@@ -583,15 +584,47 @@ class BAEConversationalCLI:
 
         time.sleep(2)
 
-        # Force restart by calling kernel with start_servers=True
-        print("🚀 Starting fresh server instances...")
-        result = self.kernel.process_natural_language_request("refresh system", start_servers=True)
+        # Check if managed system exists and is set up
+        managed_system_manager = self.kernel.managed_system_manager
+        if not managed_system_manager.managed_system_path.exists():
+            print("❌ No managed system found. Please generate a system first.")
+            print("💡 Try: 'add student' or 'Create a student management system'")
+            return
 
-        if result.get("success"):
-            print("✅ Servers restarted successfully!")
-            self.current_system_state["servers_running"] = True
-        else:
-            print("❌ Server restart failed")
+        # Start servers directly using ManagedSystemManager
+        print("🚀 Starting fresh server instances...")
+        try:
+            # Ensure structure and files are up to date
+            managed_system_manager.ensure_managed_system_structure()
+            managed_system_manager.update_system_files()
+
+            # Start servers using the kernel's _start_servers method
+            self.kernel._start_servers()
+
+            # Give servers time to start
+            time.sleep(3)
+
+            # Check if servers are actually running
+            server_status = self.check_servers_running()
+            if server_status["both_running"]:
+                print("✅ Servers restarted successfully!")
+                self.current_system_state["servers_running"] = True
+                print(f"🌐 FastAPI: http://localhost:{self.current_system_state['api_port']}/docs")
+                print(f"🎨 Streamlit: http://localhost:{self.current_system_state['ui_port']}")
+            else:
+                print("⚠️  Servers may be starting... Check status in a moment")
+                if server_status["api_running"]:
+                    print(
+                        f"🌐 FastAPI: http://localhost:{self.current_system_state['api_port']}/docs"
+                    )
+                if server_status["ui_running"]:
+                    print(f"🎨 Streamlit: http://localhost:{self.current_system_state['ui_port']}")
+
+        except Exception as e:
+            print(f"❌ Server restart failed: {str(e)}")
+            print("💡 Try running the system manually:")
+            print(f"   cd {managed_system_manager.managed_system_path}")
+            print("   ./start_servers.sh")
 
     def _kill_servers_on_ports(self):
         """Kill any processes running on our configured ports"""
@@ -622,6 +655,58 @@ class BAEConversationalCLI:
                 print(f"⚠️  Could not stop process on port {port}: {e}")
 
         self.current_system_state["servers_running"] = False
+
+    def _start_servers_only(self):
+        """Start servers without killing existing ones first"""
+        managed_system_manager = self.kernel.managed_system_manager
+        if not managed_system_manager.managed_system_path.exists():
+            print("❌ No managed system found. Please generate a system first.")
+            print("💡 Try: 'add student' or 'Create a student management system'")
+            return
+
+        # Check if servers are already running
+        server_status = self.check_servers_running()
+        if server_status["both_running"]:
+            print("✅ Servers are already running!")
+            print(f"🌐 FastAPI: http://localhost:{self.current_system_state['api_port']}/docs")
+            print(f"🎨 Streamlit: http://localhost:{self.current_system_state['ui_port']}")
+            return
+
+        print("🚀 Starting server instances...")
+        try:
+            # Ensure structure and files are up to date
+            managed_system_manager.ensure_managed_system_structure()
+            managed_system_manager.update_system_files()
+
+            # Start servers using the kernel's _start_servers method
+            self.kernel._start_servers()
+
+            # Give servers time to start
+            import time
+
+            time.sleep(3)
+
+            # Check if servers are actually running
+            server_status = self.check_servers_running()
+            if server_status["both_running"]:
+                print("✅ Servers started successfully!")
+                self.current_system_state["servers_running"] = True
+                print(f"🌐 FastAPI: http://localhost:{self.current_system_state['api_port']}/docs")
+                print(f"🎨 Streamlit: http://localhost:{self.current_system_state['ui_port']}")
+            else:
+                print("⚠️  Servers may be starting... Check status in a moment")
+                if server_status["api_running"]:
+                    print(
+                        f"🌐 FastAPI: http://localhost:{self.current_system_state['api_port']}/docs"
+                    )
+                if server_status["ui_running"]:
+                    print(f"🎨 Streamlit: http://localhost:{self.current_system_state['ui_port']}")
+
+        except Exception as e:
+            print(f"❌ Server startup failed: {str(e)}")
+            print("💡 Try running the system manually:")
+            print(f"   cd {managed_system_manager.managed_system_path}")
+            print("   ./start_servers.sh")
 
     def _show_model_prompt(self):
         """Show the model generation prompt"""
@@ -676,6 +761,7 @@ class BAEConversationalCLI:
         # System management
         print("\n🛠️  System Management:")
         print("  • restart servers - Restart FastAPI/Streamlit")
+        print("  • start servers  - Start servers (without restart)")
         print("  • show model     - View model generation prompt")
         print("  • show api       - View API generation prompt")
         print("  • clear          - Start fresh session")
@@ -766,6 +852,7 @@ class BAEConversationalCLI:
             "add teacher",
             "list entities",
             "restart servers",
+            "start servers",
             "show model",
             "show api",
             "show logs",
