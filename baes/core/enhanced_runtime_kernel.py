@@ -13,9 +13,10 @@ from baes.core.bae_registry import EnhancedBAERegistry
 from baes.core.context_store import ContextStore
 from baes.core.entity_recognizer import EntityRecognizer
 from baes.core.managed_system_manager import ManagedSystemManager
+from baes.swea_agents.backend_swea import BackendSWEA
 from baes.swea_agents.database_swea import DatabaseSWEA
 from baes.swea_agents.frontend_swea import FrontendSWEA
-from baes.swea_agents.programmer_swea import ProgrammerSWEA
+from baes.swea_agents.test_swea import TestSWEA
 from config import Config
 
 load_dotenv()
@@ -61,8 +62,9 @@ class EnhancedRuntimeKernel:
 
         # SWEA agents (coordinated by BAEs) - also lazy initialization
         self._database_swea = None
-        self._programmer_swea = None
+        self._backend_swea = None
         self._frontend_swea = None
+        self._test_swea = None
 
         self.execution_history = []
 
@@ -86,11 +88,18 @@ class EnhancedRuntimeKernel:
         return self._database_swea
 
     @property
-    def programmer_swea(self):
-        """Lazy initialization of ProgrammerSWEA"""
-        if self._programmer_swea is None:
-            self._programmer_swea = ProgrammerSWEA()
-        return self._programmer_swea
+    def backend_swea(self):
+        """Lazy initialization of BackendSWEA"""
+        if self._backend_swea is None:
+            self._backend_swea = BackendSWEA()
+        return self._backend_swea
+
+    @property
+    def test_swea(self):
+        """Lazy initialization of TestSWEA"""
+        if self._test_swea is None:
+            self._test_swea = TestSWEA()
+        return self._test_swea
 
     @property
     def frontend_swea(self):
@@ -255,18 +264,19 @@ class EnhancedRuntimeKernel:
             # Route to appropriate SWEA agent
             swea_agent_lower = swea_agent.lower()
             if swea_agent_lower in [
-                "programmer",
-                "programmingswea",
-                "programmer_swea",
-                "programmerswea",
+                "backend",
+                "backendswea",
+                "backend_swea",
             ]:
-                agent = self.programmer_swea
+                agent = self.backend_swea
             elif swea_agent_lower in ["frontend", "frontendswea", "frontend_swea"]:
                 agent = self.frontend_swea
             elif swea_agent_lower in ["database", "databaseswea", "database_swea"]:
                 agent = self.database_swea
+            elif swea_agent_lower in ["test", "testswea", "test_swea"]:
+                agent = self.test_swea
             else:
-                available_agents = ["ProgrammerSWEA", "FrontendSWEA", "DatabaseSWEA"]
+                available_agents = ["BackendSWEA", "FrontendSWEA", "DatabaseSWEA", "TestSWEA"]
                 logger.error("❌ Unknown SWEA agent: %s", swea_agent)
                 raise UnknownSWEAAgentError(swea_agent, available_agents)
 

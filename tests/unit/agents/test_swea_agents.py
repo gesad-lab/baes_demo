@@ -39,18 +39,18 @@ def setup_managed_system_path():
 
 
 @pytest.mark.unit
-class TestProgrammerSWEA:
-    """Test ProgrammerSWEA functionality."""
+class TestBackendSWEA:
+    """Test BackendSWEA functionality."""
 
-    @patch("baes.swea_agents.programmer_swea.OpenAIClient")
+    @patch("baes.swea_agents.backend_swea.OpenAIClient")
     def test_generate_model(self, mock_client_cls):
         """Test model generation."""
-        from baes.swea_agents.programmer_swea import ProgrammerSWEA
+        from baes.swea_agents.backend_swea import BackendSWEA
 
         mock_client = mock_client_cls.return_value
         mock_client.generate_code_with_domain_focus.return_value = "class Student(BaseModel): pass"
 
-        swea = ProgrammerSWEA()
+        swea = BackendSWEA()
         payload = {"entity": "Student", "attributes": ["name", "email"]}
         result = swea.handle_task("generate_model", payload)
 
@@ -60,15 +60,15 @@ class TestProgrammerSWEA:
         assert "code" in result["data"]
         mock_client.generate_code_with_domain_focus.assert_called_once()
 
-    @patch("baes.swea_agents.programmer_swea.OpenAIClient")
+    @patch("baes.swea_agents.backend_swea.OpenAIClient")
     def test_generate_api(self, mock_client_cls):
         """Test API generation."""
-        from baes.swea_agents.programmer_swea import ProgrammerSWEA
+        from baes.swea_agents.backend_swea import BackendSWEA
 
         mock_client = mock_client_cls.return_value
         mock_client.generate_code_with_domain_focus.return_value = "router = APIRouter()"
 
-        swea = ProgrammerSWEA()
+        swea = BackendSWEA()
         payload = {"entity": "Student", "model_code": "class Student: pass"}
         result = swea.handle_task("generate_api", payload)
 

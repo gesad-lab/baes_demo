@@ -61,7 +61,7 @@ This project implements the **Scenario 1: Initial System Generation** phase of t
 
 **Expected SWEA Coordination:**
 - Step 1: StudentBAE generates domain entity schema
-- Step 2: ProgrammerSWEA creates FastAPI backend
+- Step 2: BackendSWEA creates FastAPI backend
 - Step 3: DatabaseSWEA creates persistence layer
 - Step 4: FrontendSWEA generates Streamlit UI
 
@@ -82,7 +82,7 @@ Student BAE (Domain Entity Representative)
     ↓ (domain interpretation & SWEA coordination)
 Context Store (Domain Knowledge Preservation)
     ↓ (coordination plan)
-SWEA Agents (ProgrammerSWEA, FrontendSWEA, DatabaseSWEA)
+SWEA Agents (BackendSWEA, FrontendSWEA, DatabaseSWEA, TestSWEA)
     ↓ (generated artifacts with semantic coherence)
 Functional System (API + UI + Database)
 ```
@@ -147,7 +147,7 @@ print(result)
 
 ### Phase 2: Complete SWEA Agents (Week 2)
 
-#### 1. **ProgrammerSWEA Implementation**
+#### 1. **BackendSWEA Implementation**
 - [ ] FastAPI code generation with domain focus
 - [ ] SQLAlchemy model generation
 - [ ] Database migration scripts

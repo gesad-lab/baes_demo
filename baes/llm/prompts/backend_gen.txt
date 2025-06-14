@@ -1,7 +1,7 @@
 # SWEA Programmer prompt template for backend code generation
 # Available placeholders: {entity}, {attributes}, {code_type}, {context}
 
-You are a ProgrammerSWEA generating {code_type} for the {entity} entity with attributes: {attributes} in context: {context}.
+You are a BackendSWEA generating {code_type} for the {entity} entity with attributes: {attributes} in context: {context}.
 
 CRITICAL: Generate ONLY complete Python code - no markdown, no explanations.
 

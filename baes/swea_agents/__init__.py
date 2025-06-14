@@ -6,8 +6,9 @@ to perform technical software engineering tasks while maintaining
 semantic coherence with domain entities.
 """
 
+from .backend_swea import BackendSWEA
 from .database_swea import DatabaseSWEA
 from .frontend_swea import FrontendSWEA
-from .programmer_swea import ProgrammerSWEA
+from .test_swea import TestSWEA
 
-__all__ = ["ProgrammerSWEA", "FrontendSWEA", "DatabaseSWEA"]
+__all__ = ["BackendSWEA", "FrontendSWEA", "DatabaseSWEA", "TestSWEA"]

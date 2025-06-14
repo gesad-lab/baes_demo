@@ -208,7 +208,7 @@ class GenericBae(BaseAgent):
             },
             {
                 "step": 2,
-                "agent": "ProgrammerSWEA",
+                "agent": "BackendSWEA",
                 "task": "generate_api",
                 "payload": {
                     "entity": entity,
@@ -247,7 +247,7 @@ class GenericBae(BaseAgent):
                     ],
                 },
                 "description": f"Generate Streamlit UI for {entity} with business vocabulary",
-                "depends_on": ["ProgrammerSWEA.generate_api"],
+                "depends_on": ["BackendSWEA.generate_api"],
             },
         ]
 

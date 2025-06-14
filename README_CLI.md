@@ -47,8 +47,8 @@ python bae_chat.py
 ✅ System generation completed in 89.2 seconds!
 🔄 SWEA coordination completed: 4 tasks
   ✅ Task 1: DatabaseSWEA.setup_database
-  ✅ Task 2: ProgrammerSWEA.generate_model
-  ✅ Task 3: ProgrammerSWEA.generate_api
+  ✅ Task 2: BackendSWEA.generate_model
+✅ Task 3: BackendSWEA.generate_api
   ✅ Task 4: FrontendSWEA.generate_ui
 
 🌐 Your generated system is ready!

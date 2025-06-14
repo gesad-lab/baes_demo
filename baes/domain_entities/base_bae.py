@@ -144,9 +144,10 @@ class BaseBae(BaseAgent):
         Example swea_coordination format:
         [
             {{"swea_agent": "DatabaseSWEA", "task_type": "setup_database", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}},
-            {{"swea_agent": "ProgrammerSWEA", "task_type": "generate_model", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}},
-            {{"swea_agent": "ProgrammerSWEA", "task_type": "generate_api", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}},
-            {{"swea_agent": "FrontendSWEA", "task_type": "generate_ui", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}}
+            {{"swea_agent": "BackendSWEA", "task_type": "generate_model", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}},
+            {{"swea_agent": "BackendSWEA", "task_type": "generate_api", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}},
+            {{"swea_agent": "FrontendSWEA", "task_type": "generate_ui", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}},
+            {{"swea_agent": "TestSWEA", "task_type": "generate_all_tests", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}}
         ]
         """
 
@@ -170,14 +171,14 @@ class BaseBae(BaseAgent):
                 if isinstance(coordination, list):
                     # Fix any string items or improperly formatted items and validate agents
                     fixed_coordination = []
-                    valid_agents = ["DatabaseSWEA", "ProgrammerSWEA", "FrontendSWEA"]
+                    valid_agents = ["DatabaseSWEA", "BackendSWEA", "FrontendSWEA", "TestSWEA"]
 
                     for item in coordination:
                         if isinstance(item, str):
                             # Convert string to dict format
                             fixed_coordination.append(
                                 {
-                                    "swea_agent": "ProgrammerSWEA",
+                                    "swea_agent": "BackendSWEA",
                                     "task_type": "generate_component",
                                     "payload": {"attributes": extracted_attributes},
                                 }
@@ -185,7 +186,7 @@ class BaseBae(BaseAgent):
                         elif isinstance(item, dict):
                             # Ensure required keys exist
                             if "swea_agent" not in item:
-                                item["swea_agent"] = "ProgrammerSWEA"
+                                item["swea_agent"] = "BackendSWEA"
                             if "task_type" not in item:
                                 item["task_type"] = "generate_component"
                             if "payload" not in item:
@@ -206,7 +207,7 @@ class BaseBae(BaseAgent):
                                     "setup_database"
                                 ]:
                                     item["task_type"] = "setup_database"
-                                elif agent_name == "ProgrammerSWEA" and task_type not in [
+                                elif agent_name == "BackendSWEA" and task_type not in [
                                     "generate_model",
                                     "generate_api",
                                 ]:
@@ -219,6 +220,14 @@ class BaseBae(BaseAgent):
                                     "generate_ui"
                                 ]:
                                     item["task_type"] = "generate_ui"
+                                elif agent_name == "TestSWEA" and task_type not in [
+                                    "generate_unit_tests",
+                                    "generate_integration_tests",
+                                    "generate_ui_tests",
+                                    "execute_tests",
+                                    "generate_all_tests",
+                                ]:
+                                    item["task_type"] = "generate_all_tests"
 
                                 fixed_coordination.append(item)
                             else:
@@ -227,7 +236,7 @@ class BaseBae(BaseAgent):
 
                     interpretation["swea_coordination"] = fixed_coordination
             else:
-                # Provide default coordination plan including database setup with attributes
+                # Provide default coordination plan including database setup with attributes and tests
                 interpretation["swea_coordination"] = [
                     {
                         "swea_agent": "DatabaseSWEA",
@@ -235,18 +244,23 @@ class BaseBae(BaseAgent):
                         "payload": {"attributes": extracted_attributes},
                     },
                     {
-                        "swea_agent": "ProgrammerSWEA",
+                        "swea_agent": "BackendSWEA",
                         "task_type": "generate_model",
                         "payload": {"attributes": extracted_attributes},
                     },
                     {
-                        "swea_agent": "ProgrammerSWEA",
+                        "swea_agent": "BackendSWEA",
                         "task_type": "generate_api",
                         "payload": {"attributes": extracted_attributes},
                     },
                     {
                         "swea_agent": "FrontendSWEA",
                         "task_type": "generate_ui",
+                        "payload": {"attributes": extracted_attributes},
+                    },
+                    {
+                        "swea_agent": "TestSWEA",
+                        "task_type": "generate_all_tests",
                         "payload": {"attributes": extracted_attributes},
                     },
                 ]

@@ -63,7 +63,7 @@ class TestEnhancedRuntimeKernel:
         # Verify exception properties
         exception = exc_info.value
         assert exception.agent_name == "UnknownSWEA"
-        assert "ProgrammerSWEA" in exception.available_agents
+        assert "BackendSWEA" in exception.available_agents
         assert "FrontendSWEA" in exception.available_agents
 
     def test_unknown_swea_agent_error_handling(self, kernel):
@@ -115,11 +115,11 @@ class TestEnhancedRuntimeKernel:
                         assert "help" in result
 
     def test_valid_swea_agents_work_correctly(self, kernel):
-        """Test that valid SWEA agents (ProgrammerSWEA, FrontendSWEA) work correctly"""
+        """Test that valid SWEA agents (BackendSWEA, FrontendSWEA) work correctly"""
         # Mock coordination plan with valid SWEA agents
         coordination_plan = [
             {
-                "swea_agent": "ProgrammerSWEA",
+                "swea_agent": "BackendSWEA",
                 "task_type": "generate_model",
                 "entity": "Student",
                 "payload": {},
@@ -138,7 +138,7 @@ class TestEnhancedRuntimeKernel:
         mock_bae.name = "StudentBAE"
 
         # Mock SWEA agents to return successful results
-        kernel.programmer_swea.handle_task = Mock(
+        kernel.backend_swea.handle_task = Mock(
             return_value={"success": True, "code": "generated code"}
         )
         kernel.frontend_swea.handle_task = Mock(
@@ -151,17 +151,17 @@ class TestEnhancedRuntimeKernel:
         # Verify successful execution
         assert len(results) == 2
         assert all(result["success"] for result in results)
-        assert results[0]["task"] == "ProgrammerSWEA.generate_model"
+        assert results[0]["task"] == "BackendSWEA.generate_model"
         assert results[1]["task"] == "FrontendSWEA.generate_ui"
 
     def test_case_insensitive_swea_agent_matching(self, kernel):
         """Test that SWEA agent matching is case insensitive"""
         # Test various case variations that should work
         valid_variations = [
-            "programmer",
-            "PROGRAMMER",
-            "ProgrammerSWEA",
-            "programmingswea",
+            "backend",
+            "BACKEND",
+            "BackendSWEA",
+            "backendswea",
             "frontend",
             "FRONTEND",
             "FrontendSWEA",
@@ -182,8 +182,8 @@ class TestEnhancedRuntimeKernel:
             mock_bae.name = "StudentBAE"
 
             # Mock SWEA response
-            if "programmer" in agent_name.lower():
-                kernel.programmer_swea.handle_task = Mock(return_value={"success": True})
+            if "backend" in agent_name.lower():
+                kernel.backend_swea.handle_task = Mock(return_value={"success": True})
             else:
                 kernel.frontend_swea.handle_task = Mock(return_value={"success": True})
 
@@ -199,7 +199,7 @@ class TestEnhancedRuntimeKernel:
         """Test handling of SWEA agent task execution failures"""
         coordination_plan = [
             {
-                "swea_agent": "ProgrammerSWEA",
+                "swea_agent": "BackendSWEA",
                 "task_type": "generate_model",
                 "entity": "Student",
                 "payload": {},
@@ -211,7 +211,7 @@ class TestEnhancedRuntimeKernel:
         mock_bae.name = "StudentBAE"
 
         # Mock SWEA agent to raise an exception
-        kernel.programmer_swea.handle_task = Mock(side_effect=Exception("Task execution failed"))
+        kernel.backend_swea.handle_task = Mock(side_effect=Exception("Task execution failed"))
 
         # Execute coordination plan
         results = kernel._execute_coordination_plan(coordination_plan, mock_bae, "academic")
@@ -225,7 +225,7 @@ class TestEnhancedRuntimeKernel:
         """Test that execution stops at first unknown agent"""
         coordination_plan = [
             {
-                "swea_agent": "ProgrammerSWEA",  # Valid
+                "swea_agent": "BackendSWEA",  # Valid
                 "task_type": "generate_model",
                 "entity": "Student",
                 "payload": {},
@@ -249,7 +249,7 @@ class TestEnhancedRuntimeKernel:
         mock_bae.name = "StudentBAE"
 
         # Mock first SWEA to succeed
-        kernel.programmer_swea.handle_task = Mock(return_value={"success": True})
+        kernel.backend_swea.handle_task = Mock(return_value={"success": True})
 
         # Should raise exception on second (unknown) agent
         with pytest.raises(UnknownSWEAAgentError) as exc_info:
@@ -259,4 +259,4 @@ class TestEnhancedRuntimeKernel:
         assert exc_info.value.agent_name == "UnknownSWEA1"
 
         # Verify first agent was called (execution started)
-        kernel.programmer_swea.handle_task.assert_called_once()
+        kernel.backend_swea.handle_task.assert_called_once()

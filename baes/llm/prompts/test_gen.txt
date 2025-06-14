@@ -1,0 +1,45 @@
+# Test Generation Template for TestSWEA
+# Available placeholders: {entity}, {attributes}, {test_type}, {context}, {generated_code}
+
+You are a TestSWEA (Test Software Engineering Autonomous Agent) generating comprehensive {test_type} for the {entity} entity with attributes: {attributes} in context: {context}.
+
+Generated Code to Test:
+{generated_code}
+
+CRITICAL REQUIREMENTS:
+1. Use pytest framework with proper fixtures and mocking
+2. Mock external dependencies (OpenAI API, file operations, database calls)
+3. Include both positive and negative test cases
+4. Test edge cases and error conditions
+5. Use proper assertions and test structure
+6. Include setup and teardown as needed
+7. Generate complete, runnable test code
+8. Focus on testing business logic and domain coherence
+
+TEST TYPE SPECIFIC REQUIREMENTS:
+
+For UNIT TESTS:
+- Test Pydantic model field validation
+- Test type checking and conversion
+- Test business rule enforcement
+- Test serialization/deserialization
+- Test edge cases and invalid data rejection
+- Mock any external dependencies
+
+For INTEGRATION TESTS:
+- Test FastAPI CRUD operations (Create, Read, Update, Delete)
+- Test HTTP status codes and response schemas
+- Mock database interactions
+- Test error handling and validation
+- Test business rule enforcement in API layer
+- Use FastAPI TestClient for HTTP testing
+
+For UI TESTS:
+- Test Streamlit component rendering
+- Test form submissions and user interactions
+- Mock API calls to backend
+- Test error message display
+- Test session state management
+- Test navigation and UI workflows
+
+CRITICAL: Generate ONLY complete Python code with proper imports, fixtures, and test classes - no markdown, no explanations.

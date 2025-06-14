@@ -6,14 +6,14 @@ from ..core.managed_system_manager import ManagedSystemManager
 from ..llm.openai_client import OpenAIClient
 
 
-class ProgrammerSWEA(BaseAgent):
+class BackendSWEA(BaseAgent):
     """
     Software Engineering Autonomous Agent responsible for generating backend code
     (Pydantic model and FastAPI routes) while preserving domain semantics.
     """
 
     def __init__(self):
-        super().__init__("ProgrammerSWEA", "Code Generation Agent", "SWEA")
+        super().__init__("BackendSWEA", "Backend Code Generation Agent", "SWEA")
         self.llm_client = OpenAIClient()
         self._managed_system_manager = None  # Lazy initialization
 
@@ -56,7 +56,7 @@ class ProgrammerSWEA(BaseAgent):
         except FileNotFoundError:
             # Fallback prompt if template missing
             template = (
-                "You are a SWEA Programmer agent. Generate clean, production-ready Python code for {code_type} "
+                "You are a BackendSWEA agent. Generate clean, production-ready Python code for {code_type} "
                 "representing the {entity} domain entity. Attributes: {attributes}. "
                 "Use business vocabulary and FastAPI/Pydantic best practices. Return ONLY code."
             )

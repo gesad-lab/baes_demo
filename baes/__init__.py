@@ -29,11 +29,12 @@ from .domain_entities.academic.teacher_bae import TeacherBae
 # Domain Entities (BAEs) - direct imports to avoid circular dependencies
 from .domain_entities.base_bae import BaseBae
 from .domain_entities.generic_bae import GenericBae
-from .swea_agents.database_swea import DatabaseSWEA
-from .swea_agents.frontend_swea import FrontendSWEA
 
 # SWEA Agents - using actual class names (with SWEA suffix)
-from .swea_agents.programmer_swea import ProgrammerSWEA
+from .swea_agents.backend_swea import BackendSWEA
+from .swea_agents.database_swea import DatabaseSWEA
+from .swea_agents.frontend_swea import FrontendSWEA
+from .swea_agents.test_swea import TestSWEA
 
 # Backward compatibility aliases (old naming convention)
 StudentBAE = StudentBae
@@ -41,7 +42,8 @@ TeacherBAE = TeacherBae
 CourseBAE = CourseBae
 
 # New naming aliases for consistency
-ProgrammerSwea = ProgrammerSWEA
+BackendSwea = BackendSWEA
+TestSwea = TestSWEA
 FrontendSwea = FrontendSWEA
 DatabaseSwea = DatabaseSWEA
 
@@ -56,11 +58,13 @@ __all__ = [
     "TeacherBae",
     "CourseBae",
     # SWEA Agents - actual class names
-    "ProgrammerSWEA",
+    "BackendSWEA",
     "FrontendSWEA",
     "DatabaseSWEA",
+    "TestSWEA",
     # New naming aliases
-    "ProgrammerSwea",
+    "BackendSwea",
+    "TestSwea",
     "FrontendSwea",
     "DatabaseSwea",
     # Backward compatibility - old naming
