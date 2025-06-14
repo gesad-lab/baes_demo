@@ -173,6 +173,8 @@ class BaseBae(BaseAgent):
             # Only use defaults if NO attributes were extracted at all
             if not extracted_attributes:
                 extracted_attributes = self._get_default_attributes()
+                # Update the interpretation with the default attributes
+                interpretation["extracted_attributes"] = extracted_attributes
 
             # Ensure swea_coordination is properly formatted as list of dicts
             if "swea_coordination" in interpretation:
@@ -207,9 +209,8 @@ class BaseBae(BaseAgent):
                             if "payload" not in item:
                                 item["payload"] = {}
 
-                            # Ensure attributes are in payload
-                            if "attributes" not in item["payload"]:
-                                item["payload"]["attributes"] = extracted_attributes
+                            # CRITICAL FIX: Ensure attributes are in payload and use the corrected extracted_attributes
+                            item["payload"]["attributes"] = extracted_attributes
 
                             # Validate agent exists and task is supported
                             agent_name = item["swea_agent"]
