@@ -302,17 +302,14 @@ wait
                 # Copy config.py to managed system root
                 dest_config = self.managed_system_path / "config.py"
                 dest_config.write_text(config_content)
-                logger.info(f"📋 Copied config.py to managed system: {dest_config}")
 
                 # Also copy config.py to ui directory for Streamlit access
                 ui_config = self.managed_system_path / "ui" / "config.py"
                 ui_config.write_text(config_content)
-                logger.info(f"📋 Copied config.py to UI directory: {ui_config}")
 
                 # Also copy config.py to app directory for API access
                 app_config = self.managed_system_path / "app" / "config.py"
                 app_config.write_text(config_content)
-                logger.info(f"📋 Copied config.py to app directory: {app_config}")
             else:
                 logger.warning(f"⚠️ config.py not found at {source_config}")
         except Exception as e:

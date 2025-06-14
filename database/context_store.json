@@ -11,16 +11,19 @@
       "knowledge": {
         "entity": "student",
         "interpretation": {
-          "interpreted_intent": "The business user wants to implement a control mechanism for managing student entities.",
+          "interpreted_intent": "The business user wants to implement a feature for managing student entities within the academic context.",
           "extracted_attributes": [
             "name: str",
             "registration_number: str",
             "course: str"
           ],
           "domain_operations": [
-            "create_student_control",
-            "validate_student_data",
-            "enforce_business_rules"
+            "add_student",
+            "update_student",
+            "delete_student",
+            "retrieve_student",
+            "enroll_student_in_course",
+            "unenroll_student_from_course"
           ],
           "swea_coordination": [
             {
@@ -34,7 +37,7 @@
               }
             },
             {
-              "swea_agent": "ProgrammerSWEA",
+              "swea_agent": "BackendSWEA",
               "task_type": "generate_model",
               "payload": {
                 "attributes": [],
@@ -44,7 +47,7 @@
               }
             },
             {
-              "swea_agent": "ProgrammerSWEA",
+              "swea_agent": "BackendSWEA",
               "task_type": "generate_api",
               "payload": {
                 "attributes": [],
@@ -62,17 +65,24 @@
                 "context": "academic",
                 "coordinating_bae": "StudentBAE"
               }
+            },
+            {
+              "swea_agent": "TestSWEA",
+              "task_type": "generate_all_tests",
+              "payload": {
+                "attributes": [],
+                "entity": "Student",
+                "context": "academic",
+                "coordinating_bae": "StudentBAE"
+              }
             }
           ],
           "business_vocabulary": [
             "student",
-            "control",
-            "registration number",
-            "course",
-            "email",
-            "age",
-            "GPA",
-            "enrollment"
+            "aluno",
+            "estudante",
+            "discente",
+            "student management"
           ],
           "entity_focus": "Student",
           "entity": "Student"
@@ -80,22 +90,22 @@
         "context": "academic",
         "business_vocabulary": [
           "student",
-          "control",
-          "registration number",
-          "course",
-          "email",
-          "age",
-          "GPA",
-          "enrollment"
+          "aluno",
+          "estudante",
+          "discente",
+          "student management"
         ],
         "domain_operations": [
-          "create_student_control",
-          "validate_student_data",
-          "enforce_business_rules"
+          "add_student",
+          "update_student",
+          "delete_student",
+          "retrieve_student",
+          "enroll_student_in_course",
+          "unenroll_student_from_course"
         ],
-        "timestamp": "2025-06-14T09:17:06.821414"
+        "timestamp": "2025-06-14T10:23:18.680402"
       },
-      "timestamp": "2025-06-14T09:17:06.821419"
+      "timestamp": "2025-06-14T10:23:18.680407"
     },
     "course": {
       "entity": "course",
@@ -128,7 +138,7 @@
               }
             },
             {
-              "swea_agent": "ProgrammerSWEA",
+              "swea_agent": "BackendSWEA",
               "task_type": "generate_model",
               "payload": {
                 "attributes": [],
@@ -138,7 +148,7 @@
               }
             },
             {
-              "swea_agent": "ProgrammerSWEA",
+              "swea_agent": "BackendSWEA",
               "task_type": "generate_api",
               "payload": {
                 "attributes": [],
@@ -150,6 +160,16 @@
             {
               "swea_agent": "FrontendSWEA",
               "task_type": "generate_ui",
+              "payload": {
+                "attributes": [],
+                "entity": "Course",
+                "context": "academic",
+                "coordinating_bae": "CourseBAE"
+              }
+            },
+            {
+              "swea_agent": "TestSWEA",
+              "task_type": "generate_all_tests",
               "payload": {
                 "attributes": [],
                 "entity": "Course",
@@ -179,10 +199,10 @@
         "domain_operations": [
           "create_course"
         ],
-        "timestamp": "2025-06-14T09:23:19.554339"
+        "timestamp": "2025-06-14T10:25:31.018310"
       },
-      "timestamp": "2025-06-14T09:23:19.554347"
+      "timestamp": "2025-06-14T10:25:31.018315"
     }
   },
-  "last_saved": "2025-06-14T09:23:19.554357"
+  "last_saved": "2025-06-14T10:25:31.018329"
 }
