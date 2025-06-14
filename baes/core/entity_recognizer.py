@@ -45,7 +45,7 @@ class EntityRecognizer:
         )
 
         try:
-            response = self.llm.generate_response(prompt, system_prompt, temperature=0.1)
+            response = self.llm.generate_response(prompt, system_prompt, temperature=0)
             classification = json.loads(response)
 
             # Validate the response

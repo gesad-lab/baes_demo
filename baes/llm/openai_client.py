@@ -61,7 +61,7 @@ class OpenAIClient:
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
-        temperature: float = 0.2,
+        temperature: float = 0,
         max_tokens: int = 2000,
     ) -> str:
         """Generate response from OpenAI GPT-4o-mini with domain focus"""
@@ -86,7 +86,7 @@ class OpenAIClient:
         prompt: str,
         entity_type: str = "Student",
         context: str = "academic",
-        temperature: float = 0.2,
+        temperature: float = 0,
     ) -> str:
         """Generate response with specific domain entity focus and semantic coherence"""
         system_prompt = f"""
@@ -174,6 +174,8 @@ class OpenAIClient:
             - Generate form fields dynamically based on provided attributes: {attributes}
             - Use st.dataframe() with column_config for proper table display with column names
             - Use pandas DataFrame (pd.DataFrame) to properly format data for st.dataframe()
+            - Use SAFE attribute access with .get() method for all data fields to avoid KeyError
+            - Handle missing or differently named fields gracefully (e.g., 'name' vs 'Name')
             - Implement working edit functionality using session state and forms
             - Implement working delete functionality using session state for confirmation (do NOT use st.confirm which doesn't exist)
             - For delete confirmation, use st.button() with session state to show/hide confirmation buttons
@@ -193,10 +195,19 @@ class OpenAIClient:
             For example, if attributes are ["name: str", "registration_number: str", "course: str"],
             generate text_input fields for each of these in both create and edit forms.
 
+            CRITICAL ATTRIBUTE ACCESS PATTERN:
+            - ALWAYS use .get() method for accessing dictionary fields: item.get('field_name', 'default_value')
+            - NEVER use direct access like item['field_name'] which can cause KeyError
+            - For display names in dropdowns/buttons, use fallback pattern:
+              display_name = item.get('name', item.get('title', item.get('Name', f"ID {{item['id']}}")))
+            - Handle both lowercase and capitalized field names gracefully
+
             DELETE CONFIRMATION PATTERN (required):
             ```python
             # Example delete confirmation pattern using session state
-            if st.button(f"Delete {{selected_item['name']}}", type="secondary"):
+            # Use safe attribute access to get display name
+            display_name = selected_item.get('name', selected_item.get('Name', f"ID {{selected_item['id']}}"))
+            if st.button(f"Delete {{display_name}}", type="secondary"):
                 st.session_state.confirm_delete_id = selected_item['id']
 
             if hasattr(st.session_state, 'confirm_delete_id') and st.session_state.confirm_delete_id:
@@ -235,7 +246,7 @@ class OpenAIClient:
             Return ONLY the code, no explanations or markdown formatting.
             """
 
-        response = self.generate_response(prompt, system_prompt, temperature=0.1)
+        response = self.generate_response(prompt, system_prompt, temperature=0)
 
         # Strip markdown formatting if present
         return self._strip_markdown_formatting(response)
