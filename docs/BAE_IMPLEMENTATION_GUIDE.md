@@ -34,6 +34,8 @@ HBE (Human Business Expert) → Enhanced Runtime Kernel → [Student BAE] → [S
 
 **Key Innovation**: Unlike traditional LMA systems that simulate software engineering roles, this architecture centers on Business Autonomous Entities (BAEs) that represent domain entities (like "Student", "Course", "Teacher") as autonomous agents responsible for their semantic modeling, persistence, interface generation, and coordination with auxiliary agents.
 
+**PoC Enhancement**: The system includes automatic server restart functionality that ensures new entities appear immediately in the web UI, making demonstrations seamless and user-friendly.
+
 **TechLeadSWEA Enhancement**: The system now includes a TechLeadSWEA that acts as a technical governance layer, providing:
 - Technical architecture decisions and coordination oversight
 - Quality gate management and code review authority
@@ -459,6 +461,40 @@ class EnhancedRuntimeKernel:
 
         return "student"  # Default to student for POC
 ```
+
+---
+
+## 🔄 **AUTO-RESTART FEATURE (PoC Enhancement)**
+
+### **Automatic Server Refresh for Multi-Entity Systems**
+
+When adding new entities to an existing system, the BAE CLI automatically restarts servers to ensure the web UI immediately reflects the changes. This is especially important for PoC demonstrations where seamless entity addition is crucial.
+
+#### **How It Works**
+1. **Entity Detection**: System detects when new entity models are generated
+2. **Smart Restart**: Only restarts if servers are already running and new entities were added
+3. **User Feedback**: Clear messages about what's happening and why
+4. **Immediate Availability**: New entities appear in web UI without manual intervention
+
+#### **Configuration**
+```python
+# Default: Enabled for PoC demonstrations
+"auto_restart_on_entity_changes": True
+
+# Toggle via CLI command
+🔄 HBE> toggle auto restart
+✅ Auto-restart ENABLED - Servers will restart automatically after adding new entities
+
+# Or disable for manual control
+🔄 HBE> toggle auto restart
+⚠️  Auto-restart DISABLED - You'll need to manually restart servers to see new entities
+```
+
+#### **Benefits for PoC Validation**
+- **Seamless Multi-Entity Demos**: Add Student → Course → Teacher without manual restarts
+- **Improved User Experience**: Business experts see immediate results
+- **Demonstration Flow**: No interruptions during Scenario 3 (Multi-Entity System) validation
+- **Technical Transparency**: Clear feedback about system operations
 
 ---
 

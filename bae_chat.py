@@ -39,6 +39,7 @@ class BAEConversationalCLI:
             "managed_system_path": None,
             "api_port": 8100,
             "ui_port": 8600,
+            "auto_restart_on_entity_changes": True,  # For PoC: auto-restart servers after entity changes
         }
         self.context = "initial"  # initial, evolving, managing
 
@@ -137,6 +138,7 @@ class BAEConversationalCLI:
         print("💬 I'm your Business Autonomous Entity assistant!")
         print("📚 I generate academic management systems for you.")
         print("🌐 CRUD operations available in generated web UI!")
+        print("🔄 Auto-restart: New entities appear immediately in web UI")
         print()
         print("ℹ️  Commands: 'help', 'examples', 'status', 'files', 'quit'")
         print()
@@ -203,6 +205,7 @@ class BAEConversationalCLI:
             "managed_system_path": None,
             "api_port": 8100,
             "ui_port": 8600,
+            "auto_restart_on_entity_changes": True,  # For PoC: auto-restart servers after entity changes
         }
         self.conversation_history = []
         print("🆕 Starting fresh session")
@@ -243,6 +246,14 @@ class BAEConversationalCLI:
         result = self.kernel.process_natural_language_request(
             request, start_servers=not servers_already_running
         )
+
+        # For PoC: Automatically restart servers after entity changes to refresh UI
+        if (
+            result.get("success")
+            and servers_already_running
+            and self.current_system_state.get("auto_restart_on_entity_changes", True)
+        ):
+            self._handle_post_generation_server_refresh(result)
         end_time = datetime.now()
 
         generation_time = (end_time - start_time).total_seconds()
@@ -547,6 +558,7 @@ class BAEConversationalCLI:
             "list entities": self.show_system_status,
             "restart servers": self._restart_servers,
             "start servers": self._start_servers_only,
+            "toggle auto restart": self._toggle_auto_restart,
             "show model": self._show_model_prompt,
             "show api": self._show_api_prompt,
             "show logs": self.show_server_logs,
@@ -708,6 +720,47 @@ class BAEConversationalCLI:
             print(f"   cd {managed_system_manager.managed_system_path}")
             print("   ./start_servers.sh")
 
+    def _handle_post_generation_server_refresh(self, result: Dict[str, Any]):
+        """Handle server refresh after successful entity generation when servers were already running"""
+        try:
+            # Check if new entity was actually created/added
+            execution_results = result.get("execution_results", [])
+            entity_added = any(
+                task.get("success") and "model" in task.get("task", "")
+                for task in execution_results
+            )
+
+            if entity_added:
+                print("\n🔄 New entity detected! Refreshing servers to update web UI...")
+                print("💡 For PoC: Auto-restarting servers to show new entity in web interface")
+
+                # Auto-restart servers to refresh the UI
+                self._restart_servers()
+
+                # Update context to reflect we're now in evolving mode
+                if self.context == "initial":
+                    self.context = "evolving"
+
+        except Exception as e:
+            print(f"⚠️  Could not auto-refresh servers: {str(e)}")
+            print("💡 Try running 'restart servers' manually to see new entity in web UI")
+
+    def _toggle_auto_restart(self):
+        """Toggle automatic server restart after entity changes"""
+        current_setting = self.current_system_state.get("auto_restart_on_entity_changes", True)
+        self.current_system_state["auto_restart_on_entity_changes"] = not current_setting
+
+        if self.current_system_state["auto_restart_on_entity_changes"]:
+            print(
+                "✅ Auto-restart ENABLED - Servers will restart automatically after adding new entities"
+            )
+            print("💡 This ensures the web UI shows new entities immediately (recommended for PoC)")
+        else:
+            print(
+                "⚠️  Auto-restart DISABLED - You'll need to manually restart servers to see new entities"
+            )
+            print("💡 Use 'restart servers' command after adding entities to refresh the web UI")
+
     def _show_model_prompt(self):
         """Show the model generation prompt"""
         print("\n💻 Model Generation Prompt:")
@@ -762,6 +815,12 @@ class BAEConversationalCLI:
         print("\n🛠️  System Management:")
         print("  • restart servers - Restart FastAPI/Streamlit")
         print("  • start servers  - Start servers (without restart)")
+        auto_restart_status = (
+            "ON" if self.current_system_state.get("auto_restart_on_entity_changes", True) else "OFF"
+        )
+        print(
+            f"  • toggle auto restart - Auto-restart after entity changes ({auto_restart_status})"
+        )
         print("  • show model     - View model generation prompt")
         print("  • show api       - View API generation prompt")
         print("  • clear          - Start fresh session")
@@ -853,6 +912,7 @@ class BAEConversationalCLI:
             "list entities",
             "restart servers",
             "start servers",
+            "toggle auto restart",
             "show model",
             "show api",
             "show logs",

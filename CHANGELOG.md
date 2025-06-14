@@ -1,5 +1,31 @@
 # BAE System Changelog
 
+## 2024-06-14 - Enhanced Server Management & Auto-Restart
+
+### 🚀 **NEW: Automatic Server Restart After Entity Changes**
+
+**Feature**: Auto-restart servers when new entities are added to immediately update the web UI.
+
+**Problem Solved**: Previously, when adding new entities (like courses or teachers) to an existing system, the web UI wouldn't show the new entities until servers were manually restarted. This interrupted the PoC demonstration flow.
+
+**Solution**:
+- **Smart Auto-Restart**: Automatically restarts servers when new entity models are generated while servers are already running
+- **Entity Detection**: Only triggers restart when actual new entities are added (not for regular updates)
+- **Configurable**: Toggle ON/OFF with `toggle auto restart` command (default: ON)
+- **Clear Feedback**: User-friendly messages explaining what's happening and why
+
+**Benefits for PoC**:
+- ✅ **Seamless Entity Addition**: New entities appear immediately in web UI
+- ✅ **Better Demo Flow**: No manual intervention needed during demonstrations
+- ✅ **User-Friendly**: Clear feedback about auto-restart actions
+- ✅ **Configurable**: Can be disabled if manual control is preferred
+
+**New CLI Commands**:
+- `toggle auto restart` - Enable/disable automatic server restart after entity changes
+- Enhanced `help` command shows current auto-restart status
+
+### 🔧 **IMPROVED: Server Management Commands**
+
 ## 2024-06-14 - Server Management Fix
 
 ### 🔧 **Fixed: "restart servers" Command Issue**

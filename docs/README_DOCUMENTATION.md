@@ -6,6 +6,8 @@ This documentation contains all the artifacts needed to implement and validate t
 
 The core innovation demonstrated is the concept of Business Autonomous Entities (BAEs) as living domain entity representatives that maintain semantic coherence between business vocabulary and technical artifacts, enabling runtime evolution and cross-organizational reusability.
 
+**PoC Enhancement**: The system includes automatic server restart functionality that ensures new entities appear immediately in the web UI, making multi-entity demonstrations seamless and user-friendly.
+
 ---
 
 ## 📋 **MAIN DOCUMENTS**

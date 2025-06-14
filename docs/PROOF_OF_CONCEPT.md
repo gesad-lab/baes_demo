@@ -89,6 +89,7 @@ Validate the viability of the proposed architecture through the implementation o
 - Functionalities adapted to specific contexts
 - Minimal recoding necessary due to BAE reusability
 - Domain entity understanding preserved across all entities
+- **Auto-restart feature**: New entities appear immediately in web UI for seamless demonstration
 
 **Success Criteria:**
 - >80% reuse of code/logic across BAEs
@@ -285,6 +286,7 @@ Managed System (maintaining semantic coherence) FrontendSWEA  Quality Gates
 
 4. **Scenario 3 - Multi-Entity System** (2 min)
    - Multi-entity request: "Add courses and teachers to the system"
+   - **Auto-restart demonstration**: Servers automatically refresh to show new entities in web UI
    - BAE Registry coordination demonstration
    - Cross-entity relationships and operations
    - Evidence of domain knowledge reuse across entities
