@@ -354,6 +354,10 @@ class EnhancedRuntimeKernel:
             managed_system_path = self.managed_system_manager.managed_system_path
             logger.info("🚀 Starting servers from managed system at: %s", managed_system_path)
 
+            # Create log directory for server outputs
+            log_dir = managed_system_path / "logs"
+            log_dir.mkdir(exist_ok=True)
+
             # Check if managed system has the startup script
             start_script = managed_system_path / "start_servers.sh"
             if start_script.exists():
@@ -362,13 +366,17 @@ class EnhancedRuntimeKernel:
                     logger.error("❌ Invalid script path: %s", start_script)
                     return
 
-                # Use the managed system's startup script
-                subprocess.Popen(
-                    ["/bin/bash", str(start_script)], cwd=managed_system_path
-                )  # nosec B603 B607
+                # Use the managed system's startup script with output redirection
+                with open(log_dir / "startup.log", "w") as log_file:
+                    subprocess.Popen(
+                        ["/bin/bash", str(start_script)],
+                        cwd=managed_system_path,
+                        stdout=log_file,
+                        stderr=subprocess.STDOUT,
+                    )  # nosec B603 B607
                 logger.info("🚀 Servers started using managed system startup script")
             else:
-                # Fallback to manual server startup
+                # Fallback to manual server startup with output redirection
                 logger.info(
                     "🔄 Using fallback server startup (managed system startup script not found)"
                 )
@@ -385,7 +393,12 @@ class EnhancedRuntimeKernel:
                     str(Config.API_PORT),
                     "--reload",
                 ]
-                subprocess.Popen(api_cmd, cwd=managed_system_path)  # nosec B603
+
+                # Redirect FastAPI output to log file
+                with open(log_dir / "fastapi.log", "w") as api_log:
+                    subprocess.Popen(
+                        api_cmd, cwd=managed_system_path, stdout=api_log, stderr=subprocess.STDOUT
+                    )  # nosec B603
                 logger.info(
                     "🚀 FastAPI server started at http://%s:%s (from managed system)",
                     Config.API_HOST,
@@ -406,8 +419,17 @@ class EnhancedRuntimeKernel:
                         str(ui_file),
                         "--server.port",
                         str(Config.UI_PORT),
+                        "--server.headless",
+                        "true",
+                        "--logger.level",
+                        "error",
                     ]  # nosec B607
-                    subprocess.Popen(ui_cmd, cwd=managed_system_path)  # nosec B603
+
+                    # Redirect Streamlit output to log file
+                    with open(log_dir / "streamlit.log", "w") as ui_log:
+                        subprocess.Popen(
+                            ui_cmd, cwd=managed_system_path, stdout=ui_log, stderr=subprocess.STDOUT
+                        )  # nosec B603
                     logger.info(
                         "🎨 Streamlit UI started at http://%s:%s (from managed system)",
                         Config.UI_HOST,
@@ -423,6 +445,9 @@ class EnhancedRuntimeKernel:
                 len(info["entities"]),
                 info["structure_complete"],
             )
+
+            # Inform user about log files
+            logger.info("📝 Server logs available at: %s", log_dir)
 
         except Exception as e:
             logger.error("❌ Failed to start servers from managed system: %s", str(e))
