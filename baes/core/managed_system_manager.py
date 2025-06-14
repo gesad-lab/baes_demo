@@ -445,7 +445,7 @@ from pathlib import Path
 
 # Configure page
 st.set_page_config(
-    page_title="BAE Academic Management System",
+    page_title="BAE Framework Demo",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -453,7 +453,7 @@ st.set_page_config(
 
 def main():
     """Main Streamlit application."""
-    st.title("🎓 BAE Academic Management System")
+    st.title("🎓 BAE Framework Demo")
     st.markdown("**Auto-generated system for managing multiple business entities**")
 
     # Sidebar navigation
