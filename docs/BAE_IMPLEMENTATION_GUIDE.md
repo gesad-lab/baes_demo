@@ -24,14 +24,22 @@ For complete scenario details, see: `docs/PROOF_OF_CONCEPT.md`
 ```
 HBE (Human Business Expert) → Enhanced Runtime Kernel → [Student BAE] → [SWEA Agents] → Managed System
                                                               ↓
-                                                       [DatabaseSWEA]
-                                                       [ProgrammerSWEA]
-                                                       [FrontendSWEA]
-                                                              ↓
+                                                       [TechLeadSWEA] ←→ [TestSWEA]
+                                                              ↓              ↓
+                                                       [DatabaseSWEA]  [BackendSWEA]
+                                                       [FrontendSWEA]        ↓
+                                                              ↓         [Quality Gates]
                                                        [FastAPI + Streamlit + SQLite]
 ```
 
 **Key Innovation**: Unlike traditional LMA systems that simulate software engineering roles, this architecture centers on Business Autonomous Entities (BAEs) that represent domain entities (like "Student", "Course", "Teacher") as autonomous agents responsible for their semantic modeling, persistence, interface generation, and coordination with auxiliary agents.
+
+**TechLeadSWEA Enhancement**: The system now includes a TechLeadSWEA that acts as a technical governance layer, providing:
+- Technical architecture decisions and coordination oversight
+- Quality gate management and code review authority
+- SWEA conflict resolution and autonomous collaboration coordination
+- Test-driven development coordination with TestSWEA
+- Performance, security, and technical standards enforcement
 
 ---
 
@@ -67,8 +75,10 @@ baes_demo/
 │   └── swea_agents/
 │       ├── __init__.py
 │       ├── database_swea.py
-│       ├── programmer_swea.py
-│       └── frontend_swea.py
+│       ├── backend_swea.py
+│       ├── frontend_swea.py
+│       ├── test_swea.py
+│       └── techlead_swea.py
 ├── managed_system/
 │   ├── app/
 │   │   ├── models/
@@ -205,7 +215,49 @@ class StudentBae(BaseBae):
         pass
 ```
 
-### 4. DatabaseSWEA (`baes/swea_agents/database_swea.py`)
+### 4. TechLeadSWEA (`baes/swea_agents/techlead_swea.py`)
+```python
+from baes.agents.base_agent import BaseAgent
+from baes.llm.openai_client import OpenAIClient
+from typing import Dict, Any
+import json
+
+class TechLeadSWEA(BaseAgent):
+    """
+    Technical Lead Software Engineering Autonomous Agent responsible for:
+    - Technical architecture decisions and technology stack management
+    - Quality gate management and code review authority
+    - SWEA coordination and conflict resolution
+    - Performance, security, and technical standards enforcement
+    - Continuous improvement and optimization oversight
+    """
+
+    def __init__(self):
+        super().__init__("TechLeadSWEA", "Technical Leadership and Coordination Agent")
+        self.llm_client = OpenAIClient()
+        self.architecture_decisions = {}
+        self.quality_standards = {}
+        self.conflict_resolution_history = []
+
+    def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        if task == "coordinate_system_generation":
+            return self._coordinate_system_generation(payload)
+        elif task == "review_and_approve":
+            return self._review_and_approve(payload)
+        elif task == "resolve_technical_conflict":
+            return self._resolve_technical_conflict(payload)
+        elif task == "coordinate_test_fixes":
+            return self._coordinate_test_fixes(payload)
+        else:
+            return {"error": f"Unknown task: {task}"}
+
+    def _coordinate_system_generation(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Coordinate overall system generation with technical oversight"""
+        # Implementation details...
+        pass
+```
+
+### 5. DatabaseSWEA (`baes/swea_agents/database_swea.py`)
 ```python
 from baes.agents.base_agent import BaseAgent
 from typing import Dict, Any
@@ -266,8 +318,10 @@ from baes.domain_entities.academic.student_bae import StudentBae
 from baes.domain_entities.academic.course_bae import CourseBae
 from baes.domain_entities.academic.teacher_bae import TeacherBae
 from baes.swea_agents.database_swea import DatabaseSWEA
-from baes.swea_agents.programmer_swea import ProgrammerSWEA
+from baes.swea_agents.backend_swea import BackendSWEA
 from baes.swea_agents.frontend_swea import FrontendSWEA
+from baes.swea_agents.test_swea import TestSWEA
+from baes.swea_agents.techlead_swea import TechLeadSWEA
 from baes.core.bae_registry import EnhancedBAERegistry
 from baes.core.managed_system_manager import ManagedSystemManager
 from typing import Dict, Any
@@ -287,10 +341,12 @@ class EnhancedRuntimeKernel:
         self.bae_registry.register_bae("course", CourseBae())
         self.bae_registry.register_bae("teacher", TeacherBae())
 
-        # SWEA agents (coordinated by BAEs)
+        # SWEA agents (coordinated by BAEs and TechLeadSWEA)
         self.database_swea = DatabaseSWEA()
-        self.programmer_swea = ProgrammerSWEA()
+        self.backend_swea = BackendSWEA()
         self.frontend_swea = FrontendSWEA()
+        self.test_swea = TestSWEA()
+        self.techlead_swea = TechLeadSWEA()
 
         # Managed system manager
         self.managed_system_manager = ManagedSystemManager()
@@ -352,12 +408,16 @@ class EnhancedRuntimeKernel:
             swea_agent_lower = swea_agent.lower()
             if swea_agent_lower in ["database", "databaseswea", "database_swea"]:
                 agent = self.database_swea
-            elif swea_agent_lower in ["programmer", "programmingswea", "programmer_swea", "programmerswea"]:
-                agent = self.programmer_swea
+            elif swea_agent_lower in ["backend", "backendswea", "backend_swea", "programmer", "programmerswea", "programmer_swea"]:
+                agent = self.backend_swea
             elif swea_agent_lower in ["frontend", "frontendswea", "frontend_swea"]:
                 agent = self.frontend_swea
+            elif swea_agent_lower in ["test", "testswea", "test_swea"]:
+                agent = self.test_swea
+            elif swea_agent_lower in ["techlead", "techleadswea", "techlead_swea", "tech_lead", "tech_lead_swea"]:
+                agent = self.techlead_swea
             else:
-                available_agents = ["ProgrammerSWEA", "FrontendSWEA", "DatabaseSWEA"]
+                available_agents = ["BackendSWEA", "FrontendSWEA", "DatabaseSWEA", "TestSWEA", "TechLeadSWEA"]
                 logger.error("❌ Unknown SWEA agent: %s", swea_agent)
                 results.append({
                     "task": f"{swea_agent}.{task_type}",

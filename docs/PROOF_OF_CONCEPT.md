@@ -116,29 +116,35 @@ HBE (Human Business Expert)
     ↓ (natural language)
 Enhanced Runtime Kernel
     ↓ (entity recognition & routing)
-BAE Registry (Student, Course, Teacher BAEs) ←→ DatabaseSWEA
+BAE Registry (Student, Course, Teacher BAEs) ←→ TechLeadSWEA (Technical Governance)
     ↓                                              ↓
-Managed System Manager                         ProgrammerSWEA
+Managed System Manager                         DatabaseSWEA
     ↓                                              ↓
-Generated Artifacts                            FrontendSWEA
-    ↓                                              ↓
-Managed System (maintaining semantic coherence)
+Generated Artifacts                            BackendSWEA ←→ TestSWEA
+    ↓                                              ↓              ↓
+Managed System (maintaining semantic coherence) FrontendSWEA  Quality Gates
 ```
 
 ### Communication Protocol
 ```json
 {
-  "from_agent": "StudentBae",
-  "to_agent": "ProgrammerSWEA",
+  "from_agent": "TechLeadSWEA",
+  "to_agent": "BackendSWEA",
   "task": "generate_api",
   "payload": {
     "entity": "Student",
     "schema": "...",
     "operations": ["create", "read", "update", "delete"],
-    "domain_context": "academic"
+    "domain_context": "academic",
+    "quality_requirements": {
+      "test_coverage": "100%",
+      "code_review": "required",
+      "performance_standards": "sub_200ms"
+    }
   },
   "expected_response": "fastapi_code",
-  "semantic_requirements": "maintain_domain_coherence"
+  "semantic_requirements": "maintain_domain_coherence",
+  "technical_governance": "techlead_oversight"
 }
 ```
 

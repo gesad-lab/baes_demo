@@ -65,28 +65,39 @@ Low Coverage (<50%):
 
 ### 1. Enhanced Runtime Kernel Updates
 ```python
-# Added DatabaseSWEA import
+# Added all SWEA agent imports
 from baes.swea_agents.database_swea import DatabaseSWEA
+from baes.swea_agents.backend_swea import BackendSWEA
+from baes.swea_agents.test_swea import TestSWEA
+from baes.swea_agents.techlead_swea import TechLeadSWEA
 
-# Added DatabaseSWEA initialization
+# Added all SWEA agent initialization
 self.database_swea = DatabaseSWEA()
+self.backend_swea = BackendSWEA()
+self.test_swea = TestSWEA()
+self.techlead_swea = TechLeadSWEA()
 
-# Added DatabaseSWEA routing
-elif swea_agent_lower in ["database", "databaseswea", "database_swea"]:
-    agent = self.database_swea
+# Added complete SWEA routing
+elif swea_agent_lower in ["techlead", "techleadswea", "techlead_swea"]:
+    agent = self.techlead_swea
+elif swea_agent_lower in ["test", "testswea", "test_swea"]:
+    agent = self.test_swea
 
 # Updated available agents list
-available_agents = ["ProgrammerSWEA", "FrontendSWEA", "DatabaseSWEA"]
+available_agents = ["BackendSWEA", "FrontendSWEA", "DatabaseSWEA", "TestSWEA", "TechLeadSWEA"]
 ```
 
-### 2. BAE Coordination Logic Enhancement
+### 2. BAE Coordination Logic Enhancement with TechLeadSWEA
 ```python
-# Updated default coordination plan in base_bae.py
+# Updated comprehensive coordination plan in base_bae.py
 interpretation["swea_coordination"] = [
+    {"swea_agent": "TechLeadSWEA", "task_type": "coordinate_system_generation"},
     {"swea_agent": "DatabaseSWEA", "task_type": "setup_database"},
-    {"swea_agent": "ProgrammerSWEA", "task_type": "generate_model"},
-    {"swea_agent": "ProgrammerSWEA", "task_type": "generate_api"},
+    {"swea_agent": "BackendSWEA", "task_type": "generate_model"},
+    {"swea_agent": "BackendSWEA", "task_type": "generate_api"},
     {"swea_agent": "FrontendSWEA", "task_type": "generate_ui"},
+    {"swea_agent": "TestSWEA", "task_type": "generate_all_tests_with_collaboration"},
+    {"swea_agent": "TechLeadSWEA", "task_type": "review_and_approve"},
 ]
 ```
 
@@ -107,9 +118,11 @@ interpretation["swea_coordination"] = [
 
 ### SWEA Coordination ✅
 - **DatabaseSWEA**: Database setup and schema management
-- **ProgrammerSWEA**: Model and API generation
+- **BackendSWEA**: Model and API generation with dependency management
 - **FrontendSWEA**: UI generation
-- **All SWEAs**: Properly routed and functional
+- **TestSWEA**: Test generation and execution with collaborative fixing
+- **TechLeadSWEA**: Technical coordination and quality gate management
+- **All SWEAs**: Properly routed and functional with enhanced collaboration
 
 ### Managed System Architecture ✅
 - **Path**: `/managed_system/` (not `generated/` as in old docs)

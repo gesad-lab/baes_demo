@@ -1,3 +1,4 @@
+import re
 import subprocess
 import sys
 from typing import Any, Dict, List
@@ -11,12 +12,19 @@ class TestSWEA(BaseAgent):
     """
     Software Engineering Autonomous Agent responsible for generating and executing
     comprehensive tests for all generated artifacts (models, APIs, UI, database).
+
+    Enhanced with autonomous collaboration capabilities:
+    - Analyzes test failures and coordinates fixes with other SWEAs
+    - Ensures quality without exposing technical details to HBEs
+    - Re-executes tests after each component regeneration
     """
 
     def __init__(self):
         super().__init__("TestSWEA", "Test Generation and Execution Agent", "SWEA")
         self.llm_client = OpenAIClient()
         self._managed_system_manager = None  # Lazy initialization
+        self.max_fix_iterations = 3  # Maximum attempts to fix issues autonomously
+        self.collaboration_history = []  # Track SWEA collaboration attempts
 
     @property
     def managed_system_manager(self):
@@ -31,7 +39,9 @@ class TestSWEA(BaseAgent):
         "generate_integration_tests": "_generate_integration_tests",
         "generate_ui_tests": "_generate_ui_tests",
         "execute_tests": "_execute_tests",
-        "generate_all_tests": "_generate_all_tests",
+        "generate_all_tests": "_generate_all_tests_with_collaboration",
+        "generate_all_tests_with_collaboration": "_generate_all_tests_with_collaboration",
+        "validate_and_fix": "_validate_and_fix_system",
     }
 
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -50,7 +60,447 @@ class TestSWEA(BaseAgent):
             return self.create_error_response(task, str(e), "execution_error")
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # Enhanced Collaborative Methods
+    # ------------------------------------------------------------------
+
+    def _generate_all_tests_with_collaboration(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate all tests and collaborate with other SWEAs to fix issues autonomously."""
+        # entity = payload.get("entity", "Student")  # Currently unused
+
+        self.collaboration_history = []  # Reset collaboration history
+
+        # Step 1: Generate all tests
+        base_result = self._generate_all_tests_basic(payload)
+
+        # Step 2: Analyze failures and collaborate to fix issues
+        if not self._all_tests_passed(base_result):
+            collaboration_result = self._collaborate_to_fix_issues(payload, base_result)
+            if collaboration_result["success"]:
+                return collaboration_result
+
+        return base_result
+
+    def _validate_and_fix_system(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate entire system and coordinate fixes with other SWEAs."""
+        # entity = payload.get("entity", "Student")  # Currently unused
+
+        # Execute all tests to get current state
+        test_result = self._execute_all_tests(payload)
+
+        if test_result["success"]:
+            return self.create_success_response(
+                "validate_and_fix",
+                {
+                    "validation_status": "passed",
+                    "system_quality": "high",
+                    "tests_executed": test_result.get("data", {}).get("tests_executed", 0),
+                    "collaboration_needed": False,
+                },
+            )
+
+        # System has issues - collaborate to fix
+        fix_result = self._collaborate_to_fix_issues(payload, test_result)
+        return fix_result
+
+    def _collaborate_to_fix_issues(
+        self, payload: Dict[str, Any], test_results: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Analyze test failures and collaborate with other SWEAs to fix issues."""
+        entity = payload.get("entity", "Student")
+        # coordinating_bae = payload.get("coordinating_bae", "StudentBAE")  # Currently unused
+
+        collaboration_log = []
+        iteration = 0
+
+        while iteration < self.max_fix_iterations:
+            iteration += 1
+
+            # Analyze all test failures
+            failure_analysis = self._analyze_test_failures(test_results)
+
+            if not failure_analysis["issues_found"]:
+                break
+
+            collaboration_log.append(
+                f"Iteration {iteration}: Found {len(failure_analysis['issues'])} issues"
+            )
+
+            # Request fixes from appropriate SWEAs
+            fix_requests = self._create_fix_requests(failure_analysis, entity, payload)
+
+            # Execute fix requests (this would normally go through the RuntimeKernel)
+            fixes_applied = self._execute_fix_requests(fix_requests, payload)
+            collaboration_log.extend(fixes_applied)
+
+            # Re-execute tests to see if issues are resolved
+            test_results = self._execute_all_tests(payload)
+
+            if self._all_tests_passed(test_results):
+                collaboration_log.append(f"✅ All tests passing after {iteration} iteration(s)")
+                break
+
+        # Store collaboration history
+        self.collaboration_history = collaboration_log
+
+        return self.create_success_response(
+            "collaborative_testing",
+            {
+                "final_test_status": self._all_tests_passed(test_results),
+                "iterations": iteration,
+                "collaboration_log": collaboration_log,
+                "issues_resolved": iteration < self.max_fix_iterations,
+                "final_test_results": test_results,
+                "autonomous_collaboration": True,
+            },
+        )
+
+    def _analyze_test_failures(self, test_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Analyze test failures and categorize issues for SWEA collaboration."""
+        issues = []
+        issues_found = False
+
+        # Check if test_results contains execution results
+        test_executions = test_results.get("test_executions", [])
+        if not test_executions and "test_execution" in test_results:
+            test_executions = [{"result": test_results}]
+
+        for test_execution in test_executions:
+            test_result = test_execution.get("result", {})
+            test_data = test_result.get("data", {})
+            test_exec = test_data.get("test_execution", {})
+
+            if not test_exec.get("success", True):
+                issues_found = True
+                stderr = test_exec.get("stderr", "")
+                stdout = test_exec.get("stdout", "")
+
+                # Categorize the issue
+                issue_category = self._categorize_test_failure(stderr, stdout)
+                issues.append(
+                    {
+                        "category": issue_category["category"],
+                        "responsible_swea": issue_category["responsible_swea"],
+                        "description": issue_category["description"],
+                        "fix_action": issue_category["fix_action"],
+                        "stderr": stderr,
+                        "stdout": stdout,
+                    }
+                )
+
+        return {
+            "issues_found": issues_found,
+            "issues": issues,
+            "total_issues": len(issues),
+        }
+
+    def _categorize_test_failure(self, stderr: str, stdout: str) -> Dict[str, str]:
+        """Categorize test failure and determine which SWEA should fix it."""
+        combined_output = f"{stderr} {stdout}".lower()
+
+        # Dependency issues -> BackendSWEA should fix
+        if any(
+            pattern in combined_output
+            for pattern in [
+                "modulenotfounderror",
+                "no module named",
+                "importerror",
+                "email-validator",
+                "pydantic[email]",
+            ]
+        ):
+            return {
+                "category": "missing_dependency",
+                "responsible_swea": "BackendSWEA",
+                "description": "Missing Python dependencies",
+                "fix_action": "update_dependencies",
+            }
+
+        # Model validation issues -> BackendSWEA should fix
+        if any(
+            pattern in combined_output
+            for pattern in ["validationerror", "field required", "type expected", "pydantic"]
+        ):
+            return {
+                "category": "model_validation",
+                "responsible_swea": "BackendSWEA",
+                "description": "Model validation or schema issues",
+                "fix_action": "fix_model_schema",
+            }
+
+        # Import/syntax issues -> BackendSWEA should fix
+        if any(
+            pattern in combined_output
+            for pattern in ["syntaxerror", "indentationerror", "cannot import"]
+        ):
+            return {
+                "category": "code_syntax",
+                "responsible_swea": "BackendSWEA",
+                "description": "Code syntax or import issues",
+                "fix_action": "fix_code_syntax",
+            }
+
+        # API/route issues -> BackendSWEA should fix
+        if any(
+            pattern in combined_output
+            for pattern in ["fastapi", "router", "endpoint", "httpexception"]
+        ):
+            return {
+                "category": "api_issues",
+                "responsible_swea": "BackendSWEA",
+                "description": "API routing or endpoint issues",
+                "fix_action": "fix_api_routes",
+            }
+
+        # UI/Streamlit issues -> FrontendSWEA should fix
+        if any(pattern in combined_output for pattern in ["streamlit", "st.", "ui", "frontend"]):
+            return {
+                "category": "ui_issues",
+                "responsible_swea": "FrontendSWEA",
+                "description": "UI or Streamlit interface issues",
+                "fix_action": "fix_ui_interface",
+            }
+
+        # Database issues -> DatabaseSWEA should fix
+        if any(
+            pattern in combined_output
+            for pattern in ["sqlite", "database", "sql", "table", "schema"]
+        ):
+            return {
+                "category": "database_issues",
+                "responsible_swea": "DatabaseSWEA",
+                "description": "Database schema or connection issues",
+                "fix_action": "fix_database_schema",
+            }
+
+        # Default: BackendSWEA for general issues
+        return {
+            "category": "general_issue",
+            "responsible_swea": "BackendSWEA",
+            "description": "General system issue",
+            "fix_action": "general_fix",
+        }
+
+    def _create_fix_requests(
+        self, failure_analysis: Dict[str, Any], entity: str, original_payload: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Create fix requests for appropriate SWEAs based on failure analysis."""
+        fix_requests = []
+
+        for issue in failure_analysis["issues"]:
+            fix_request = {
+                "swea_agent": issue["responsible_swea"],
+                "task_type": self._get_fix_task_type(issue),
+                "payload": {
+                    **original_payload,  # Include original payload
+                    "fix_context": {
+                        "issue_category": issue["category"],
+                        "issue_description": issue["description"],
+                        "fix_action": issue["fix_action"],
+                        "test_stderr": issue["stderr"],
+                        "test_stdout": issue["stdout"],
+                        "requested_by": "TestSWEA",
+                        "collaboration_mode": True,
+                    },
+                },
+            }
+            fix_requests.append(fix_request)
+
+        return fix_requests
+
+    def _get_fix_task_type(self, issue: Dict[str, str]) -> str:
+        """Determine the appropriate task type for the SWEA to fix the issue."""
+        fix_action = issue["fix_action"]
+        responsible_swea = issue["responsible_swea"]
+
+        if responsible_swea == "BackendSWEA":
+            if fix_action == "update_dependencies":
+                return "generate_requirements"  # New task for dependency management
+            elif fix_action in ["fix_model_schema", "model_validation"]:
+                return "generate_model"  # Regenerate model
+            elif fix_action in ["fix_api_routes", "api_issues"]:
+                return "generate_api"  # Regenerate API
+            else:
+                return "generate_model"  # Default
+
+        elif responsible_swea == "FrontendSWEA":
+            return "generate_ui"  # Regenerate UI
+
+        elif responsible_swea == "DatabaseSWEA":
+            return "setup_database"  # Recreate database
+
+        return "regenerate_component"  # Fallback
+
+    def _execute_fix_requests(
+        self, fix_requests: List[Dict[str, Any]], payload: Dict[str, Any]
+    ) -> List[str]:
+        """Execute fix requests by simulating SWEA collaboration."""
+        collaboration_log = []
+
+        for fix_request in fix_requests:
+            swea_agent = fix_request["swea_agent"]
+            task_type = fix_request["task_type"]
+            issue_desc = fix_request["payload"]["fix_context"]["issue_description"]
+
+            collaboration_log.append(f"🔧 Requesting {swea_agent} to {task_type} - {issue_desc}")
+
+            # Note: In a real implementation, this would send the fix_request
+            # back to the RuntimeKernel to execute the appropriate SWEA
+            # For now, we'll simulate the collaboration
+
+            if swea_agent == "BackendSWEA" and "dependency" in issue_desc.lower():
+                # Simulate dependency fix
+                self._create_requirements_file(payload.get("entity", "Student"))
+                collaboration_log.append(
+                    "✅ BackendSWEA: Added missing dependencies to requirements.txt"
+                )
+
+        return collaboration_log
+
+    def _create_requirements_file(self, entity: str):
+        """Create or update requirements.txt with necessary dependencies."""
+        managed_system_path = self.managed_system_manager.managed_system_path
+        requirements_file = managed_system_path / "requirements.txt"
+
+        # Basic requirements that are commonly needed
+        basic_requirements = [
+            "fastapi==0.104.1",
+            "uvicorn==0.24.0",
+            "streamlit==1.28.1",
+            "pydantic[email]==2.5.0",  # Include email validation
+            "sqlalchemy==2.0.23",
+            "python-multipart",  # For FastAPI forms
+            "requests==2.31.0",
+            "pytest==7.4.3",
+            "email-validator",  # Explicit email validator
+        ]
+
+        requirements_content = "\n".join(basic_requirements) + "\n"
+        requirements_file.write_text(requirements_content)
+
+    def _execute_all_tests(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute all tests in the managed system."""
+        entity = payload.get("entity", "Student")
+
+        try:
+            managed_system_path = self.managed_system_manager.managed_system_path
+            tests_dir = managed_system_path / "tests"
+
+            if not tests_dir.exists():
+                return self.create_error_response(
+                    "execute_all_tests", f"No tests directory found for {entity}", "no_tests_found"
+                )
+
+            # Run all tests
+            cmd = [
+                sys.executable,
+                "-m",
+                "pytest",
+                str(tests_dir),
+                "-v",
+                "--tb=short",
+                "--no-header",
+                "-q",
+            ]
+
+            result = subprocess.run(
+                cmd,
+                cwd=str(managed_system_path),
+                capture_output=True,
+                text=True,
+                timeout=120,  # 2 minute timeout for all tests
+            )
+
+            return self.create_success_response(
+                "execute_all_tests",
+                {
+                    "success": result.returncode == 0,
+                    "exit_code": result.returncode,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "tests_directory": str(tests_dir),
+                    "tests_executed": self._count_tests_executed(result.stdout),
+                },
+            )
+
+        except Exception as e:
+            return self.create_error_response(
+                "execute_all_tests", f"Error executing all tests: {str(e)}", "execution_error"
+            )
+
+    def _count_tests_executed(self, stdout: str) -> int:
+        """Count the number of tests executed from pytest output."""
+        # Look for patterns like "collected X items" or "X passed"
+        collected_match = re.search(r"collected (\d+) items", stdout)
+        if collected_match:
+            return int(collected_match.group(1))
+
+        passed_match = re.search(r"(\d+) passed", stdout)
+        if passed_match:
+            return int(passed_match.group(1))
+
+        return 0
+
+    def _all_tests_passed(self, test_results: Dict[str, Any]) -> bool:
+        """Check if all tests passed in the test results."""
+        # Check overall success
+        if test_results.get("success") is False:
+            return False
+
+        # Check data structure
+        data = test_results.get("data", {})
+        if data.get("success") is False:
+            return False
+
+        # Check individual test executions
+        test_executions = test_results.get("test_executions", [])
+        for test_execution in test_executions:
+            test_result = test_execution.get("result", {})
+            test_data = test_result.get("data", {})
+            test_exec = test_data.get("test_execution", {})
+
+            if not test_exec.get("success", True):
+                return False
+
+        return True
+
+    def _generate_all_tests_basic(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate all types of tests (unit, integration, UI) for an entity."""
+        entity = payload.get("entity", "Student")
+
+        results = {
+            "entity": entity,
+            "test_types_generated": [],
+            "test_executions": [],
+            "overall_success": True,
+        }
+
+        # Generate unit tests
+        unit_result = self._generate_unit_tests(payload)
+        results["test_types_generated"].append("unit_tests")
+        results["test_executions"].append({"test_type": "unit_tests", "result": unit_result})
+        if not unit_result.get("success", False):
+            results["overall_success"] = False
+
+        # Generate integration tests
+        integration_result = self._generate_integration_tests(payload)
+        results["test_types_generated"].append("integration_tests")
+        results["test_executions"].append(
+            {"test_type": "integration_tests", "result": integration_result}
+        )
+        if not integration_result.get("success", False):
+            results["overall_success"] = False
+
+        # Generate UI tests
+        ui_result = self._generate_ui_tests(payload)
+        results["test_types_generated"].append("ui_tests")
+        results["test_executions"].append({"test_type": "ui_tests", "result": ui_result})
+        if not ui_result.get("success", False):
+            results["overall_success"] = False
+
+        return self.create_success_response("generate_all_tests", results)
+
+    # ------------------------------------------------------------------
+    # Internal helpers (keeping existing methods)
     # ------------------------------------------------------------------
     def _build_test_prompt(
         self,

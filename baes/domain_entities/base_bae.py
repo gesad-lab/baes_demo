@@ -141,13 +141,22 @@ class BaseBae(BaseAgent):
 
         ONLY include attributes that are explicitly mentioned in the business request. Do NOT add default attributes that aren't requested.
 
-        Example swea_coordination format:
+        Available SWEA Agents:
+        - TechLeadSWEA: Technical coordination, architecture decisions, quality gates
+        - DatabaseSWEA: Database setup and schema management
+        - BackendSWEA: Model and API generation
+        - FrontendSWEA: UI generation
+        - TestSWEA: Test generation and execution
+
+        Example swea_coordination format (with TechLeadSWEA oversight):
         [
-            {{"swea_agent": "DatabaseSWEA", "task_type": "setup_database", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}},
-            {{"swea_agent": "BackendSWEA", "task_type": "generate_model", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}},
-            {{"swea_agent": "BackendSWEA", "task_type": "generate_api", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}},
-            {{"swea_agent": "FrontendSWEA", "task_type": "generate_ui", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}},
-            {{"swea_agent": "TestSWEA", "task_type": "generate_all_tests", "payload": {{"attributes": ["name: str", "email: str", "age: int"]}}}}
+            {{"swea_agent": "TechLeadSWEA", "task_type": "coordinate_system_generation", "payload": {{"entity": "{self.entity_name}", "attributes": ["name: str", "email: str"]}}}},
+            {{"swea_agent": "DatabaseSWEA", "task_type": "setup_database", "payload": {{"attributes": ["name: str", "email: str"]}}}},
+            {{"swea_agent": "BackendSWEA", "task_type": "generate_model", "payload": {{"attributes": ["name: str", "email: str"]}}}},
+            {{"swea_agent": "BackendSWEA", "task_type": "generate_api", "payload": {{"attributes": ["name: str", "email: str"]}}}},
+            {{"swea_agent": "FrontendSWEA", "task_type": "generate_ui", "payload": {{"attributes": ["name: str", "email: str"]}}}},
+            {{"swea_agent": "TestSWEA", "task_type": "generate_all_tests", "payload": {{"attributes": ["name: str", "email: str"]}}}},
+            {{"swea_agent": "TechLeadSWEA", "task_type": "review_and_approve", "payload": {{"entity": "{self.entity_name}", "attributes": ["name: str", "email: str"]}}}}
         ]
         """
 
@@ -171,7 +180,13 @@ class BaseBae(BaseAgent):
                 if isinstance(coordination, list):
                     # Fix any string items or improperly formatted items and validate agents
                     fixed_coordination = []
-                    valid_agents = ["DatabaseSWEA", "BackendSWEA", "FrontendSWEA", "TestSWEA"]
+                    valid_agents = [
+                        "DatabaseSWEA",
+                        "BackendSWEA",
+                        "FrontendSWEA",
+                        "TestSWEA",
+                        "TechLeadSWEA",
+                    ]
 
                     for item in coordination:
                         if isinstance(item, str):
@@ -228,6 +243,18 @@ class BaseBae(BaseAgent):
                                     "generate_all_tests",
                                 ]:
                                     item["task_type"] = "generate_all_tests"
+                                elif agent_name == "TechLeadSWEA" and task_type not in [
+                                    "coordinate_system_generation",
+                                    "review_and_approve",
+                                    "resolve_technical_conflict",
+                                    "optimize_architecture",
+                                    "manage_quality_gate",
+                                    "coordinate_test_fixes",
+                                    "make_tech_decision",
+                                    "assess_system_health",
+                                ]:
+                                    # Default TechLeadSWEA task
+                                    item["task_type"] = "coordinate_system_generation"
 
                                 fixed_coordination.append(item)
                             else:
@@ -236,8 +263,8 @@ class BaseBae(BaseAgent):
 
                     interpretation["swea_coordination"] = fixed_coordination
             else:
-                # Provide default coordination plan including database setup with attributes and tests
-                interpretation["swea_coordination"] = [
+                # Enhanced coordination plan with TechLeadSWEA oversight
+                base_coordination_plan = [
                     {
                         "swea_agent": "DatabaseSWEA",
                         "task_type": "setup_database",
@@ -262,6 +289,33 @@ class BaseBae(BaseAgent):
                         "swea_agent": "TestSWEA",
                         "task_type": "generate_all_tests",
                         "payload": {"attributes": extracted_attributes},
+                    },
+                ]
+
+                # TechLeadSWEA coordination and quality gate
+                interpretation["swea_coordination"] = [
+                    # First: TechLeadSWEA analyzes requirements and creates technical plan
+                    {
+                        "swea_agent": "TechLeadSWEA",
+                        "task_type": "coordinate_system_generation",
+                        "payload": {
+                            "entity": self.entity_name,
+                            "business_requirements": interpretation,
+                            "bae_coordination_plan": base_coordination_plan,
+                            "attributes": extracted_attributes,
+                        },
+                    },
+                    # Then: Execute the base coordination plan
+                    *base_coordination_plan,
+                    # Finally: TechLeadSWEA reviews and approves all artifacts
+                    {
+                        "swea_agent": "TechLeadSWEA",
+                        "task_type": "review_and_approve",
+                        "payload": {
+                            "entity": self.entity_name,
+                            "coordination_plan": base_coordination_plan,
+                            "attributes": extracted_attributes,
+                        },
                     },
                 ]
 

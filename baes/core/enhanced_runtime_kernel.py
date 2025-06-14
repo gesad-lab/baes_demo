@@ -16,6 +16,7 @@ from baes.core.managed_system_manager import ManagedSystemManager
 from baes.swea_agents.backend_swea import BackendSWEA
 from baes.swea_agents.database_swea import DatabaseSWEA
 from baes.swea_agents.frontend_swea import FrontendSWEA
+from baes.swea_agents.techlead_swea import TechLeadSWEA
 from baes.swea_agents.test_swea import TestSWEA
 from config import Config
 
@@ -65,6 +66,7 @@ class EnhancedRuntimeKernel:
         self._backend_swea = None
         self._frontend_swea = None
         self._test_swea = None
+        self._techlead_swea = None
 
         self.execution_history = []
 
@@ -107,6 +109,13 @@ class EnhancedRuntimeKernel:
         if self._frontend_swea is None:
             self._frontend_swea = FrontendSWEA()
         return self._frontend_swea
+
+    @property
+    def techlead_swea(self):
+        """Lazy initialization of TechLeadSWEA"""
+        if self._techlead_swea is None:
+            self._techlead_swea = TechLeadSWEA()
+        return self._techlead_swea
 
     def process_natural_language_request(
         self, request: str, context: str = "academic", start_servers: bool = True
@@ -275,8 +284,24 @@ class EnhancedRuntimeKernel:
                 agent = self.database_swea
             elif swea_agent_lower in ["test", "testswea", "test_swea"]:
                 agent = self.test_swea
+                # For collaborative testing, use the enhanced task
+                if task_type == "generate_all_tests":
+                    task_type = "generate_all_tests_with_collaboration"
+            elif swea_agent_lower in [
+                "techlead",
+                "techleadswea",
+                "techlead_swea",
+                "technical_lead",
+            ]:
+                agent = self.techlead_swea
             else:
-                available_agents = ["BackendSWEA", "FrontendSWEA", "DatabaseSWEA", "TestSWEA"]
+                available_agents = [
+                    "BackendSWEA",
+                    "FrontendSWEA",
+                    "DatabaseSWEA",
+                    "TestSWEA",
+                    "TechLeadSWEA",
+                ]
                 logger.error("❌ Unknown SWEA agent: %s", swea_agent)
                 raise UnknownSWEAAgentError(swea_agent, available_agents)
 

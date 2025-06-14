@@ -9,6 +9,7 @@ semantic coherence with domain entities.
 from .backend_swea import BackendSWEA
 from .database_swea import DatabaseSWEA
 from .frontend_swea import FrontendSWEA
+from .techlead_swea import TechLeadSWEA
 from .test_swea import TestSWEA
 
-__all__ = ["BackendSWEA", "FrontendSWEA", "DatabaseSWEA", "TestSWEA"]
+__all__ = ["BackendSWEA", "FrontendSWEA", "DatabaseSWEA", "TestSWEA", "TechLeadSWEA"]
