@@ -164,11 +164,16 @@ class OpenAIClient:
 
             CRITICAL REQUIREMENTS:
             - Create a complete functional Streamlit interface for {entity} CRUD operations
+            - MUST include these imports at the top of the file:
+              * import streamlit as st
+              * import requests
+              * import pandas as pd
+              * from config import Config
             - MUST use API endpoint from Config.get_api_endpoint_url() method
-            - Import: from config import Config
             - Set API_URL = Config.get_api_endpoint_url("{entity.lower()}s") at the top of the file
             - Generate form fields dynamically based on provided attributes: {attributes}
             - Use st.dataframe() with column_config for proper table display with column names
+            - Use pandas DataFrame (pd.DataFrame) to properly format data for st.dataframe()
             - Implement working edit functionality using session state and forms
             - Implement working delete functionality with confirmation dialog
             - Include proper error handling and success messages
