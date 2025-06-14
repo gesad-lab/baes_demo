@@ -21,10 +21,9 @@ load_dotenv()
 class TestConfig:
     @staticmethod
     def get_managed_system_path():
-        from pathlib import Path
+        from config import Config
 
-        managed_path = os.getenv("MANAGED_SYSTEM_PATH", "managed_system")
-        return Path(managed_path)
+        return Config.get_managed_system_path()
 
 
 # Use centralized temp directory from conftest

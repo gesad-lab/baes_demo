@@ -21,17 +21,8 @@ class ManagedSystemManager:
     """
 
     def __init__(self):
-        # Use environment variable or default path
-        managed_path = os.getenv("MANAGED_SYSTEM_PATH", "managed_system")
-
-        if os.path.isabs(managed_path):
-            # Absolute path - use as is
-            self.managed_system_path = Path(managed_path)
-        else:
-            # Relative path - relative to BAE project root
-            bae_project_root = Path(__file__).resolve().parent.parent.parent
-            self.managed_system_path = bae_project_root / managed_path
-
+        # Use centralized configuration method for path resolution
+        self.managed_system_path = Config.get_managed_system_path()
         self.managed_system_path.mkdir(parents=True, exist_ok=True)
         logger.info(f"🏗️  Managed System initialized at: {self.managed_system_path}")
 

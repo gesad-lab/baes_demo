@@ -8,6 +8,7 @@ Focus: Scenario 1 (Initial System Generation) with Runtime Evolution
 
 import json
 import os
+import shutil
 import socket
 import sqlite3
 import subprocess
@@ -23,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import after path setup to avoid import errors
 from baes.core.enhanced_runtime_kernel import EnhancedRuntimeKernel  # noqa: E402
+from config import Config  # noqa: E402
 
 
 class BAEConversationalCLI:
@@ -195,8 +197,28 @@ class BAEConversationalCLI:
 
     def _clear_session(self):
         """Clear session and start fresh"""
+        # Stop any running servers first
+        if self.current_system_state.get("servers_running", False):
+            print("🔄 Stopping running servers before clearing session...")
+            self._kill_servers_on_ports()
+
+        # Remove session file
         if self.session_file.exists():
             self.session_file.unlink()
+
+        # Remove managed_system directory if it exists
+        # Use centralized configuration method
+        managed_system_path = Config.get_managed_system_path()
+
+        if managed_system_path.exists():
+            print(f"🗑️  Removing managed system directory: {managed_system_path}")
+            try:
+                shutil.rmtree(managed_system_path)
+                print("✅ Managed system directory removed")
+            except Exception as e:
+                print(f"⚠️  Could not remove managed system directory: {e}")
+
+        # Reset system state
         self.current_system_state = {
             "entities": [],
             "generated_files": [],
@@ -350,17 +372,21 @@ class BAEConversationalCLI:
             self.current_system_state["entities"].append(entity)
 
         self.current_system_state["servers_running"] = True
-        self.current_system_state["database_path"] = "managed_system/app/database/academic.db"
-        self.current_system_state["managed_system_path"] = "managed_system/"
+        managed_system_path = Config.get_managed_system_path()
+        self.current_system_state["database_path"] = str(
+            managed_system_path / "app/database/academic.db"
+        )
+        self.current_system_state["managed_system_path"] = str(managed_system_path) + "/"
 
     def _show_access_information(self):
         """Show how to access the generated system"""
+        managed_system_path = Config.get_managed_system_path()
         print("\n🌐 Your generated system is ready!")
         print("  📊 FastAPI Documentation: http://localhost:8100/docs")
         print("  🖥️  Streamlit CRUD Interface: http://localhost:8600")
-        print("  📁 Generated files: managed_system/")
-        print("  🗄️  Database: managed_system/app/database/academic.db")
-        print("  📝 Server logs: managed_system/logs/ (fastapi.log, streamlit.log)")
+        print(f"  📁 Generated files: {managed_system_path}/")
+        print(f"  🗄️  Database: {managed_system_path}/app/database/academic.db")
+        print(f"  📝 Server logs: {managed_system_path}/logs/ (fastapi.log, streamlit.log)")
         print("\n💡 Use the web interface above for CRUD operations!")
         print("💡 Server output is redirected to log files to keep CLI clean")
 
@@ -441,7 +467,7 @@ class BAEConversationalCLI:
         print("\n📁 Generated Files:")
         print("─" * 40)
 
-        managed_path = Path("managed_system")
+        managed_path = Config.get_managed_system_path()
         if not managed_path.exists():
             print("  ❌ No managed system found")
             print("  💡 Generate a system first with 'add student' or similar")
@@ -507,7 +533,7 @@ class BAEConversationalCLI:
         print("\n📝 Server Logs:")
         print("─" * 40)
 
-        managed_path = Path("managed_system")
+        managed_path = Config.get_managed_system_path()
         log_dir = managed_path / "logs"
 
         if not log_dir.exists():
