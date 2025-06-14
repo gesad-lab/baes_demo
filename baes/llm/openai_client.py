@@ -175,7 +175,9 @@ class OpenAIClient:
             - Use st.dataframe() with column_config for proper table display with column names
             - Use pandas DataFrame (pd.DataFrame) to properly format data for st.dataframe()
             - Implement working edit functionality using session state and forms
-            - Implement working delete functionality with confirmation dialog
+            - Implement working delete functionality using session state for confirmation (do NOT use st.confirm which doesn't exist)
+            - For delete confirmation, use st.button() with session state to show/hide confirmation buttons
+            - Delete confirmation pattern: First button shows "Are you sure?", second button performs actual delete
             - Include proper error handling and success messages
             - Use st.rerun() for real-time updates (NOT st.experimental_rerun which is deprecated) after operations
             - Use business vocabulary and user-friendly labels
@@ -190,6 +192,27 @@ class OpenAIClient:
             IMPORTANT: Generate ALL form input fields based on the attributes provided.
             For example, if attributes are ["name: str", "registration_number: str", "course: str"],
             generate text_input fields for each of these in both create and edit forms.
+
+            DELETE CONFIRMATION PATTERN (required):
+            ```python
+            # Example delete confirmation pattern using session state
+            if st.button(f"Delete {{selected_item['name']}}", type="secondary"):
+                st.session_state.confirm_delete_id = selected_item['id']
+
+            if hasattr(st.session_state, 'confirm_delete_id') and st.session_state.confirm_delete_id:
+                st.warning("⚠️ Are you sure you want to delete this {entity.lower()}?")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✅ Yes, Delete", type="primary"):
+                        # Perform actual delete API call here
+                        # Clear confirmation state
+                        del st.session_state.confirm_delete_id
+                        st.rerun()
+                with col2:
+                    if st.button("❌ Cancel"):
+                        del st.session_state.confirm_delete_id
+                        st.rerun()
+            ```
 
             Generate ONLY the complete Python Streamlit code, no markdown, no explanations.
             """
