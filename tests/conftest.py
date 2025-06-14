@@ -178,7 +178,7 @@ def mock_all_openai_clients():
     patches = [
         patch("baes.llm.openai_client.OpenAIClient"),
         patch("baes.domain_entities.base_bae.OpenAIClient"),
-        patch("baes.swea_agents.programmer_swea.OpenAIClient"),
+        patch("baes.swea_agents.backend_swea.OpenAIClient"),
         patch("baes.swea_agents.frontend_swea.OpenAIClient"),
     ]
 
@@ -213,7 +213,7 @@ def mock_all_openai_clients():
                     "domain_operations": ["create", "read", "update", "delete"],
                     "swea_coordination": [
                         {"agent": "DatabaseSWEA", "task": "setup_database"},
-                        {"agent": "ProgrammerSWEA", "task": "generate_api"},
+                        {"agent": "BackendSWEA", "task": "generate_api"},
                         {"agent": "FrontendSWEA", "task": "generate_ui"}
                     ],
                     "business_vocabulary": ["student", "academic", "learning", "registration"]
@@ -236,7 +236,7 @@ class Student(BaseModel):
             "intent": "create_student_management_system",
             "entity_focus": "Student",
             "domain_operations": ["create", "read", "update", "delete"],
-            "swea_coordination": [{"agent": "ProgrammerSWEA", "task": "generate_api"}],
+            "swea_coordination": [{"agent": "BackendSWEA", "task": "generate_api"}],
             "business_vocabulary": ["student", "academic", "learning"],
         }
 
@@ -371,7 +371,7 @@ def scenario1_success_criteria():
         "max_generation_time_seconds": 180,  # 3 minutes
         "required_success_rate": 100,  # 100% functional system
         "min_semantic_coherence_score": 80,  # 80% semantic coherence
-        "required_swea_agents": ["StudentBAE", "ProgrammerSWEA", "FrontendSWEA", "DatabaseSWEA"],
+        "required_swea_agents": ["StudentBAE", "BackendSWEA", "FrontendSWEA", "DatabaseSWEA"],
         "expected_artifacts": ["models", "routes", "ui", "database"],
     }
 
