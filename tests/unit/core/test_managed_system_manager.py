@@ -17,19 +17,14 @@ from baes.core.managed_system_manager import ManagedSystemManager
 load_dotenv()
 
 
-# Default config values if environment variables are not set
-class Config:
+# Helper for test-specific managed system path
+class TestConfig:
     @staticmethod
     def get_managed_system_path():
         from pathlib import Path
 
         managed_path = os.getenv("MANAGED_SYSTEM_PATH", "managed_system")
         return Path(managed_path)
-
-    API_HOST = os.getenv("API_HOST", "127.0.0.1")
-    API_PORT = int(os.getenv("API_PORT", "8000"))
-    UI_HOST = os.getenv("UI_HOST", "127.0.0.1")
-    UI_PORT = int(os.getenv("UI_PORT", "8501"))
 
 
 # Use centralized temp directory from conftest
@@ -75,7 +70,7 @@ class TestManagedSystemManager:
 
     def test_managed_system_path_configuration(self):
         """Managed system path should be resolved under the temp directory."""
-        managed_path = Config.get_managed_system_path()
+        managed_path = TestConfig.get_managed_system_path()
         assert managed_path.exists()
         assert managed_path.name == "test_managed_system"
         # Should reside inside the temporary folder we created
@@ -111,7 +106,10 @@ class TestManagedSystemManager:
         """write_entity_artifact should persist model code to /app/models."""
         self.manager.ensure_managed_system_structure()
 
-        sample_code = """from pydantic import BaseModel\n\nclass Student(BaseModel):\n    name: str\n    email: str\n"""
+        sample_code = (
+            "from pydantic import BaseModel\n\n"
+            "class Student(BaseModel):\n    name: str\n    email: str\n"
+        )
         file_path = self.manager.write_entity_artifact("Student", "model", sample_code)
 
         expected_path = self.manager.managed_system_path / "app" / "models" / "student_model.py"

@@ -19,13 +19,14 @@ import requests
 
 from baes.core.context_store import ContextStore
 from baes.core.enhanced_runtime_kernel import EnhancedRuntimeKernel
+from config import Config
 
 # Use centralized temp directory from conftest (consistent with other tests)
 TESTS_TEMP_DIR = Path(__file__).parent.parent / ".temp"
 
-# Fixed ports for realworld testing (consistent with run_tests.py cleanup)
-REALWORLD_FASTAPI_PORT = 8100
-REALWORLD_STREAMLIT_PORT = 8600
+# Use centralized port configuration
+REALWORLD_FASTAPI_PORT = Config.REALWORLD_FASTAPI_PORT
+REALWORLD_STREAMLIT_PORT = Config.REALWORLD_STREAMLIT_PORT
 
 
 @pytest.mark.e2e
@@ -122,8 +123,11 @@ class TestScenario1RealWorld:
             item_path = ui_dir / item
             assert item_path.exists(), f"Expected UI item not found: {item_path}"
 
-        # Validate Python file syntax
-        python_files = list(managed_system_dir.rglob("*.py"))
+        # Validate Python file syntax (exclude venv and other non-generated directories)
+        python_files = []
+        for pattern in ["app/**/*.py", "ui/**/*.py"]:
+            python_files.extend(list(managed_system_dir.glob(pattern)))
+
         assert (
             len(python_files) >= 3
         ), f"Expected at least 3 Python files, found {len(python_files)}"
@@ -1055,6 +1059,98 @@ class TestScenario1RealWorld:
 
         print("✅ Main function fix validation completed successfully")
         print("🎉 The 'No main() function found' error has been resolved!")
+
+    def test_18_ui_fixes_validation(self, running_servers):
+        """Test that the UI fixes for table display and edit/delete functionality are working correctly"""
+
+        print("\n🔧 Testing UI fixes validation - table display and edit/delete functionality...")
+
+        # Get the current system's UI file path
+        temp_dir = Path(__file__).parent.parent / ".temp"
+        system_dirs = list(temp_dir.glob("scenario1_system_*"))
+        assert system_dirs, "No generated system found in .temp directory"
+
+        latest_system = max(system_dirs, key=lambda p: p.stat().st_mtime)
+        ui_file = latest_system / "managed_system" / "ui" / "pages" / "student_management.py"
+
+        assert ui_file.exists(), f"UI file should exist at {ui_file}"
+
+        # Read the generated UI file content
+        with open(ui_file, "r") as f:
+            ui_content = f.read()
+
+        print("🔍 Analyzing generated UI file for fixes...")
+
+        # Validation checks for UI fixes
+        checks = {
+            "main_function": ("def main():", "main() function is present"),
+            "dataframe_usage": ("st.dataframe(", "Uses st.dataframe() for table display"),
+            "centralized_config": (
+                "Config.get_api_endpoint_url",
+                "Uses centralized configuration for API endpoints",
+            ),
+            "config_import": ("from config import Config", "Imports centralized configuration"),
+            "form_structure": ("st.form(", "Uses proper form structure"),
+            "create_operation": ("create", "Create operation is present"),
+            "update_operation": ("update", "Update operation is present"),
+            "delete_operation": ("delete", "Delete operation is present"),
+            "request_handling": ("requests.", "HTTP request handling is present"),
+            "error_handling": ("st.error(", "Error handling is present"),
+            "success_messages": ("st.success(", "Success messages are present"),
+        }
+
+        passed_checks = []
+        failed_checks = []
+
+        for check_name, (pattern, description) in checks.items():
+            if pattern.lower() in ui_content.lower():
+                passed_checks.append(f"✅ {description}")
+                print(f"   ✅ {description}")
+            else:
+                failed_checks.append(f"❌ {description}")
+                print(f"   ❌ {description}")
+
+        # Additional check: ensure no broken patterns are present
+        broken_patterns = [
+            ("st.table(", "Old broken st.table() usage"),
+            ("edit functionality not implemented", "Missing edit functionality message"),
+            ("localhost:8000", "Hardcoded wrong API port (should use Config)"),
+            ("localhost:8501", "Hardcoded wrong UI port (should use Config)"),
+            ("http://localhost:8100", "Hardcoded API URL (should use Config.get_api_endpoint_url)"),
+            ("html buttons", "Broken HTML buttons in dataframe"),
+        ]
+
+        for pattern, description in broken_patterns:
+            if pattern.lower() in ui_content.lower():
+                failed_checks.append(f"❌ Found broken pattern: {description}")
+                print(f"   ❌ Found broken pattern: {description}")
+            else:
+                passed_checks.append(f"✅ No broken pattern: {description}")
+                print(f"   ✅ No broken pattern: {description}")
+
+        # Calculate score
+        total_checks = len(passed_checks) + len(failed_checks)
+        score_percentage = (len(passed_checks) / total_checks * 100) if total_checks > 0 else 0
+
+        print("\n📊 UI Fixes Validation Results:")
+        print(f"   Passed: {len(passed_checks)}")
+        print(f"   Failed: {len(failed_checks)}")
+        print(f"   Score: {score_percentage:.1f}%")
+
+        # Success criteria: at least 80% of checks should pass
+        assert (
+            score_percentage >= 80
+        ), f"UI fixes validation failed with score {score_percentage:.1f}%. Expected at least 80%."
+
+        # Critical checks that must pass
+        critical_checks = ["def main():", "st.dataframe(", "Config.get_api_endpoint_url"]
+        for critical_pattern in critical_checks:
+            assert (
+                critical_pattern.lower() in ui_content.lower()
+            ), f"Critical UI fix missing: {critical_pattern}"
+
+        print("🎉 UI fixes validation PASSED!")
+        return True
 
 
 # ==========================================

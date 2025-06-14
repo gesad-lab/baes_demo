@@ -1,4 +1,3 @@
-import os
 from typing import Any, Dict, List
 
 from ..agents.base_agent import BaseAgent
@@ -38,23 +37,23 @@ class FrontendSWEA(BaseAgent):
 
     # ------------------------------------------------------------------
     def _build_prompt(self, entity: str, attributes: List[str], context: str) -> str:
-        template_path = os.path.join("baes", "llm", "prompts", "frontend_gen.txt")
-        try:
-            with open(template_path, "r") as f:
-                template = f.read()
-        except FileNotFoundError:
-            template = (
-                "You are a SWEA Frontend agent. Generate a Streamlit UI for managing {entity} data. "
-                "Attributes: {attributes}. Use proper widgets, call the FastAPI backend at /{entity_lower}s. "
-                "IMPORTANT: Wrap all UI code in a main() function that can be called by the main Streamlit app. "
-                "Return ONLY the code."
-            )
-        return template.format(
-            entity=entity,
-            entity_lower=entity.lower(),
-            attributes=", ".join(attributes),
-            context=context,
-        )
+        """Build a direct prompt for Streamlit UI generation without template complications"""
+        return f"""
+Generate a complete Streamlit UI for {entity} management with the following attributes: {attributes}
+
+Requirements:
+1. Create a main() function that contains all UI code
+2. Use API endpoint: http://localhost:8000/api/{entity.lower()}s/
+3. Include forms for creating and editing {entity.lower()}s
+4. Use st.dataframe() with proper column configuration for table display
+5. Implement working edit and delete functionality with session state
+6. Use st.rerun() for updates (not st.experimental_rerun)
+7. Include proper error handling and success messages
+8. Generate complete form fields for all attributes: {attributes}
+
+Generate ONLY the complete Python code with imports, main() function, and proper functionality.
+No markdown, no explanations, just working Python code.
+"""
 
     def _write_to_managed_system(self, entity: str, code: str) -> str:
         """Write UI code to the managed system instead of the legacy generated directory."""

@@ -16,16 +16,9 @@ from baes.core.managed_system_manager import ManagedSystemManager
 from baes.swea_agents.database_swea import DatabaseSWEA
 from baes.swea_agents.frontend_swea import FrontendSWEA
 from baes.swea_agents.programmer_swea import ProgrammerSWEA
+from config import Config
 
 load_dotenv()
-
-
-# Default config values if environment variables are not set
-class Config:
-    API_HOST = os.getenv("API_HOST", "127.0.0.1")
-    API_PORT = int(os.getenv("API_PORT", "8000"))
-    UI_HOST = os.getenv("UI_HOST", "127.0.0.1")
-    UI_PORT = int(os.getenv("UI_PORT", "8501"))
 
 
 logger = logging.getLogger(__name__)

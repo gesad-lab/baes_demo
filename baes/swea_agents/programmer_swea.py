@@ -7,7 +7,10 @@ from ..llm.openai_client import OpenAIClient
 
 
 class ProgrammerSWEA(BaseAgent):
-    """Software Engineering Autonomous Agent responsible for generating backend code (Pydantic model and FastAPI routes) while preserving domain semantics."""
+    """
+    Software Engineering Autonomous Agent responsible for generating backend code
+    (Pydantic model and FastAPI routes) while preserving domain semantics.
+    """
 
     def __init__(self):
         super().__init__("ProgrammerSWEA", "Code Generation Agent", "SWEA")

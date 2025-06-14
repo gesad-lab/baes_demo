@@ -10,11 +10,32 @@ class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "your_openai_api_key_here")
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///database/academic.db")
-    # Use localhost for development, override with env var for production
+
+    # Server Configuration - Centralized Port Management
     API_HOST = os.getenv("API_HOST", "127.0.0.1")  # nosec B104
-    API_PORT = int(os.getenv("API_PORT", "8000"))
+    API_PORT = int(os.getenv("API_PORT", "8100"))  # Updated to match realworld tests
     UI_HOST = os.getenv("UI_HOST", "127.0.0.1")  # nosec B104
-    UI_PORT = int(os.getenv("UI_PORT", "8501"))
+    UI_PORT = int(os.getenv("UI_PORT", "8600"))  # Updated to match realworld tests
+
+    # Realworld Testing Ports (for consistency)
+    REALWORLD_FASTAPI_PORT = int(os.getenv("REALWORLD_FASTAPI_PORT", str(API_PORT)))
+    REALWORLD_STREAMLIT_PORT = int(os.getenv("REALWORLD_STREAMLIT_PORT", str(UI_PORT)))
+
+    # URL Builders for consistent endpoint generation
+    @classmethod
+    def get_api_base_url(cls) -> str:
+        """Get the base API URL"""
+        return f"http://{cls.API_HOST}:{cls.API_PORT}"
+
+    @classmethod
+    def get_api_endpoint_url(cls, entity: str = "students") -> str:
+        """Get the API endpoint URL for a specific entity"""
+        return f"{cls.get_api_base_url()}/api/{entity}/"
+
+    @classmethod
+    def get_ui_base_url(cls) -> str:
+        """Get the base UI URL"""
+        return f"http://{cls.UI_HOST}:{cls.UI_PORT}"
 
     # BAE-specific configuration
     DOMAIN_ENTITY_FOCUS = True

@@ -37,7 +37,12 @@ class EntityRecognizer:
         If the request doesn't clearly map to any supported entity, use "unknown".
         """
 
-        system_prompt = """You are an Entity Recognition specialist for an Academic BAE System. Your job is to accurately classify user requests to route them to the appropriate Business Autonomous Entity (BAE). Be precise and conservative - if unsure, classify as 'unknown'."""
+        system_prompt = (
+            "You are an Entity Recognition specialist for an Academic BAE System. "
+            "Your job is to accurately classify user requests to route them to the "
+            "appropriate Business Autonomous Entity (BAE). Be precise and conservative - "
+            "if unsure, classify as 'unknown'."
+        )
 
         try:
             response = self.llm.generate_response(prompt, system_prompt, temperature=0.1)

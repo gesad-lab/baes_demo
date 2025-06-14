@@ -3,73 +3,176 @@
 
 You are a SWEA Frontend agent.
 
-Generate Streamlit code that provides a simple CRUD UI for the {entity} domain entity.
+Generate Streamlit code that provides a complete CRUD UI for the {entity} domain entity.
 Attributes: {attributes}
 Context: {context}
 FastAPI base URL: http://localhost:8000
 
 Requirements:
-1. Use Streamlit best practices (forms, tables).
+1. Use Streamlit best practices with proper table display and functional edit/delete.
 2. Call the REST endpoints exposed at /api/{entity_lower}s (note the /api prefix).
 3. Preserve business vocabulary in labels and titles.
-4. Return ONLY executable Python code – no markdown or explanations.
+4. Return ONLY executable Python code – no markdown, no code blocks, no explanations.
 5. Include proper error handling for API calls.
 6. Use proper HTTP methods (POST for create, GET for read, PUT for update, DELETE for delete).
 7. IMPORTANT: Wrap all UI code in a main() function that can be called by the main Streamlit app.
+8. CRITICAL: Use st.dataframe() with proper column names, NOT st.table() with button lists.
+9. CRITICAL: Implement functional edit and delete operations with session state.
+10. CRITICAL: Generate ONLY Python code without any markdown formatting or code block markers.
 
-REQUIRED STRUCTURE:
-```python
+Generate the complete Python file content starting with imports and ending with the main() function call.
+Do not include any markdown formatting, code block markers, or explanations.
+The output should be valid Python code that can be executed directly.
+
+EXAMPLE STRUCTURE (generate actual working code based on the attributes provided):
+
 import streamlit as st
 import requests
 import pandas as pd
 from datetime import datetime
 
 def main():
-    """Main function for {entity} management interface."""
     st.title("{entity} Management System")
+    st.markdown("Auto-generated system for managing multiple business entities")
 
-    # API base URL
     API_BASE = "http://localhost:8000/api/{entity_lower}s"
 
-    # Create {entity}
-    with st.expander("Add New {entity}"):
-        with st.form("create_{entity_lower}"):
-            # Add form fields based on attributes
-            # Example: name = st.text_input("Name")
+    if 'editing_item' not in st.session_state:
+        st.session_state.editing_item = None
+    if 'refresh_data' not in st.session_state:
+        st.session_state.refresh_data = False
 
-            if st.form_submit_button("Create {entity}"):
-                data = {{
-                    # Map form fields to data
-                }}
+    st.header("Add New {entity}")
+    with st.form("create_{entity_lower}"):
+        name = st.text_input("Name", key="create_name")
+        registration_number = st.text_input("Registration Number", key="create_reg")
+        course = st.text_input("Course", key="create_course")
+
+        if st.form_submit_button("Create {entity}"):
+            if name and registration_number and course:
+                data = {
+                    "name": name,
+                    "registration_number": registration_number,
+                    "course": course
+                }
                 try:
                     response = requests.post(API_BASE + "/", json=data)
-                    if response.status_code == 201:
+                    if response.status_code in [200, 201]:
                         st.success("{entity} created successfully!")
                         st.rerun()
                     else:
-                        st.error(f"Error creating {entity}: {{response.text}}")
+                        st.error(f"Failed to create {entity}: {response.text}")
                 except Exception as e:
-                    st.error(f"Connection error: {{e}}")
+                    st.error(f"Error creating {entity}: {e}")
+            else:
+                st.error("Please fill in all fields")
 
-    # List {entity}s
-    st.subheader("All {entity}s")
+    st.header("All {entity}s")
+
     try:
         response = requests.get(API_BASE + "/")
         if response.status_code == 200:
             {entity_lower}s = response.json()
             if {entity_lower}s:
                 df = pd.DataFrame({entity_lower}s)
-                st.dataframe(df)
+
+                st.dataframe(
+                    df,
+                    use_container_width=True,
+                    column_config={
+                        "id": st.column_config.NumberColumn("ID", width="small"),
+                        "name": st.column_config.TextColumn("Name"),
+                        "registration_number": st.column_config.TextColumn("Registration Number"),
+                        "course": st.column_config.TextColumn("Course")
+                    }
+                )
+
+                st.subheader("Manage {entity}s")
+
+                {entity_lower}_options = {f"{item.get('name', item.get('id', 'Unknown'))} (ID: {item['id']})" : item['id'] for item in {entity_lower}s}
+
+                if {entity_lower}_options:
+                    selected_display = st.selectbox(
+                        "Select {entity} to Edit or Delete:",
+                        options=list({entity_lower}_options.keys()),
+                        key="selected_{entity_lower}"
+                    )
+
+                    if selected_display:
+                        selected_id = {entity_lower}_options[selected_display]
+                        selected_item = next(item for item in {entity_lower}s if item['id'] == selected_id)
+
+                        col1, col2 = st.columns(2)
+
+                        with col1:
+                            if st.button("Edit Selected {entity}", type="primary"):
+                                st.session_state.editing_item = selected_item
+
+                        with col2:
+                            if st.button("Delete Selected {entity}", type="secondary"):
+                                if st.session_state.get('confirm_delete') == selected_id:
+                                    try:
+                                        delete_response = requests.delete(f"{API_BASE}/{selected_id}")
+                                        if delete_response.status_code in [200, 204]:
+                                            st.success("{entity} deleted successfully!")
+                                            st.session_state.refresh_data = True
+                                            if 'confirm_delete' in st.session_state:
+                                                del st.session_state.confirm_delete
+                                            st.rerun()
+                                        else:
+                                            st.error(f"Failed to delete {entity}")
+                                    except Exception as e:
+                                        st.error(f"Error deleting {entity}: {e}")
+                                else:
+                                    st.session_state.confirm_delete = selected_id
+                                    st.warning("Click Delete again to confirm")
             else:
                 st.info("No {entity_lower}s found.")
         else:
-            st.error(f"Error fetching {entity_lower}s: {{response.text}}")
+            st.error(f"Error fetching {entity_lower}s: {response.text}")
     except Exception as e:
-        st.error(f"Connection error: {{e}}")
+        st.error(f"Connection error: {e}")
 
-# Allow module to be run directly for testing
+    if st.session_state.editing_item:
+        st.header(f"Edit {entity}")
+        item = st.session_state.editing_item
+
+        with st.form("edit_{entity_lower}"):
+            edit_name = st.text_input("Name", value=item.get('name', ''), key="edit_name")
+            edit_registration_number = st.text_input("Registration Number", value=item.get('registration_number', ''), key="edit_reg")
+            edit_course = st.text_input("Course", value=item.get('course', ''), key="edit_course")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.form_submit_button("Update {entity}", type="primary"):
+                    if edit_name and edit_registration_number and edit_course:
+                        update_data = {
+                            "name": edit_name,
+                            "registration_number": edit_registration_number,
+                            "course": edit_course
+                        }
+                        try:
+                            response = requests.put(f"{API_BASE}/{item['id']}", json=update_data)
+                            if response.status_code == 200:
+                                st.success("{entity} updated successfully!")
+                                st.session_state.editing_item = None
+                                st.rerun()
+                            else:
+                                st.error(f"Failed to update {entity}: {response.text}")
+                        except Exception as e:
+                            st.error(f"Error updating {entity}: {e}")
+                    else:
+                        st.error("Please fill in all fields")
+
+            with col2:
+                if st.form_submit_button("Cancel Edit"):
+                    st.session_state.editing_item = None
+                    st.rerun()
+
+    if st.session_state.refresh_data:
+        st.session_state.refresh_data = False
+
 if __name__ == "__main__":
     main()
-```
 
-CRITICAL: Make sure ALL Streamlit UI code is inside the main() function!
+CRITICAL: Generate complete working Python code with actual form fields and API calls based on the provided attributes. Do not include any markdown formatting or code block markers.

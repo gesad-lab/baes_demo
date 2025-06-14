@@ -44,10 +44,11 @@
             "course: str"
           ],
           "domain_operations": [
-            "add_student",
-            "update_student",
-            "delete_student",
-            "retrieve_student"
+            "register_student",
+            "update_student_info",
+            "enroll_in_course",
+            "retrieve_student_info",
+            "validate_registration_number_uniqueness"
           ],
           "swea_coordination": [
             {
@@ -122,15 +123,16 @@
           "course"
         ],
         "domain_operations": [
-          "add_student",
-          "update_student",
-          "delete_student",
-          "retrieve_student"
+          "register_student",
+          "update_student_info",
+          "enroll_in_course",
+          "retrieve_student_info",
+          "validate_registration_number_uniqueness"
         ],
-        "timestamp": "2025-06-13T15:26:17.410964"
+        "timestamp": "2025-06-14T06:13:07.726536"
       },
-      "timestamp": "2025-06-13T15:26:17.410969"
+      "timestamp": "2025-06-14T06:13:07.726553"
     }
   },
-  "last_saved": "2025-06-13T15:26:17.410980"
+  "last_saved": "2025-06-14T06:13:07.726589"
 }

@@ -16,9 +16,12 @@ import sys
 import time
 from pathlib import Path
 
-# Fixed ports for realworld testing
-REALWORLD_FASTAPI_PORT = 8100
-REALWORLD_STREAMLIT_PORT = 8600
+# Import centralized configuration
+from config import Config
+
+# Use centralized port configuration
+REALWORLD_FASTAPI_PORT = Config.REALWORLD_FASTAPI_PORT
+REALWORLD_STREAMLIT_PORT = Config.REALWORLD_STREAMLIT_PORT
 
 
 def is_port_in_use(port):

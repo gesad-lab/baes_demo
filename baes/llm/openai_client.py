@@ -42,6 +42,21 @@ class OpenAIClient:
         # Return original response if no code blocks found
         return response.strip()
 
+    def _strip_markdown_formatting(self, response: str) -> str:
+        """Strip markdown code block formatting from response"""
+        response = response.strip()
+
+        # Remove markdown code block markers
+        if response.startswith("```python"):
+            response = response[9:]  # Remove ```python
+        elif response.startswith("```"):
+            response = response[3:]  # Remove ```
+
+        if response.endswith("```"):
+            response = response[:-3]  # Remove trailing ```
+
+        return response.strip()
+
     def generate_response(
         self,
         prompt: str,
@@ -118,7 +133,9 @@ class OpenAIClient:
               * PUT /api/{entity.lower()}s/{{id}} (update by id)
               * DELETE /api/{entity.lower()}s/{{id}} (delete by id)
             - Handle database with sqlite3 and proper row_factory
-            - Database path must be: os.path.join(os.path.dirname(__file__), "../database/academic.db")
+            - Database path must be: os.path.abspath(os.path.join(os.path.dirname(__file__), "../database/academic.db"))
+            - Add error handling for database connection failures
+            - Ensure database file exists before connecting
             - Create separate response model that includes id field for API responses
             - Use 'id' as primary key in all endpoints, not other fields
             - ONLY use the attributes specified: {attributes}
@@ -128,6 +145,17 @@ class OpenAIClient:
             Entity: {entity}
             Attributes (use ONLY these): {attributes}
 
+            IMPORTANT: Use this database connection pattern:
+            ```python
+            def get_db_connection():
+                db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../database/academic.db"))
+                if not os.path.exists(db_path):
+                    raise HTTPException(status_code=500, detail=f"Database not found at {{db_path}}")
+                conn = sqlite3.connect(db_path)
+                conn.row_factory = sqlite3.Row
+                return conn
+            ```
+
             Generate ONLY the complete Python code, no markdown, no explanations.
             """
         elif "Streamlit" in code_type or "UI" in code_type or "Frontend" in code_type:
@@ -135,20 +163,28 @@ class OpenAIClient:
             You are generating Streamlit UI for {entity} entity management.
 
             CRITICAL REQUIREMENTS:
-            - Create a complete Streamlit interface for {entity} management
-            - Use API endpoint: http://localhost:8100/api/{entity.lower()}s/
-            - Include form for creating new {entity.lower()}s
-            - Include table for displaying all {entity.lower()}s
-            - Include management features (edit/delete)
+            - Create a complete functional Streamlit interface for {entity} CRUD operations
+            - MUST use API endpoint from Config.get_api_endpoint_url() method
+            - Import: from config import Config
+            - Set API_URL = Config.get_api_endpoint_url("{entity.lower()}s") at the top of the file
+            - Generate form fields dynamically based on provided attributes: {attributes}
+            - Use st.dataframe() with column_config for proper table display with column names
+            - Implement working edit functionality using session state and forms
+            - Implement working delete functionality with confirmation dialog
+            - Include proper error handling and success messages
+            - Use st.rerun() for real-time updates (NOT st.experimental_rerun which is deprecated) after operations
             - Use business vocabulary and user-friendly labels
-            - Include error handling and success messages
-            - Use st.rerun() for real-time updates
-            - Include the words "student", "management", "form", "table" in the UI
+            - Follow the EXACT structure from the frontend_gen.txt template
             - ONLY use the attributes specified: {attributes}
+            - Generate complete form fields for both create and edit operations
             - Do NOT add extra fields beyond what's specified
 
             Entity: {entity}
             Attributes (use ONLY these): {attributes}
+
+            IMPORTANT: Generate ALL form input fields based on the attributes provided.
+            For example, if attributes are ["name: str", "registration_number: str", "course: str"],
+            generate text_input fields for each of these in both create and edit forms.
 
             Generate ONLY the complete Python Streamlit code, no markdown, no explanations.
             """
@@ -171,7 +207,10 @@ class OpenAIClient:
             Return ONLY the code, no explanations or markdown formatting.
             """
 
-        return self.generate_response(prompt, system_prompt, temperature=0.1)
+        response = self.generate_response(prompt, system_prompt, temperature=0.1)
+
+        # Strip markdown formatting if present
+        return self._strip_markdown_formatting(response)
 
     def validate_semantic_coherence(
         self, artifact_code: str, artifact_type: str, domain_context: Dict[str, Any]
