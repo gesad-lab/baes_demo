@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from baes.core.enhanced_runtime_kernel import EnhancedRuntimeKernel
+
 # Set up environment for tests
 os.environ["MANAGED_SYSTEM_PATH"] = str(Path(__file__).parent.parent / ".temp")
-
-from baes.core.enhanced_runtime_kernel import EnhancedRuntimeKernel
 
 
 @pytest.mark.integration

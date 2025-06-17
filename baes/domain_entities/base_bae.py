@@ -689,19 +689,19 @@ class BaseBae(BaseAgent):
             else:
                 removed_attributes.append(attr)
 
-            return {
-                "entity": self.entity_name,
-                "interpreted_intent": f"Remove attributes from {self.entity_name} entity: {', '.join(attributes_to_remove)}",
-                "extracted_attributes": remaining_attributes,
-                "removed_attributes": removed_attributes,
-                "existing_attributes": current_attributes,
-                "domain_operations": ["evolve_entity"],
-                "is_evolution": True,
-                "evolution_type": "removal",
-                "swea_coordination": self._create_evolution_coordination_plan(remaining_attributes),
-                "business_vocabulary": [self.entity_name.lower()],
-                "entity_focus": self.entity_name,
-            }
+        return {
+            "entity": self.entity_name,
+            "interpreted_intent": f"Remove attributes from {self.entity_name} entity: {', '.join(attributes_to_remove)}",
+            "extracted_attributes": remaining_attributes,
+            "removed_attributes": removed_attributes,
+            "existing_attributes": current_attributes,
+            "domain_operations": ["evolve_entity"],
+            "is_evolution": True,
+            "evolution_type": "removal",
+            "swea_coordination": self._create_evolution_coordination_plan(remaining_attributes),
+            "business_vocabulary": [self.entity_name.lower()],
+            "entity_focus": self.entity_name,
+        }
 
     def _handle_modification_evolution(
         self, business_request: str, context: str, current_attributes: List[str]
