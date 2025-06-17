@@ -613,17 +613,17 @@ class BaseBae(BaseAgent):
 
         Request: "{business_request}"
         Current {self.entity_name} attributes: {current_attributes}
-        
+
         Extract ONLY the NEW attributes that should be ADDED to the existing entity.
         Look for field names like:
         - "email" or "email address" -> "email: str"
         - "age" -> "age: int"
         - "birth date" -> "birth_date: date"
         - "phone" or "phone number" -> "phone: str"
-        
+
         Return a simple JSON list of new attributes to add:
         ["new_attribute1: type", "new_attribute2: type"]
-        
+
         For example, if the request is "add email address", return: ["email: str"]
         """
 
@@ -651,14 +651,14 @@ class BaseBae(BaseAgent):
         """Handle removing attributes from existing entity"""
         prompt = f"""
         As the {self.entity_name} BAE, analyze this attribute removal request:
-        
+
         Request: "{business_request}"
         Current {self.entity_name} attributes: {current_attributes}
-        
+
         Identify which attributes should be REMOVED from the entity.
         Return a simple JSON list of attribute names (without types) to remove:
         ["attribute_name1", "attribute_name2"]
-        
+
         For example, if the request is "remove age attribute", return: ["age"]
         If the request is "remove age and course", return: ["age", "course"]
         """
@@ -709,10 +709,10 @@ class BaseBae(BaseAgent):
         """Handle modifying existing attributes"""
         prompt = f"""
         As the {self.entity_name} BAE, analyze this attribute modification request:
-        
+
         Request: "{business_request}"
         Current {self.entity_name} attributes: {current_attributes}
-        
+
         Identify what modifications should be made to existing attributes.
         Return a JSON object with the modifications:
         {{
@@ -721,7 +721,7 @@ class BaseBae(BaseAgent):
                 {{"old": "old_name: type", "new": "new_name: type", "change": "rename"}}
             ]
         }}
-        
+
         For example:
         - "change age from int to str" -> {{"old": "age: int", "new": "age: str", "change": "type_change"}}
         - "rename registration_number to student_id" -> {{"old": "registration_number: str", "new": "student_id: str", "change": "rename"}}
@@ -840,10 +840,10 @@ class BaseBae(BaseAgent):
         """Handle complex evolution requests with multiple operations"""
         prompt = f"""
         As the {self.entity_name} BAE, analyze this complex evolution request that contains multiple operations:
-        
+
         Request: "{business_request}"
         Current {self.entity_name} attributes: {current_attributes}
-        
+
         This request contains multiple operations. Analyze and return a JSON object with:
         {{
             "operations": [
@@ -852,7 +852,7 @@ class BaseBae(BaseAgent):
                 {{"type": "modify", "old": "old_attr: old_type", "new": "new_attr: new_type"}}
             ]
         }}
-        
+
         Identify all operations in the request and list them separately.
         """
 
