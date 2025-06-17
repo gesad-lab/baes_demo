@@ -11,19 +11,20 @@
       "knowledge": {
         "entity": "student",
         "interpretation": {
-          "interpreted_intent": "The business user wants to add a new student to the system.",
+          "interpreted_intent": "generate a student entity with specified attributes",
           "extracted_attributes": [
             "name: str",
             "registration_number: str",
             "course: str"
           ],
           "domain_operations": [
+            "create_student",
             "validate_registration_number_uniqueness",
-            "validate_email_uniqueness_and_format",
+            "validate_email_uniqueness",
             "validate_age",
-            "validate_gpa_range",
-            "enroll_student_in_course",
-            "validate_birth_date_consistency"
+            "validate_gpa",
+            "enroll_in_course",
+            "validate_birth_date"
           ],
           "swea_coordination": [
             {
@@ -127,10 +128,7 @@
           ],
           "business_vocabulary": [
             "student",
-            "registration number",
-            "email",
-            "age",
-            "GPA",
+            "registration_number",
             "course"
           ],
           "entity_focus": "Student",
@@ -139,23 +137,21 @@
         "context": "academic",
         "business_vocabulary": [
           "student",
-          "registration number",
-          "email",
-          "age",
-          "GPA",
+          "registration_number",
           "course"
         ],
         "domain_operations": [
+          "create_student",
           "validate_registration_number_uniqueness",
-          "validate_email_uniqueness_and_format",
+          "validate_email_uniqueness",
           "validate_age",
-          "validate_gpa_range",
-          "enroll_student_in_course",
-          "validate_birth_date_consistency"
+          "validate_gpa",
+          "enroll_in_course",
+          "validate_birth_date"
         ],
-        "timestamp": "2025-06-14T15:39:35.915087"
+        "timestamp": "2025-06-17T09:29:12.382356"
       },
-      "timestamp": "2025-06-14T15:39:35.915092"
+      "timestamp": "2025-06-17T09:29:12.382360"
     },
     "course": {
       "entity": "course",
@@ -174,12 +170,12 @@
             "level: str"
           ],
           "domain_operations": [
-            "validate course code uniqueness",
-            "validate credits are positive integer",
-            "validate prerequisites reference existing courses",
-            "validate duration specification",
-            "validate department assignment",
-            "validate level appropriateness"
+            "validate_course_code_uniqueness",
+            "validate_positive_credits",
+            "validate_prerequisites",
+            "validate_duration",
+            "validate_department_assignment",
+            "validate_level_appropriateness"
           ],
           "swea_coordination": [
             {
@@ -335,16 +331,16 @@
           "subject"
         ],
         "domain_operations": [
-          "validate course code uniqueness",
-          "validate credits are positive integer",
-          "validate prerequisites reference existing courses",
-          "validate duration specification",
-          "validate department assignment",
-          "validate level appropriateness"
+          "validate_course_code_uniqueness",
+          "validate_positive_credits",
+          "validate_prerequisites",
+          "validate_duration",
+          "validate_department_assignment",
+          "validate_level_appropriateness"
         ],
-        "timestamp": "2025-06-14T15:43:08.485376"
+        "timestamp": "2025-06-17T09:40:25.163488"
       },
-      "timestamp": "2025-06-14T15:43:08.485381"
+      "timestamp": "2025-06-17T09:40:25.163491"
     },
     "teacher": {
       "entity": "teacher",
@@ -531,10 +527,10 @@
           "validate_qualifications",
           "validate_subject_expertise"
         ],
-        "timestamp": "2025-06-14T15:41:26.353243"
+        "timestamp": "2025-06-17T09:42:48.425889"
       },
-      "timestamp": "2025-06-14T15:41:26.353248"
+      "timestamp": "2025-06-17T09:42:48.425893"
     }
   },
-  "last_saved": "2025-06-14T15:43:08.485401"
+  "last_saved": "2025-06-17T09:42:48.425909"
 }

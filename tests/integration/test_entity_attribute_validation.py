@@ -24,6 +24,7 @@ class TestEntityAttributeValidation:
     @pytest.fixture
     def mock_openai_client(self):
         """Mock OpenAI client to return controlled responses"""
+        # Patch the OpenAIClient class constructor to return our mock
         with patch("baes.llm.openai_client.OpenAIClient") as mock_client_class:
             mock_client = Mock()
             mock_client_class.return_value = mock_client
@@ -140,11 +141,49 @@ class TestEntityAttributeValidation:
 
     def test_non_empty_llm_response_preserved(self, mock_openai_client):
         """Test that non-empty LLM responses are preserved correctly"""
-        # Mock LLM returning custom attributes
+        # Mock LLM returning custom attributes in proper JSON format
         custom_attributes = ["custom_name: str", "custom_id: int", "custom_field: str"]
-        mock_openai_client.generate_response.return_value = str(custom_attributes)
+        mock_response = {
+            "interpreted_intent": "create student with custom fields",
+            "extracted_attributes": custom_attributes,
+            "domain_operations": ["create_entity"],
+            "swea_coordination": [
+                {
+                    "swea_agent": "DatabaseSWEA",
+                    "task_type": "setup_database",
+                    "payload": {"attributes": custom_attributes},
+                },
+                {
+                    "swea_agent": "BackendSWEA",
+                    "task_type": "generate_model",
+                    "payload": {"attributes": custom_attributes},
+                },
+                {
+                    "swea_agent": "BackendSWEA",
+                    "task_type": "generate_api",
+                    "payload": {"attributes": custom_attributes},
+                },
+                {
+                    "swea_agent": "FrontendSWEA",
+                    "task_type": "generate_ui",
+                    "payload": {"attributes": custom_attributes},
+                },
+            ],
+            "business_vocabulary": ["student", "custom"],
+            "entity_focus": "Student",
+        }
 
+        # Mock both generate_response and generate_domain_entity_response to return the JSON
+        import json
+
+        mock_json_response = json.dumps(mock_response)
+        mock_openai_client.generate_response.return_value = mock_json_response
+        mock_openai_client.generate_domain_entity_response.return_value = mock_json_response
+
+        # Create StudentBae and directly replace its llm attribute to ensure our mock is used
         student_bae = StudentBae()
+        student_bae.llm = mock_openai_client  # Direct assignment to ensure mock is used
+
         result = student_bae.handle(
             "interpret_business_request", {"request": "add student with custom fields"}
         )
