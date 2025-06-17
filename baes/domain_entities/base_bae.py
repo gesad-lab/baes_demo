@@ -33,7 +33,73 @@ class BaseBae(BaseAgent):
 
         # Initialize domain-specific attributes
         self._initialize_domain_knowledge()
+
+        # Load previously stored schema if available (for evolution detection after restart)
+        self._load_stored_schema()
+
         logger.info(f"{self.entity_name}BAE initialized with domain keywords: {domain_keywords}")
+
+    def _load_stored_schema(self):
+        """Load previously stored schema from persistent memory for evolution detection"""
+        try:
+            # Try to load from agent memory first
+            stored_schema = self.get_memory("current_schema")
+            if stored_schema:
+                self.current_schema = stored_schema
+                logger.info(
+                    f"📥 Loaded stored schema for {self.entity_name} with {len(stored_schema.get('attributes', []))} attributes"
+                )
+                return
+
+            # Try to load from context store agent memory
+            from ..core.context_store import ContextStore
+
+            context_store = ContextStore()
+
+            # Check for stored agent memory
+            agent_memory = context_store.get_agent_memory(self.name)
+            if agent_memory and isinstance(agent_memory, dict):
+                # Restore full memory from context store
+                self.memory = agent_memory
+                stored_schema = self.get_memory("current_schema")
+                if stored_schema:
+                    self.current_schema = stored_schema
+                    logger.info(
+                        f"📥 Restored schema for {self.entity_name} from context store with {len(stored_schema.get('attributes', []))} attributes"
+                    )
+                    return
+
+            # If no schema in memory, check context store for domain knowledge
+            domain_knowledge = context_store.get_domain_knowledge(self.entity_name.lower())
+
+            if domain_knowledge and isinstance(domain_knowledge, dict):
+                # Check if domain knowledge contains interpretation with extracted attributes
+                interpretation = domain_knowledge.get("interpretation", {})
+                if interpretation and interpretation.get("extracted_attributes"):
+                    # Reconstruct schema from domain knowledge
+                    stored_schema = {
+                        "entity": self.entity_name,
+                        "attributes": interpretation.get("extracted_attributes", []),
+                        "context": domain_knowledge.get("context", "academic"),
+                        "generated_at": domain_knowledge.get("timestamp", "unknown"),
+                        "business_rules": interpretation.get("business_vocabulary", []),
+                        "code": "",  # Will be populated by backend SWEA if needed
+                    }
+                    self.current_schema = stored_schema
+                    # Also store it in memory for future use
+                    self.update_memory("current_schema", stored_schema)
+                    logger.info(
+                        f"📥 Reconstructed schema for {self.entity_name} from domain knowledge with {len(stored_schema['attributes'])} attributes"
+                    )
+                    return
+
+            logger.debug(
+                f"🆕 No stored schema found for {self.entity_name}, starting with empty schema"
+            )
+
+        except Exception as e:
+            logger.warning(f"⚠️  Could not load stored schema for {self.entity_name}: {str(e)}")
+            # Continue with empty schema if loading fails
 
     @abstractmethod
     def _initialize_domain_knowledge(self):
@@ -610,19 +676,19 @@ class BaseBae(BaseAgent):
             else:
                 removed_attributes.append(attr)
 
-        return {
-            "entity": self.entity_name,
-            "interpreted_intent": f"Remove attributes from {self.entity_name} entity: {', '.join(attributes_to_remove)}",
-            "extracted_attributes": remaining_attributes,
-            "removed_attributes": removed_attributes,
-            "existing_attributes": current_attributes,
-            "domain_operations": ["evolve_entity"],
-            "is_evolution": True,
-            "evolution_type": "removal",
-            "swea_coordination": self._create_evolution_coordination_plan(remaining_attributes),
-            "business_vocabulary": [self.entity_name.lower()],
-            "entity_focus": self.entity_name,
-        }
+            return {
+                "entity": self.entity_name,
+                "interpreted_intent": f"Remove attributes from {self.entity_name} entity: {', '.join(attributes_to_remove)}",
+                "extracted_attributes": remaining_attributes,
+                "removed_attributes": removed_attributes,
+                "existing_attributes": current_attributes,
+                "domain_operations": ["evolve_entity"],
+                "is_evolution": True,
+                "evolution_type": "removal",
+                "swea_coordination": self._create_evolution_coordination_plan(remaining_attributes),
+                "business_vocabulary": [self.entity_name.lower()],
+                "entity_focus": self.entity_name,
+            }
 
     def _handle_modification_evolution(
         self, business_request: str, context: str, current_attributes: List[str]

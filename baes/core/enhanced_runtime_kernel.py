@@ -211,6 +211,14 @@ class EnhancedRuntimeKernel:
                     "code": "",  # Will be populated by backend SWEA
                 }
                 target_bae.update_memory("current_schema", current_schema)
+
+                # Also persist BAE memory to context store for restart resilience
+                try:
+                    self.context_store.store_agent_memory(target_bae.name, target_bae.memory)
+                    logger.debug("💾 BAE memory persisted to context store for %s", detected_entity)
+                except Exception as e:
+                    logger.warning("⚠️  Could not persist BAE memory to context store: %s", str(e))
+
                 logger.debug("💾 Current schema stored in %s BAE memory", detected_entity)
 
         # Step 7: Execute generated tests after evolution to validate changes
