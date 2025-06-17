@@ -11,19 +11,19 @@
       "knowledge": {
         "entity": "student",
         "interpretation": {
-          "interpreted_intent": "add a student entity to the system",
+          "interpreted_intent": "The business user wants to add a new student to the system.",
           "extracted_attributes": [
             "name: str",
             "registration_number: str",
             "course: str"
           ],
           "domain_operations": [
-            "create_student",
             "validate_registration_number_uniqueness",
-            "validate_email_uniqueness",
+            "validate_email_uniqueness_and_format",
             "validate_age",
-            "validate_gpa",
-            "enroll_in_course"
+            "validate_gpa_range",
+            "enroll_student_in_course",
+            "validate_birth_date_consistency"
           ],
           "swea_coordination": [
             {
@@ -127,7 +127,10 @@
           ],
           "business_vocabulary": [
             "student",
-            "registration_number",
+            "registration number",
+            "email",
+            "age",
+            "GPA",
             "course"
           ],
           "entity_focus": "Student",
@@ -136,27 +139,30 @@
         "context": "academic",
         "business_vocabulary": [
           "student",
-          "registration_number",
+          "registration number",
+          "email",
+          "age",
+          "GPA",
           "course"
         ],
         "domain_operations": [
-          "create_student",
           "validate_registration_number_uniqueness",
-          "validate_email_uniqueness",
+          "validate_email_uniqueness_and_format",
           "validate_age",
-          "validate_gpa",
-          "enroll_in_course"
+          "validate_gpa_range",
+          "enroll_student_in_course",
+          "validate_birth_date_consistency"
         ],
-        "timestamp": "2025-06-14T12:16:54.572419"
+        "timestamp": "2025-06-14T15:39:35.915087"
       },
-      "timestamp": "2025-06-14T12:16:54.572423"
+      "timestamp": "2025-06-14T15:39:35.915092"
     },
     "course": {
       "entity": "course",
       "knowledge": {
         "entity": "course",
         "interpretation": {
-          "interpreted_intent": "add a course to the system",
+          "interpreted_intent": "create a new course",
           "extracted_attributes": [
             "name: str",
             "code: str",
@@ -168,7 +174,12 @@
             "level: str"
           ],
           "domain_operations": [
-            "create_course"
+            "validate course code uniqueness",
+            "validate credits are positive integer",
+            "validate prerequisites reference existing courses",
+            "validate duration specification",
+            "validate department assignment",
+            "validate level appropriateness"
           ],
           "swea_coordination": [
             {
@@ -324,18 +335,23 @@
           "subject"
         ],
         "domain_operations": [
-          "create_course"
+          "validate course code uniqueness",
+          "validate credits are positive integer",
+          "validate prerequisites reference existing courses",
+          "validate duration specification",
+          "validate department assignment",
+          "validate level appropriateness"
         ],
-        "timestamp": "2025-06-14T13:04:20.543363"
+        "timestamp": "2025-06-14T15:43:08.485376"
       },
-      "timestamp": "2025-06-14T13:04:20.543373"
+      "timestamp": "2025-06-14T15:43:08.485381"
     },
     "teacher": {
       "entity": "teacher",
       "knowledge": {
         "entity": "teacher",
         "interpretation": {
-          "interpreted_intent": "The business user wants to add a new teacher to the system.",
+          "interpreted_intent": "The business user wants to add a new teacher to the academic system.",
           "extracted_attributes": [
             "name: str",
             "employee_id: str",
@@ -348,7 +364,7 @@
           ],
           "domain_operations": [
             "validate_unique_employee_id",
-            "validate_department_existence",
+            "validate_department",
             "validate_subject_assignment",
             "validate_email_format",
             "validate_qualifications",
@@ -509,16 +525,16 @@
         ],
         "domain_operations": [
           "validate_unique_employee_id",
-          "validate_department_existence",
+          "validate_department",
           "validate_subject_assignment",
           "validate_email_format",
           "validate_qualifications",
           "validate_subject_expertise"
         ],
-        "timestamp": "2025-06-14T13:08:32.631664"
+        "timestamp": "2025-06-14T15:41:26.353243"
       },
-      "timestamp": "2025-06-14T13:08:32.631669"
+      "timestamp": "2025-06-14T15:41:26.353248"
     }
   },
-  "last_saved": "2025-06-14T13:08:32.631684"
+  "last_saved": "2025-06-14T15:43:08.485401"
 }

@@ -35,7 +35,7 @@ class TestEntityAttributeValidation:
         mock_openai_client.generate_response.return_value = "[]"
 
         student_bae = StudentBae()
-        result = student_bae.interpret_business_request("add student")
+        result = student_bae.handle("interpret_business_request", {"request": "add student"})
 
         # Verify that default attributes are used when LLM returns empty
         assert "extracted_attributes" in result
@@ -56,7 +56,7 @@ class TestEntityAttributeValidation:
         mock_openai_client.generate_response.return_value = "[]"
 
         teacher_bae = TeacherBae()
-        result = teacher_bae.interpret_business_request("add teacher")
+        result = teacher_bae.handle("interpret_business_request", {"request": "add teacher"})
 
         # Verify that default attributes are used
         assert "extracted_attributes" in result
@@ -77,7 +77,7 @@ class TestEntityAttributeValidation:
         mock_openai_client.generate_response.return_value = "[]"
 
         course_bae = CourseBae()
-        result = course_bae.interpret_business_request("add course")
+        result = course_bae.handle("interpret_business_request", {"request": "add course"})
 
         # Verify that default attributes are used
         assert "extracted_attributes" in result
@@ -106,7 +106,7 @@ class TestEntityAttributeValidation:
         ]
 
         for request in test_requests:
-            result = student_bae.interpret_business_request(request)
+            result = student_bae.handle("interpret_business_request", {"request": request})
             extracted_attributes = result["extracted_attributes"]
             assert (
                 len(extracted_attributes) > 0
@@ -126,7 +126,7 @@ class TestEntityAttributeValidation:
         mock_openai_client.generate_response.return_value = "[]"
 
         student_bae = StudentBae()
-        result = student_bae.interpret_business_request("add student")
+        result = student_bae.handle("interpret_business_request", {"request": "add student"})
 
         extracted_attributes = result["extracted_attributes"]
         coordination_plan = result.get("swea_coordination", [])
@@ -145,7 +145,9 @@ class TestEntityAttributeValidation:
         mock_openai_client.generate_response.return_value = str(custom_attributes)
 
         student_bae = StudentBae()
-        result = student_bae.interpret_business_request("add student with custom fields")
+        result = student_bae.handle(
+            "interpret_business_request", {"request": "add student with custom fields"}
+        )
 
         # Verify custom attributes are used (not defaults)
         extracted_attributes = result["extracted_attributes"]
