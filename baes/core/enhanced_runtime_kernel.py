@@ -197,15 +197,53 @@ class EnhancedRuntimeKernel:
                     ),
                 }
 
-        # Step 6: Preserve domain knowledge
+        # Step 6: Store schema in BAE memory for future evolution requests
+        if interpretation_result and execution_results:
+            extracted_attributes = interpretation_result.get("extracted_attributes", [])
+            if extracted_attributes:
+                # Store current schema in BAE memory for evolution
+                current_schema = {
+                    "entity": detected_entity,
+                    "attributes": extracted_attributes,
+                    "context": context,
+                    "generated_at": self._get_timestamp(),
+                    "business_rules": interpretation_result.get("business_vocabulary", []),
+                    "code": "",  # Will be populated by backend SWEA
+                }
+                target_bae.update_memory("current_schema", current_schema)
+                logger.debug("💾 Current schema stored in %s BAE memory", detected_entity)
+
+        # Step 7: Execute generated tests after evolution to validate changes
+        if interpretation_result and interpretation_result.get("is_evolution"):
+            test_execution_result = self._execute_evolution_tests(
+                detected_entity, execution_results
+            )
+            execution_results.append(
+                {
+                    "task": "TestSWEA.execute_evolution_tests",
+                    "success": test_execution_result.get("success", False),
+                    "result": test_execution_result,
+                    "entity": detected_entity,
+                }
+            )
+            if test_execution_result.get("success"):
+                logger.info("✅ Evolution tests executed successfully for %s", detected_entity)
+            else:
+                logger.warning(
+                    "⚠️  Evolution tests failed for %s: %s",
+                    detected_entity,
+                    test_execution_result.get("error", "Unknown error"),
+                )
+
+        # Step 8: Preserve domain knowledge
         self._preserve_domain_knowledge(detected_entity, interpretation_result, context)
 
-        # Step 7: Reload and start servers if requested
+        # Step 9: Reload and start servers if requested
         if start_servers and not os.getenv("SKIP_SERVER_START"):
             self._reload_system_components()
             self._start_servers()
 
-        # Step 8: Return comprehensive result
+        # Step 10: Return comprehensive result
         result = {
             "success": True,
             "entity": detected_entity,
@@ -519,6 +557,63 @@ class EnhancedRuntimeKernel:
                 else None
             ),
         }
+
+    def _execute_evolution_tests(
+        self, entity: str, execution_results: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """Execute tests after evolution to validate changes work correctly"""
+        try:
+            # Check if TestSWEA was part of the execution results
+            test_generation_result = None
+            for result in execution_results:
+                if "TestSWEA" in result.get("task", "") and result.get("success"):
+                    test_generation_result = result
+                    break
+
+            if not test_generation_result:
+                logger.warning("⚠️  No TestSWEA execution found in results, skipping test execution")
+                return {"success": False, "error": "No test generation found", "entity": entity}
+
+            # Execute the generated tests
+            test_payload = {
+                "entity": entity,
+                "execution_type": "evolution_validation",
+                "validate_after_changes": True,
+            }
+
+            execution_result = self.test_swea.handle_task("execute_tests", test_payload)
+
+            # Extract test execution details
+            test_data = execution_result.get("data", {})
+            test_execution = test_data.get("test_execution", {})
+
+            success = execution_result.get("success", False) and test_execution.get(
+                "success", False
+            )
+
+            result = {
+                "success": success,
+                "tests_executed": test_data.get("tests_executed", 0),
+                "tests_passed": test_execution.get("tests_passed", 0),
+                "tests_failed": test_execution.get("tests_failed", 0),
+                "execution_time": test_execution.get("execution_time", 0),
+                "entity": entity,
+                "evolution_validation": True,
+            }
+
+            if not success:
+                result["error"] = test_execution.get("stderr", "Test execution failed")
+                result["stdout"] = test_execution.get("stdout", "")
+
+            return result
+
+        except Exception as e:
+            logger.error("❌ Failed to execute evolution tests: %s", str(e))
+            return {
+                "success": False,
+                "error": f"Evolution test execution failed: {str(e)}",
+                "entity": entity,
+            }
 
     def _get_timestamp(self):
         """Get current timestamp"""

@@ -440,6 +440,14 @@ class TestSWEA(BaseAgent):
 
         return 0
 
+    def _count_tests_passed(self, stdout: str) -> int:
+        """Count the number of tests that passed from pytest output."""
+        passed_match = re.search(r"(\d+) passed", stdout)
+        if passed_match:
+            return int(passed_match.group(1))
+
+        return 0
+
     def _all_tests_passed(self, test_results: Dict[str, Any]) -> bool:
         """Check if all tests passed in the test results."""
         # Check overall success
@@ -809,6 +817,8 @@ Return ONLY complete Python test code with imports and test classes using approp
     def _execute_tests(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Execute all tests in the managed system."""
         entity = payload.get("entity", "Student")
+        execution_type = payload.get("execution_type", "standard")
+        validate_after_changes = payload.get("validate_after_changes", False)
 
         try:
             managed_system_path = self.managed_system_manager.managed_system_path
@@ -819,7 +829,7 @@ Return ONLY complete Python test code with imports and test classes using approp
                     "execute_tests", f"No tests directory found for {entity}", "no_tests_found"
                 )
 
-            # Run all tests
+            # Build test command
             cmd = [
                 sys.executable,
                 "-m",
@@ -831,6 +841,17 @@ Return ONLY complete Python test code with imports and test classes using approp
                 "-q",
             ]
 
+            # For evolution validation, focus on entity-specific tests
+            if execution_type == "evolution_validation":
+                entity_lower = entity.lower()
+                test_pattern = f"*{entity_lower}*"
+                cmd.extend(["-k", test_pattern])
+                print(f"🧪 Running evolution validation tests for {entity} entity")
+
+            import time
+
+            start_time = time.time()
+
             result = subprocess.run(
                 cmd,
                 cwd=str(managed_system_path),
@@ -839,16 +860,43 @@ Return ONLY complete Python test code with imports and test classes using approp
                 timeout=120,  # 2 minute timeout for all tests
             )
 
-            return self.create_success_response(
-                "execute_tests",
-                {
+            execution_time = time.time() - start_time
+            tests_executed = self._count_tests_executed(result.stdout)
+            tests_passed = (
+                tests_executed
+                if result.returncode == 0
+                else self._count_tests_passed(result.stdout)
+            )
+            tests_failed = tests_executed - tests_passed
+
+            response_data = {
+                "tests_executed": tests_executed,
+                "test_execution": {
                     "success": result.returncode == 0,
                     "exit_code": result.returncode,
                     "stdout": result.stdout,
                     "stderr": result.stderr,
                     "tests_directory": str(tests_dir),
+                    "tests_passed": tests_passed,
+                    "tests_failed": tests_failed,
+                    "execution_time": execution_time,
+                    "execution_type": execution_type,
+                    "entity": entity,
                 },
-            )
+            }
+
+            if validate_after_changes:
+                response_data["test_execution"]["validation_status"] = (
+                    "passed" if result.returncode == 0 else "failed"
+                )
+                response_data["test_execution"]["evolution_validation"] = True
+
+                if result.returncode != 0:
+                    print(f"⚠️  Evolution validation tests failed for {entity}")
+                else:
+                    print(f"✅ Evolution validation tests passed for {entity}")
+
+            return self.create_success_response("execute_tests", response_data)
 
         except Exception as e:
             return self.create_error_response(
