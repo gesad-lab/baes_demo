@@ -1,10 +1,12 @@
 import json
 import logging
+import os
 from abc import abstractmethod
 from datetime import datetime
 from typing import Any, Dict, List
 
 from ..agents.base_agent import BaseAgent
+from ..core.context_store import ContextStore
 from ..llm.openai_client import OpenAIClient
 
 logger = logging.getLogger(__name__)
@@ -52,9 +54,12 @@ class BaseBae(BaseAgent):
                 return
 
             # Try to load from context store agent memory
-            from ..core.context_store import ContextStore
-
-            context_store = ContextStore()
+            # Use the same context store path as the kernel if available
+            # Check for environment variable or use default
+            context_store_path = os.environ.get(
+                "BAE_CONTEXT_STORE_PATH", "database/context_store.json"
+            )
+            context_store = ContextStore(context_store_path)
 
             # Check for stored agent memory
             agent_memory = context_store.get_agent_memory(self.name)
@@ -63,9 +68,17 @@ class BaseBae(BaseAgent):
                 self.memory = agent_memory
                 stored_schema = self.get_memory("current_schema")
                 if stored_schema:
-                    self.current_schema = stored_schema
+                    # Handle both wrapped and unwrapped schema formats
+                    if isinstance(stored_schema, dict) and "value" in stored_schema:
+                        # This is a wrapped memory item, extract the value
+                        actual_schema = stored_schema["value"]
+                    else:
+                        # This is already the unwrapped schema
+                        actual_schema = stored_schema
+
+                    self.current_schema = actual_schema
                     logger.info(
-                        f"📥 Restored schema for {self.entity_name} from context store with {len(stored_schema.get('attributes', []))} attributes"
+                        f"📥 Restored schema for {self.entity_name} from context store with {len(actual_schema.get('attributes', []))} attributes"
                     )
                     return
 

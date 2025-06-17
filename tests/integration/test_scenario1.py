@@ -1152,6 +1152,186 @@ class TestScenario1RealWorld:
         print("🎉 UI fixes validation PASSED!")
         return True
 
+    def test_17_schema_restoration_after_restart(self, real_system_fixtures):
+        """Test that schema restoration works correctly after BAE system restart"""
+
+        print("\n🔄 Testing schema restoration after restart...")
+
+        temp_dir, original_kernel, context_store = real_system_fixtures
+
+        # Step 1: Create initial system with student entity
+        print("📋 Step 1: Creating initial system with student entity")
+        initial_request = "Create a student entity with name, age, and course"
+
+        result = original_kernel.process_natural_language_request(
+            initial_request, context="academic", start_servers=False
+        )
+
+        assert result["success"], f"Initial system creation failed: {result.get('error')}"
+        assert result["entity"] == "student"
+
+        # Verify schema was stored
+        student_bae = original_kernel.bae_registry.get_bae("student")
+        original_schema = student_bae.get_memory("current_schema")
+        assert original_schema is not None, "Schema should be stored after initial creation"
+        assert len(original_schema.get("attributes", [])) >= 3, "Should have at least 3 attributes"
+
+        print(f"✅ Initial schema created with {len(original_schema['attributes'])} attributes")
+        print(f"   Attributes: {[attr for attr in original_schema['attributes']]}")
+
+        # Step 2: Simulate system restart by creating new kernel instance
+        print("📋 Step 2: Simulating system restart with new kernel instance")
+
+        # Create new kernel instance (simulating restart)
+        context_store_path = temp_dir / "context_store.json"
+        new_kernel = EnhancedRuntimeKernel(context_store_path=str(context_store_path))
+
+        # Step 3: Verify schema restoration
+        print("📋 Step 3: Verifying schema restoration after restart")
+
+        # Get the student BAE from the new kernel
+        new_student_bae = new_kernel.bae_registry.get_bae("student")
+        print(f"🔍 Debug: Student BAE name: {new_student_bae.name}")
+        print(f"🔍 Debug: Student BAE memory keys: {list(new_student_bae.memory.keys())}")
+
+        # Check memory directly
+        schema_memory = new_student_bae.memory.get("current_schema")
+        print(f"🔍 Debug: Schema memory structure: {schema_memory}")
+
+        # Check get_memory result
+        schema_from_get_memory = new_student_bae.get_memory("current_schema")
+        print(f"🔍 Debug: Schema from get_memory: {schema_from_get_memory}")
+
+        # Check current_schema attribute
+        restored_schema = new_student_bae.current_schema
+        print(f"🔍 Debug: current_schema attribute: {restored_schema}")
+
+        # Verify schema was properly restored
+        assert restored_schema is not None, "Schema should be restored after restart"
+        assert (
+            len(restored_schema.get("attributes", [])) >= 3
+        ), "Restored schema should have original attributes"
+
+        # Compare key attributes from original and restored schemas
+        original_attrs = set(original_schema.get("attributes", []))
+        restored_attrs = set(restored_schema.get("attributes", []))
+
+        # Should have same or similar attributes (allowing for minor formatting differences)
+        common_attrs = original_attrs.intersection(restored_attrs)
+        assert (
+            len(common_attrs) >= 2
+        ), f"Should have common attributes. Original: {original_attrs}, Restored: {restored_attrs}"
+
+        print(f"✅ Schema restored with {len(restored_schema['attributes'])} attributes")
+        print(f"   Original: {original_attrs}")
+        print(f"   Restored: {restored_attrs}")
+        print(f"   Common: {common_attrs}")
+
+        # Step 4: Test evolution request works correctly after restoration
+        print("📋 Step 4: Testing evolution request after schema restoration")
+
+        evolution_request = "Add email address to students"
+        evolution_result = new_kernel.process_natural_language_request(
+            evolution_request, context="academic", start_servers=False
+        )
+
+        assert evolution_result[
+            "success"
+        ], f"Evolution request failed: {evolution_result.get('error')}"
+
+        # Verify evolution was detected (not full regeneration)
+        interpretation = evolution_result.get("interpretation", {})
+        request_type = interpretation.get("request_type", "")
+
+        # Should be evolution, not new entity creation
+        assert (
+            "evolution" in request_type.lower() or "add" in request_type.lower()
+        ), f"Should detect evolution request, but got: {request_type}"
+
+        # Verify final schema has both original and new attributes
+        final_student_bae = new_kernel.bae_registry.get_bae("student")
+        final_schema = final_student_bae.get_memory("current_schema")
+
+        assert final_schema is not None, "Final schema should exist after evolution"
+        final_attributes = final_schema.get("attributes", [])
+        assert (
+            len(final_attributes) >= 4
+        ), f"Should have at least 4 attributes after adding email. Got: {final_attributes}"
+
+        # Check that email was added
+        email_found = any("email" in attr.lower() for attr in final_attributes)
+        assert (
+            email_found
+        ), f"Email attribute should be present. Final attributes: {final_attributes}"
+
+        # Check that original attributes are preserved
+        original_attr_preserved = any("name" in attr.lower() for attr in final_attributes)
+        assert (
+            original_attr_preserved
+        ), f"Original attributes should be preserved. Final attributes: {final_attributes}"
+
+        print(f"✅ Evolution successful! Final schema has {len(final_attributes)} attributes")
+        print(f"   Final attributes: {final_attributes}")
+
+        # Step 5: Verify execution results show evolution process
+        print("📋 Step 5: Verifying evolution process was used")
+
+        execution_results = evolution_result.get("execution_results", [])
+
+        # Should have fewer tasks than full regeneration (evolution is more efficient)
+        assert len(execution_results) >= 1, "Evolution should have execution results"
+
+        # Check for evolution-specific indicators
+        has_evolution_indicators = any(
+            "evolution" in str(task).lower()
+            or "update" in str(task).lower()
+            or "modify" in str(task).lower()
+            for task in execution_results
+        )
+
+        print(f"✅ Evolution process completed with {len(execution_results)} tasks")
+        print(f"   Evolution indicators found: {has_evolution_indicators}")
+
+        # Step 6: Validate final system state
+        print("📋 Step 6: Validating final system state consistency")
+
+        # Check that context store has the updated information
+        stored_entities = context_store.get_entities()
+        assert "student" in [
+            entity.get("name", "").lower() for entity in stored_entities
+        ], "Student entity should be stored in context"
+
+        # Check database was updated (if exists)
+        db_path = temp_dir / "managed_system" / "app" / "database" / "academic.db"
+        if db_path.exists():
+            import sqlite3
+
+            conn = sqlite3.connect(str(db_path))
+            cursor = conn.cursor()
+
+            # Check table schema was updated
+            cursor.execute("PRAGMA table_info(students)")
+            columns = cursor.fetchall()
+            column_names = [col[1].lower() for col in columns]
+
+            # Should have email column
+            assert (
+                "email" in column_names
+            ), f"Database should have email column. Columns: {column_names}"
+            print(f"✅ Database schema updated with columns: {column_names}")
+
+            conn.close()
+
+        print("🎉 Schema restoration validation completed successfully!")
+        print("✅ Key validations passed:")
+        print("   • Schema properly restored after restart")
+        print("   • Evolution detection works after restoration")
+        print("   • Original attributes preserved during evolution")
+        print("   • New attributes successfully added")
+        print("   • System maintains consistency across restart")
+
+        return True
+
 
 # ==========================================
 # FIXTURES

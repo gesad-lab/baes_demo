@@ -56,6 +56,9 @@ class EnhancedRuntimeKernel:
     """
 
     def __init__(self, context_store_path: str = "database/context_store.json"):
+        # Set environment variable so BAEs use the same context store path
+        os.environ["BAE_CONTEXT_STORE_PATH"] = context_store_path
+
         self.context_store = ContextStore(context_store_path)
         self.bae_registry = EnhancedBAERegistry()  # Auto-initializes all BAEs
         self.entity_recognizer = EntityRecognizer()
