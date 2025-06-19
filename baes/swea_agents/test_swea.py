@@ -844,7 +844,7 @@ Return ONLY complete Python test code with imports and test classes using approp
             # For evolution validation, focus on entity-specific tests
             if execution_type == "evolution_validation":
                 entity_lower = entity.lower()
-                test_pattern = f"*{entity_lower}*"
+                test_pattern = entity_lower  # Fixed: Remove asterisks to avoid pytest syntax error
                 cmd.extend(["-k", test_pattern])
                 print(f"🧪 Running evolution validation tests for {entity} entity")
 

@@ -252,13 +252,78 @@ class ContextStore:
             return []
 
     def get_all_domain_entities(self) -> List[str]:
-        """Get list of all domain entities with preserved knowledge"""
+        """Get all known domain entities from memory"""
         try:
-            if not hasattr(self, "domain_knowledge"):
-                self.domain_knowledge = {}
-            return list(self.domain_knowledge.keys())
+            # Get entities from domain knowledge
+            entities = (
+                list(self.domain_knowledge.keys()) if hasattr(self, "domain_knowledge") else []
+            )
+
+            # Also check agent memories for entities
+            for agent_name, memory_entry in self.agent_memories.items():
+                memory_data = memory_entry.get("memory_data", {})
+                if "current_schema" in memory_data:
+                    schema = memory_data["current_schema"]
+                    if isinstance(schema, dict) and "entity" in schema:
+                        entity = schema["entity"].lower()
+                        if entity not in entities:
+                            entities.append(entity)
+
+            return entities
         except Exception as e:
-            logger.error(f"Failed to get all domain entities: {str(e)}")
+            logger.error(f"Failed to get domain entities: {str(e)}")
+            return []
+
+    def get_entities(self) -> List[Dict[str, Any]]:
+        """Get all known entities with metadata - compatible with test expectations"""
+        try:
+            entities = []
+            seen_entities = set()  # To avoid duplicates
+
+            # Get entities from domain knowledge
+            if hasattr(self, "domain_knowledge"):
+                for entity_name, knowledge_entry in self.domain_knowledge.items():
+                    entities.append(
+                        {"name": entity_name, "type": "domain_knowledge", "data": knowledge_entry}
+                    )
+                    seen_entities.add(entity_name.lower())
+
+            # Also check agent memories for entities
+            for agent_name, memory_entry in self.agent_memories.items():
+                memory_data = memory_entry.get("memory_data", {})
+                if "current_schema" in memory_data:
+                    schema = memory_data["current_schema"]
+                    if isinstance(schema, dict) and "entity" in schema:
+                        entity_name = schema["entity"]
+                        # Avoid duplicates
+                        if entity_name.lower() not in seen_entities:
+                            entities.append(
+                                {"name": entity_name, "type": "agent_memory", "data": schema}
+                            )
+                            seen_entities.add(entity_name.lower())
+
+            # Check domain contexts for entities
+            for context_name, context_list in self.domain_contexts.items():
+                for context_entry in context_list:
+                    entity_focus = context_entry.get("entity_focus", "")
+                    if entity_focus and entity_focus.lower() not in seen_entities:
+                        entities.append(
+                            {"name": entity_focus, "type": "domain_context", "data": context_entry}
+                        )
+                        seen_entities.add(entity_focus.lower())
+
+            # Check evolution history for entities
+            for evolution_entry in self.evolution_history:
+                entity_name = evolution_entry.get("entity", "")
+                if entity_name and entity_name.lower() not in seen_entities:
+                    entities.append(
+                        {"name": entity_name, "type": "evolution_history", "data": evolution_entry}
+                    )
+                    seen_entities.add(entity_name.lower())
+
+            return entities
+        except Exception as e:
+            logger.error(f"Failed to get entities: {str(e)}")
             return []
 
     def backup_and_restore(self, backup_path: str = None) -> Dict[str, Any]:

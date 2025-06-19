@@ -8,6 +8,7 @@ in the BAE (Business Autonomous Entities) test suite.
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 from typing import Dict
 from unittest.mock import Mock, patch
@@ -25,6 +26,9 @@ if REPO_ROOT not in sys.path:
 
 # Global temp directory management
 TESTS_TEMP_DIR = Path(__file__).parent / ".temp"
+
+# Global test timing data
+test_timings = {}
 
 
 def pytest_configure(config):
@@ -76,6 +80,59 @@ def pytest_runtest_setup(item):
             pytest.skip("Set RUN_ONLINE=1 to run live OpenAI tests")
         if not os.getenv("OPENAI_API_KEY"):
             pytest.skip("OPENAI_API_KEY not set in environment")
+
+    # Setup before each test - start timing
+    test_timings[item.nodeid] = {"start_time": time.time()}
+
+
+def pytest_runtest_teardown(item, nextitem):
+    """Teardown after each test - log execution time"""
+    if item.nodeid in test_timings:
+        end_time = time.time()
+        start_time = test_timings[item.nodeid]["start_time"]
+        duration = end_time - start_time
+        test_timings[item.nodeid]["duration"] = duration
+
+        # Log execution time for tests taking more than 1 second
+        if duration >= 1.0:  # Only log tests that take more than 1 second
+            test_timings[item.nodeid] = duration
+            print(f"\n⏱️  {item.nodeid}: {duration:.2f}s")
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Print test timing summary at the end of the session"""
+    if test_timings:
+        print("\n" + "=" * 80)
+        print("🚀 TEST EXECUTION TIME SUMMARY")
+        print("=" * 80)
+
+        # Sort tests by duration
+        sorted_timings = sorted(
+            test_timings.items(), key=lambda x: x[1].get("duration", 0), reverse=True
+        )
+
+        total_time = sum(timing.get("duration", 0) for _, timing in sorted_timings)
+        slow_tests = [
+            (test, timing) for test, timing in sorted_timings if timing.get("duration", 0) > 10.0
+        ]
+
+        print(f"📊 Total test execution time: {total_time:.2f}s")
+        print(f"📈 Number of tests: {len(test_timings)}")
+        print(f"⚡ Average time per test: {total_time/len(test_timings):.2f}s")
+
+        if slow_tests:
+            print("\n🐌 SLOW TESTS (>10s):")
+            for test, timing in slow_tests[:10]:  # Show top 10 slowest
+                duration = timing.get("duration", 0)
+                print(f"   {duration:6.2f}s - {test}")
+
+        fast_tests = [
+            (test, timing) for test, timing in sorted_timings if timing.get("duration", 0) < 1.0
+        ]
+        if fast_tests:
+            print(f"\n⚡ Fast tests (<1s): {len(fast_tests)} tests")
+
+        print("=" * 80)
 
 
 @pytest.fixture

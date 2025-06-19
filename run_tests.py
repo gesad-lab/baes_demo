@@ -205,34 +205,14 @@ def main():
     parser = argparse.ArgumentParser(description="Run BAE system tests")
     parser.add_argument(
         "test_type",
-        choices=[
-            "all",
-            "unit",
-            "integration",
-            "performance",
-            "quick",
-            "online",
-            "e2e",
-            "selenium",
-            "realworld",
-            "scenario1",
-        ],
+        choices=["all", "unit", "integration", "slow", "scenario"],
         help="Type of tests to run",
     )
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Verbose output with real-time progress"
     )
-    parser.add_argument(
-        "--progress",
-        "-p",
-        action="store_true",
-        help="Show test progress and names (default behavior)",
-    )
     parser.add_argument("--coverage", action="store_true", help="Run with coverage report")
     parser.add_argument("--parallel", "-j", type=int, help="Number of parallel workers")
-    parser.add_argument(
-        "--quiet", "-q", action="store_true", help="Minimal output (overrides verbose/progress)"
-    )
 
     args = parser.parse_args()
 
@@ -240,88 +220,58 @@ def main():
     # This ensures clean state for all test runs, preventing conflicts
     cleanup_test_environment()
 
-    # Base pytest command
+    # Run pytest with appropriate markers and options
     cmd = ["python", "-m", "pytest"]
 
-    # Determine where the tests live (relative to this script)
-    THIS_DIR = Path(__file__).resolve().parent
-    TESTS_ROOT = THIS_DIR / "tests"
+    if args.test_type == "unit":
+        cmd.extend(["-m", "unit"])
+        cmd.extend(["tests/unit/"])
+    elif args.test_type == "integration":
+        cmd.extend(["-m", "integration"])
+        cmd.extend(["tests/integration/"])
+    elif args.test_type == "all":
+        # Exclude the slowest realworld tests for faster execution
+        cmd.extend(["-m", "not (e2e and realworld)"])
+        cmd.extend(["tests/"])
+    elif args.test_type == "slow":
+        # Run only the slow/realworld tests
+        cmd.extend(["-m", "e2e and realworld"])
+        cmd.extend(["tests/"])
+    elif args.test_type == "scenario":
+        cmd.extend(["-m", "scenario"])
+        cmd.extend(["tests/integration/"])
+    else:
+        print(f"❌ Unknown test type: {args.test_type}")
+        print("Valid types: unit, integration, all, slow, scenario")
+        return False
 
     # Handle verbosity and progress reporting
-    if args.quiet:
-        cmd.extend(["-q"])  # Quiet mode
-    elif args.verbose:
-        cmd.extend(["-v", "-s", "--tb=long"])  # -s shows print statements from tests
-    elif args.progress or not args.quiet:
-        cmd.extend(["-v", "--tb=short"])  # Default: show test names with short traceback
+    if args.verbose:
+        cmd.append("-v")
+        cmd.append("-s")
+    else:
+        cmd.append("--tb=short")
+        cmd.append("--disable-warnings")
 
-    # Add real-time progress reporting and colors
-    cmd.extend(["--color=yes", "--durations=5"])  # Show 5 slowest tests
-
-    # Add coverage
-    if args.coverage:
-        cmd.extend(["--cov=.", "--cov-report=html", "--cov-report=term"])
-
-    # Add parallel processing
-    if args.parallel:
+    # Add parallel execution if requested
+    if args.parallel and args.parallel > 1:
         cmd.extend(["-n", str(args.parallel)])
 
-    # Select test paths based on test type
+    # Test descriptions for reporting
     test_descriptions = {
-        "all": "Running all tests (unit + integration)",
-        "unit": "Running unit tests only",
-        "integration": "Running integration tests only",
-        "performance": "Running performance tests only",
-        "online": "Running online integration tests (requires API keys)",
-        "quick": "Running quick unit tests (excluding slow tests)",
-        "e2e": "Running end-to-end tests",
-        "selenium": "Running Selenium browser tests",
-        "realworld": "Running real-world tests (excluding Selenium)",
-        "scenario1": "Running Scenario 1 real-world test",
+        "unit": "🧪 Running unit tests (individual components)",
+        "integration": "🔗 Running integration tests (component interactions)",
+        "all": "🚀 Running all tests (excluding slowest realworld tests)",
+        "slow": "🐌 Running slow realworld tests (with actual servers)",
+        "scenario": "📋 Running scenario tests (proof of concept validation)",
     }
 
     print(f"📋 Test Plan: {test_descriptions.get(args.test_type, 'Unknown test type')}")
     print()
 
-    if args.test_type == "all":
-        cmd.append(str(TESTS_ROOT))
-    elif args.test_type == "unit":
-        cmd.extend(["-m", "unit", str(TESTS_ROOT / "unit")])
-    elif args.test_type == "integration":
-        cmd.extend(["-m", "integration", str(TESTS_ROOT / "integration")])
-    elif args.test_type == "performance":
-        cmd.extend(["-m", "performance"])
-    elif args.test_type == "online":
-        # Ensure env variable is set for live tests
-        os.environ["RUN_ONLINE"] = "1"
-        cmd.extend(["-m", "integration_online", str(TESTS_ROOT / "integration")])
-        print("🌐 Online mode enabled - will make real API calls")
-    elif args.test_type == "quick":
-        cmd.extend(["-m", "not slow", str(TESTS_ROOT / "unit")])
-    elif args.test_type == "e2e":
-        cmd.extend(["-m", "e2e", str(TESTS_ROOT / "integration")])
-    elif args.test_type == "selenium":
-        cmd.extend(["-m", "selenium", str(TESTS_ROOT / "integration")])
-    elif args.test_type == "realworld":
-        cmd.extend(["-m", "e2e and not selenium", str(TESTS_ROOT / "integration")])
-    elif args.test_type == "scenario1":
-        cmd.extend(["-k", "TestScenario1RealWorld", str(TESTS_ROOT / "integration")])
-
-    print(f"🧪 Running BAE {args.test_type} tests...")
-
-    # Show mode information
-    if args.quiet:
-        print("🔇 Quiet mode - minimal output")
-    elif args.verbose:
-        print("📝 Verbose mode - showing real-time test progress and print statements")
-    else:
-        print("📊 Progress mode - showing test names and progress (use --verbose for more detail)")
-
     # Show additional options
     if args.coverage:
-        print("📈 Coverage reporting enabled")
-    if args.parallel:
-        print(f"⚡ Parallel execution with {args.parallel} workers")
+        cmd.extend(["--cov=.", "--cov-report=html", "--cov-report=term"])
 
     print("=" * 60)
 
@@ -332,7 +282,7 @@ def main():
         print(f"✅ All {args.test_type} tests passed!")
 
         # For tests that generate artifacts, remind user about inspection
-        realworld_test_types = ["realworld", "scenario1", "e2e", "selenium", "all"]
+        realworld_test_types = ["slow", "all"]
         if args.test_type in realworld_test_types:
             print()
             print("🔍 INSPECTION AVAILABLE:")

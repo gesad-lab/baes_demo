@@ -275,6 +275,10 @@ class BaseBae(BaseAgent):
             )
         )
 
+        # Additional check: If no schema exists, force creation mode even if keywords suggest evolution
+        if current_schema is None:
+            is_evolution_request = False
+
         if is_evolution_request:
             # This is an evolution request - route to evolve_schema
             return self._handle_evolution_request(business_request, context, current_schema)
@@ -334,6 +338,8 @@ class BaseBae(BaseAgent):
         try:
             interpretation = json.loads(cleaned_response)
             interpretation["entity"] = self.entity_name
+            interpretation["request_type"] = "creation"
+            interpretation["is_evolution"] = False
 
             # Extract attributes from the interpretation - only use what was explicitly mentioned
             extracted_attributes = interpretation.get("extracted_attributes", [])
@@ -639,6 +645,7 @@ class BaseBae(BaseAgent):
             "domain_operations": ["evolve_entity"],
             "is_evolution": True,
             "evolution_type": "addition",
+            "request_type": "evolution",
             "swea_coordination": self._create_evolution_coordination_plan(all_attributes),
             "business_vocabulary": [self.entity_name.lower()]
             + [attr.split(":")[0].strip() for attr in new_attributes],
@@ -698,6 +705,7 @@ class BaseBae(BaseAgent):
             "domain_operations": ["evolve_entity"],
             "is_evolution": True,
             "evolution_type": "removal",
+            "request_type": "evolution",
             "swea_coordination": self._create_evolution_coordination_plan(remaining_attributes),
             "business_vocabulary": [self.entity_name.lower()],
             "entity_focus": self.entity_name,

@@ -1152,6 +1152,7 @@ class TestScenario1RealWorld:
         print("🎉 UI fixes validation PASSED!")
         return True
 
+    @pytest.mark.timeout(60)  # Strict 60-second timeout to prevent infinite runs
     def test_17_schema_restoration_after_restart(self, real_system_fixtures):
         """Test that schema restoration works correctly after BAE system restart"""
 

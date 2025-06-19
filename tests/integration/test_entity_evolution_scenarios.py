@@ -294,6 +294,16 @@ class TestEntityEvolutionScenarios:
         kernel = kernel_with_temp_path
         bae = kernel.bae_registry.get_bae("student")
 
+        # CRITICAL: Clear any existing schema to test the no-schema case
+        bae.update_memory("current_schema", None)
+        # Also clear from context store to ensure clean state
+        if hasattr(bae, "context_store"):
+            bae.context_store.clear_agent_memory(bae.name)
+
+        # Verify no schema exists
+        current_schema = bae.get_memory("current_schema")
+        assert current_schema is None, f"Schema should be None but got: {current_schema}"
+
         # No existing schema stored
         result = bae.handle(
             "interpret_business_request",
@@ -301,7 +311,9 @@ class TestEntityEvolutionScenarios:
         )
 
         # Should fall back to normal creation, not evolution
-        assert result.get("is_evolution") is not True
+        assert (
+            result.get("is_evolution") is not True
+        ), f"Should not be evolution when no schema exists. Result: {result}"
         assert result.get("extracted_attributes") is not None
 
     def test_evolution_with_invalid_attribute_syntax(self, student_bae_with_schema):
@@ -375,6 +387,11 @@ class TestEntityEvolutionScenarios:
         kernel = kernel_with_temp_path
         bae = kernel.bae_registry.get_bae("student")
 
+        # CRITICAL: Ensure clean state for creation test
+        bae.update_memory("current_schema", None)
+        if hasattr(bae, "context_store"):
+            bae.context_store.clear_agent_memory(bae.name)
+
         # Test creation (no existing schema)
         creation_result = bae.handle(
             "interpret_business_request",
@@ -399,7 +416,9 @@ class TestEntityEvolutionScenarios:
         creation_is_evolution = creation_result.get("is_evolution", False)
         evolution_is_evolution = evolution_result.get("is_evolution", False)
 
-        assert not creation_is_evolution, "Creation should not be flagged as evolution"
+        assert (
+            not creation_is_evolution
+        ), f"Creation should not be flagged as evolution. Result: {creation_result}"
         assert evolution_is_evolution, "Evolution should be flagged as evolution"
 
         # Evolution should have more attributes (preserved + new)
