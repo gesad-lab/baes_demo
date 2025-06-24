@@ -636,7 +636,7 @@ Return ONLY complete Python test code with imports and test classes using approp
             # Change to the managed system directory for test execution
             managed_system_path = self.managed_system_manager.managed_system_path
 
-            # Run pytest with coverage and verbose output
+            # Run pytest with timeout and basic options to prevent hanging
             cmd = [
                 sys.executable,
                 "-m",
@@ -647,14 +647,17 @@ Return ONLY complete Python test code with imports and test classes using approp
                 "--no-header",
                 "--no-summary",
                 "-q",
+                "--timeout=30",  # 30 second timeout per test
+                "--maxfail=3",  # Stop after 3 failures to prevent hanging
             ]
 
+            # Use a shorter timeout for the entire process
             result = subprocess.run(
                 cmd,
                 cwd=str(managed_system_path),
                 capture_output=True,
                 text=True,
-                timeout=60,  # 1 minute timeout
+                timeout=45,  # 45 second timeout for entire process
             )
 
             return {
@@ -666,20 +669,34 @@ Return ONLY complete Python test code with imports and test classes using approp
             }
 
         except subprocess.TimeoutExpired:
+            print(f"⚠️  Test execution timed out for {test_file_path}")
             return {
                 "success": False,
                 "exit_code": -1,
                 "stdout": "",
-                "stderr": "Test execution timed out after 60 seconds",
+                "stderr": "Test execution timed out after 45 seconds. This may indicate infinite loops or hanging tests.",
                 "test_file": test_file_path,
+                "timeout_error": True,
+            }
+        except FileNotFoundError:
+            print(f"⚠️  Test file not found: {test_file_path}")
+            return {
+                "success": False,
+                "exit_code": -1,
+                "stdout": "",
+                "stderr": f"Test file not found: {test_file_path}",
+                "test_file": test_file_path,
+                "file_not_found": True,
             }
         except Exception as e:
+            print(f"⚠️  Error executing tests for {test_file_path}: {str(e)}")
             return {
                 "success": False,
                 "exit_code": -1,
                 "stdout": "",
                 "stderr": f"Error executing tests: {str(e)}",
                 "test_file": test_file_path,
+                "execution_error": True,
             }
 
     def _get_generated_code(self, entity: str, code_type: str) -> str:

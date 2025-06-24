@@ -193,91 +193,123 @@ class BaseBae(BaseAgent):
 
         # Check if this is an evolution request by looking for existing schema and modification keywords
         current_schema = self.get_memory("current_schema")
-        evolution_keywords = [
-            # Addition keywords
-            "add attribute",
-            "add field",
-            "add column",
-            "add property",
-            "include",
-            "with",
-            "also",
-            "additional",
-            "new field",
-            "new attribute",
-            "extend",
-            "enhance",
-            "add the attribute",
-            "add",
-            "add email",
-            "add age",
-            "add phone",
-            "add birth",
-            "for student entity, add",
-            "needs",
-            "should have",
-            "should also have",
-            "entity needs",
-            "entity should",
-            # Removal keywords
-            "remove attribute",
-            "remove field",
-            "remove column",
-            "remove property",
-            "delete attribute",
-            "delete field",
-            "exclude",
-            "drop",
-            "remove",
-            "remove email",
-            "remove age",
-            "remove phone",
-            "remove birth",
-            "for student entity, remove",
-            # Modification keywords
-            "modify",
-            "update",
-            "change",
-            "alter",
-            "rename",
-            "transform",
-            "change attribute",
-            "modify field",
-            "update property",
-            "rename field",
-            "make optional",
-            "make required",
-            "change type",
-            "convert to",
-        ]
 
-        request_lower = business_request.lower()
-        is_evolution_request = current_schema is not None and (
-            any(keyword in request_lower for keyword in evolution_keywords)
-            or ("add" in request_lower and "attribute" in request_lower)
-            or ("add" in request_lower and "field" in request_lower)
-            or ("remove" in request_lower and "attribute" in request_lower)
-            or ("remove" in request_lower and "field" in request_lower)
-            or ("modify" in request_lower and "attribute" in request_lower)
-            or ("change" in request_lower and "attribute" in request_lower)
-            or ("update" in request_lower and "attribute" in request_lower)
-            or ("make" in request_lower and "attribute" in request_lower)
-            or ("make" in request_lower and "optional" in request_lower)
-            or ("make" in request_lower and "required" in request_lower)
-            or (
-                "for " + self.entity_name.lower() in request_lower
-                and (
-                    "add" in request_lower
-                    or "remove" in request_lower
-                    or "modify" in request_lower
-                    or "make" in request_lower
-                )
-            )
-        )
-
-        # Additional check: If no schema exists, force creation mode even if keywords suggest evolution
+        # First check: If no schema exists, this is definitely a creation request
         if current_schema is None:
             is_evolution_request = False
+        else:
+            # Evolution detection for requests that modify existing schemas
+            entity_lower = self.entity_name.lower()
+            request_lower = business_request.lower()
+
+            # Start with basic evolution indicators
+            is_evolution_request = False
+
+            # 1. Explicit attribute keywords (high confidence)
+            attribute_keywords = [
+                "add attribute",
+                "add field",
+                "add column",
+                "add property",
+                "remove attribute",
+                "remove field",
+                "remove column",
+                "remove property",
+                "delete attribute",
+                "delete field",
+                "modify attribute",
+                "update attribute",
+                "change attribute",
+                "alter attribute",
+                "rename attribute",
+                "new attribute",
+                "additional attribute",
+                "make optional",
+                "make required",
+                "change type",
+            ]
+
+            if any(keyword in request_lower for keyword in attribute_keywords):
+                is_evolution_request = True
+
+            # 2. Entity-specific patterns (medium confidence)
+            elif any(
+                pattern in request_lower
+                for pattern in [
+                    f"{entity_lower} entity needs",
+                    f"{entity_lower} entity should",
+                    f"for {entity_lower} entity,",
+                    f"to {entity_lower} entity",
+                    f"in {entity_lower} entity",
+                    f"from {entity_lower} entity",
+                ]
+            ):
+                is_evolution_request = True
+
+            # 3. Contextual evolution patterns (medium confidence)
+            elif (
+                any(
+                    pattern in request_lower
+                    for pattern in [
+                        "include",
+                        "extend",
+                        "enhance",
+                        "modify",
+                        "update",
+                        "change",
+                        "rename",
+                        "remove",
+                        "delete",
+                        "exclude",
+                        "drop",
+                    ]
+                )
+                and entity_lower in request_lower
+            ):
+                is_evolution_request = True
+
+            # 4. Specific attribute modification patterns
+            elif (
+                any(
+                    pattern in request_lower
+                    for pattern in [
+                        "add email",
+                        "add phone",
+                        "add age",
+                        "add birth",
+                        "add address",
+                        "remove email",
+                        "remove phone",
+                        "remove age",
+                        "remove birth",
+                        "with email",
+                        "with phone",
+                        "with age",
+                        "with birth",
+                    ]
+                )
+                and entity_lower in request_lower
+            ):
+                is_evolution_request = True
+
+            # 5. Exclude pure creation patterns
+            creation_only_patterns = [
+                f"create {entity_lower}",
+                f"add {entity_lower}",
+                f"generate {entity_lower}",
+                f"new {entity_lower}",
+                f"make {entity_lower}",
+            ]
+
+            # If it's a pure creation pattern without entity-specific modification language,
+            # treat as creation
+            if any(pattern == request_lower.strip() for pattern in creation_only_patterns):
+                is_evolution_request = False
+            elif any(pattern in request_lower for pattern in creation_only_patterns):
+                # Check if it also has modification language
+                modification_words = ["attribute", "field", "property", "with", "needs", "include"]
+                if not any(word in request_lower for word in modification_words):
+                    is_evolution_request = False
 
         if is_evolution_request:
             # This is an evolution request - route to evolve_schema
@@ -341,14 +373,29 @@ class BaseBae(BaseAgent):
             interpretation["request_type"] = "creation"
             interpretation["is_evolution"] = False
 
-            # Extract attributes from the interpretation - only use what was explicitly mentioned
+            # Extract attributes from the interpretation
             extracted_attributes = interpretation.get("extracted_attributes", [])
 
-            # Only use defaults if NO attributes were extracted at all
-            if not extracted_attributes:
+            # For new entity creation, if no specific attributes were mentioned, use defaults
+            # This handles cases like "add student" or "create student" where no specific attributes are mentioned
+            if not extracted_attributes or (len(extracted_attributes) == 0):
                 extracted_attributes = self._get_default_attributes()
                 # Update the interpretation with the default attributes
                 interpretation["extracted_attributes"] = extracted_attributes
+                print(f"ℹ️  Using default attributes for {self.entity_name}: {extracted_attributes}")
+
+            # If attributes were extracted but seem incomplete for basic entity creation,
+            # merge with essential defaults (for cases where LLM only extracts some attributes)
+            elif len(extracted_attributes) < 3:  # Most entities need at least 3 basic attributes
+                default_attrs = self._get_default_attributes()
+                # Merge extracted with defaults, preserving extracted ones
+                merged_attrs = list(extracted_attributes)
+                for default_attr in default_attrs:
+                    if default_attr not in merged_attrs:
+                        merged_attrs.append(default_attr)
+                extracted_attributes = merged_attrs
+                interpretation["extracted_attributes"] = extracted_attributes
+                print(f"ℹ️  Merged attributes for {self.entity_name}: {extracted_attributes}")
 
             # Ensure swea_coordination is properly formatted as list of dicts
             if "swea_coordination" in interpretation:

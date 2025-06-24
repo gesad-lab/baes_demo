@@ -594,9 +594,20 @@ class EnhancedRuntimeKernel:
 
             execution_result = self.test_swea.handle_task("execute_tests", test_payload)
 
-            # Extract test execution details
+            # Extract test execution details with better error handling
             test_data = execution_result.get("data", {})
             test_execution = test_data.get("test_execution", {})
+
+            # Check for timeout or other specific errors
+            if test_execution.get("timeout_error"):
+                logger.warning(f"⚠️  Test execution timed out for {entity}")
+                return {
+                    "success": False,
+                    "error": "Test execution timed out",
+                    "timeout": True,
+                    "entity": entity,
+                    "stderr": test_execution.get("stderr", ""),
+                }
 
             success = execution_result.get("success", False) and test_execution.get(
                 "success", False

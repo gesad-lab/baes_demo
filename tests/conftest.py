@@ -95,7 +95,6 @@ def pytest_runtest_teardown(item, nextitem):
 
         # Log execution time for tests taking more than 1 second
         if duration >= 1.0:  # Only log tests that take more than 1 second
-            test_timings[item.nodeid] = duration
             print(f"\n⏱️  {item.nodeid}: {duration:.2f}s")
 
 
