@@ -224,24 +224,33 @@ class EnhancedRuntimeKernel:
 
                 logger.debug("💾 Current schema stored in %s BAE memory", detected_entity)
 
-        # Step 7: Execute generated tests after evolution to validate changes
-        if interpretation_result and interpretation_result.get("is_evolution"):
+        # Step 7: Execute generated tests after any successful generation/modification to validate changes
+        if interpretation_result and execution_results:
+            # Determine execution type for appropriate test validation
+            is_evolution = interpretation_result.get("is_evolution", False)
+            execution_type = "evolution_validation" if is_evolution else "creation_validation"
+
             test_execution_result = self._execute_evolution_tests(
                 detected_entity, execution_results
             )
             execution_results.append(
                 {
-                    "task": "TestSWEA.execute_evolution_tests",
+                    "task": f"TestSWEA.execute_{execution_type}_tests",
                     "success": test_execution_result.get("success", False),
                     "result": test_execution_result,
                     "entity": detected_entity,
                 }
             )
             if test_execution_result.get("success"):
-                logger.info("✅ Evolution tests executed successfully for %s", detected_entity)
+                action = "evolution" if is_evolution else "creation"
+                logger.info(
+                    "✅ %s tests executed successfully for %s", action.capitalize(), detected_entity
+                )
             else:
+                action = "evolution" if is_evolution else "creation"
                 logger.warning(
-                    "⚠️  Evolution tests failed for %s: %s",
+                    "⚠️  %s tests failed for %s: %s",
+                    action.capitalize(),
                     detected_entity,
                     test_execution_result.get("error", "Unknown error"),
                 )
@@ -572,7 +581,7 @@ class EnhancedRuntimeKernel:
     def _execute_evolution_tests(
         self, entity: str, execution_results: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Execute tests after evolution to validate changes work correctly"""
+        """Execute tests after system generation/evolution to validate changes work correctly"""
         try:
             # Check if TestSWEA was part of the execution results
             test_generation_result = None
