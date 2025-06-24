@@ -13,7 +13,7 @@
               "course: str"
             ],
             "context": "academic",
-            "generated_at": "2025-06-24T07:45:20.245137",
+            "generated_at": "2025-06-24T09:01:42.096405",
             "business_rules": [
               "student",
               "registration_number",
@@ -21,8 +21,8 @@
             ],
             "code": ""
           },
-          "timestamp": "2025-06-24T07:45:20.245144",
-          "update_count": 63
+          "timestamp": "2025-06-24T09:02:47.146024",
+          "update_count": 64
         },
         "interactions": [
           {
@@ -6476,10 +6476,155 @@
             "error_message": null,
             "timestamp": "2025-06-24T07:43:43.287957",
             "duration": null
+          },
+          {
+            "interaction_id": "StudentBAE_1",
+            "task": "interpret_business_request",
+            "payload": {
+              "request": "Create a student entity with basic fields",
+              "context": "academic",
+              "entity_classification": {
+                "detected_entity": "student",
+                "confidence": 0.95,
+                "reasoning": "The user request explicitly mentions 'Create a student entity', indicating a clear intent to work with the student entity.",
+                "language_detected": "English",
+                "action_intent": "create"
+              }
+            },
+            "result": {
+              "interpreted_intent": "Create a student entity with basic fields",
+              "extracted_attributes": [
+                "name: str",
+                "registration_number: str",
+                "course: str"
+              ],
+              "domain_operations": [
+                "create_student",
+                "validate_registration_number_uniqueness",
+                "validate_email_uniqueness",
+                "validate_age",
+                "validate_gpa_range",
+                "enroll_in_course",
+                "validate_birth_date_consistency"
+              ],
+              "swea_coordination": [
+                {
+                  "swea_agent": "TechLeadSWEA",
+                  "task_type": "coordinate_system_generation",
+                  "payload": {
+                    "entity": "Student",
+                    "attributes": [
+                      "name: str",
+                      "registration_number: str",
+                      "course: str"
+                    ],
+                    "context": "academic",
+                    "coordinating_bae": "StudentBAE"
+                  }
+                },
+                {
+                  "swea_agent": "DatabaseSWEA",
+                  "task_type": "setup_database",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "registration_number: str",
+                      "course: str"
+                    ],
+                    "entity": "Student",
+                    "context": "academic",
+                    "coordinating_bae": "StudentBAE"
+                  }
+                },
+                {
+                  "swea_agent": "BackendSWEA",
+                  "task_type": "generate_model",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "registration_number: str",
+                      "course: str"
+                    ],
+                    "entity": "Student",
+                    "context": "academic",
+                    "coordinating_bae": "StudentBAE"
+                  }
+                },
+                {
+                  "swea_agent": "BackendSWEA",
+                  "task_type": "generate_api",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "registration_number: str",
+                      "course: str"
+                    ],
+                    "entity": "Student",
+                    "context": "academic",
+                    "coordinating_bae": "StudentBAE"
+                  }
+                },
+                {
+                  "swea_agent": "FrontendSWEA",
+                  "task_type": "generate_ui",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "registration_number: str",
+                      "course: str"
+                    ],
+                    "entity": "Student",
+                    "context": "academic",
+                    "coordinating_bae": "StudentBAE"
+                  }
+                },
+                {
+                  "swea_agent": "TestSWEA",
+                  "task_type": "generate_all_tests",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "registration_number: str",
+                      "course: str"
+                    ],
+                    "entity": "Student",
+                    "context": "academic",
+                    "coordinating_bae": "StudentBAE"
+                  }
+                },
+                {
+                  "swea_agent": "TechLeadSWEA",
+                  "task_type": "review_and_approve",
+                  "payload": {
+                    "entity": "Student",
+                    "attributes": [
+                      "name: str",
+                      "registration_number: str",
+                      "course: str"
+                    ],
+                    "context": "academic",
+                    "coordinating_bae": "StudentBAE"
+                  }
+                }
+              ],
+              "business_vocabulary": [
+                "student",
+                "registration_number",
+                "course"
+              ],
+              "entity_focus": "Student",
+              "entity": "Student",
+              "request_type": "creation",
+              "is_evolution": false
+            },
+            "success": true,
+            "error_message": null,
+            "timestamp": "2025-06-24T08:49:25.064637",
+            "duration": null
           }
         ]
       },
-      "timestamp": "2025-06-24T07:45:20.245159"
+      "timestamp": "2025-06-24T09:03:15.489662"
     },
     "TeacherBAE": {
       "agent_name": "TeacherBAE",
@@ -15497,202 +15642,20 @@
               "level: str"
             ],
             "context": "academic",
-            "generated_at": "2025-06-24T07:48:37.720331",
+            "generated_at": "2025-06-24T09:13:50.540631",
             "business_rules": [
               "course",
-              "registration",
-              "control"
+              "curso",
+              "disciplina",
+              "mat\u00e9ria",
+              "subject"
             ],
             "code": ""
           },
-          "timestamp": "2025-06-24T07:48:37.720337",
-          "update_count": 52
+          "timestamp": "2025-06-24T09:13:51.502968",
+          "update_count": 53
         },
         "interactions": [
-          {
-            "interaction_id": "CourseBAE_1",
-            "task": "interpret_business_request",
-            "payload": {
-              "request": "create course",
-              "context": "academic",
-              "entity_classification": {
-                "detected_entity": "course",
-                "confidence": 0.9,
-                "reasoning": "The user request explicitly mentions 'create course', which directly relates to managing courses/subjects.",
-                "language_detected": "English",
-                "action_intent": "create"
-              }
-            },
-            "result": {
-              "interpreted_intent": "create a new course",
-              "extracted_attributes": [
-                "name: str",
-                "code: str",
-                "credits: int",
-                "duration: int",
-                "description: str",
-                "prerequisites: List[str]",
-                "department: str",
-                "level: str"
-              ],
-              "domain_operations": [
-                "validate course code uniqueness",
-                "validate credits as positive integer",
-                "validate prerequisites against existing courses",
-                "validate duration specification",
-                "validate department assignment",
-                "validate course level"
-              ],
-              "swea_coordination": [
-                {
-                  "swea_agent": "TechLeadSWEA",
-                  "task_type": "coordinate_system_generation",
-                  "payload": {
-                    "entity": "Course",
-                    "attributes": [
-                      "name: str",
-                      "code: str",
-                      "credits: int",
-                      "duration: int",
-                      "description: str",
-                      "prerequisites: List[str]",
-                      "department: str",
-                      "level: str"
-                    ],
-                    "context": "academic",
-                    "coordinating_bae": "CourseBAE"
-                  }
-                },
-                {
-                  "swea_agent": "DatabaseSWEA",
-                  "task_type": "setup_database",
-                  "payload": {
-                    "attributes": [
-                      "name: str",
-                      "code: str",
-                      "credits: int",
-                      "duration: int",
-                      "description: str",
-                      "prerequisites: List[str]",
-                      "department: str",
-                      "level: str"
-                    ],
-                    "entity": "Course",
-                    "context": "academic",
-                    "coordinating_bae": "CourseBAE"
-                  }
-                },
-                {
-                  "swea_agent": "BackendSWEA",
-                  "task_type": "generate_model",
-                  "payload": {
-                    "attributes": [
-                      "name: str",
-                      "code: str",
-                      "credits: int",
-                      "duration: int",
-                      "description: str",
-                      "prerequisites: List[str]",
-                      "department: str",
-                      "level: str"
-                    ],
-                    "entity": "Course",
-                    "context": "academic",
-                    "coordinating_bae": "CourseBAE"
-                  }
-                },
-                {
-                  "swea_agent": "BackendSWEA",
-                  "task_type": "generate_api",
-                  "payload": {
-                    "attributes": [
-                      "name: str",
-                      "code: str",
-                      "credits: int",
-                      "duration: int",
-                      "description: str",
-                      "prerequisites: List[str]",
-                      "department: str",
-                      "level: str"
-                    ],
-                    "entity": "Course",
-                    "context": "academic",
-                    "coordinating_bae": "CourseBAE"
-                  }
-                },
-                {
-                  "swea_agent": "FrontendSWEA",
-                  "task_type": "generate_ui",
-                  "payload": {
-                    "attributes": [
-                      "name: str",
-                      "code: str",
-                      "credits: int",
-                      "duration: int",
-                      "description: str",
-                      "prerequisites: List[str]",
-                      "department: str",
-                      "level: str"
-                    ],
-                    "entity": "Course",
-                    "context": "academic",
-                    "coordinating_bae": "CourseBAE"
-                  }
-                },
-                {
-                  "swea_agent": "TestSWEA",
-                  "task_type": "generate_all_tests",
-                  "payload": {
-                    "attributes": [
-                      "name: str",
-                      "code: str",
-                      "credits: int",
-                      "duration: int",
-                      "description: str",
-                      "prerequisites: List[str]",
-                      "department: str",
-                      "level: str"
-                    ],
-                    "entity": "Course",
-                    "context": "academic",
-                    "coordinating_bae": "CourseBAE"
-                  }
-                },
-                {
-                  "swea_agent": "TechLeadSWEA",
-                  "task_type": "review_and_approve",
-                  "payload": {
-                    "entity": "Course",
-                    "attributes": [
-                      "name: str",
-                      "code: str",
-                      "credits: int",
-                      "duration: int",
-                      "description: str",
-                      "prerequisites: List[str]",
-                      "department: str",
-                      "level: str"
-                    ],
-                    "context": "academic",
-                    "coordinating_bae": "CourseBAE"
-                  }
-                }
-              ],
-              "business_vocabulary": [
-                "course",
-                "curso",
-                "disciplina",
-                "mat\u00e9ria",
-                "subject"
-              ],
-              "entity_focus": "Course",
-              "entity": "Course"
-            },
-            "success": true,
-            "error_message": null,
-            "timestamp": "2025-06-17T18:02:39.976894",
-            "duration": null
-          },
           {
             "interaction_id": "CourseBAE_1",
             "task": "interpret_business_request",
@@ -24128,10 +24091,191 @@
             "error_message": null,
             "timestamp": "2025-06-24T07:46:52.843919",
             "duration": null
+          },
+          {
+            "interaction_id": "CourseBAE_1",
+            "task": "interpret_business_request",
+            "payload": {
+              "request": "Add a course entity to the system",
+              "context": "academic",
+              "entity_classification": {
+                "detected_entity": "course",
+                "confidence": 1.0,
+                "reasoning": "The user explicitly mentions 'Add a course entity', indicating a clear intent to work with the course entity.",
+                "language_detected": "English",
+                "action_intent": "create"
+              }
+            },
+            "result": {
+              "interpreted_intent": "The business user wants to add a new course entity to the system.",
+              "extracted_attributes": [
+                "name: str",
+                "code: str",
+                "credits: int",
+                "duration: int",
+                "description: str",
+                "prerequisites: List[str]",
+                "department: str",
+                "level: str"
+              ],
+              "domain_operations": [
+                "create_course"
+              ],
+              "swea_coordination": [
+                {
+                  "swea_agent": "TechLeadSWEA",
+                  "task_type": "coordinate_system_generation",
+                  "payload": {
+                    "entity": "Course",
+                    "attributes": [
+                      "name: str",
+                      "code: str",
+                      "credits: int",
+                      "duration: int",
+                      "description: str",
+                      "prerequisites: List[str]",
+                      "department: str",
+                      "level: str"
+                    ],
+                    "context": "academic",
+                    "coordinating_bae": "CourseBAE"
+                  }
+                },
+                {
+                  "swea_agent": "DatabaseSWEA",
+                  "task_type": "setup_database",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "code: str",
+                      "credits: int",
+                      "duration: int",
+                      "description: str",
+                      "prerequisites: List[str]",
+                      "department: str",
+                      "level: str"
+                    ],
+                    "entity": "Course",
+                    "context": "academic",
+                    "coordinating_bae": "CourseBAE"
+                  }
+                },
+                {
+                  "swea_agent": "BackendSWEA",
+                  "task_type": "generate_model",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "code: str",
+                      "credits: int",
+                      "duration: int",
+                      "description: str",
+                      "prerequisites: List[str]",
+                      "department: str",
+                      "level: str"
+                    ],
+                    "entity": "Course",
+                    "context": "academic",
+                    "coordinating_bae": "CourseBAE"
+                  }
+                },
+                {
+                  "swea_agent": "BackendSWEA",
+                  "task_type": "generate_api",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "code: str",
+                      "credits: int",
+                      "duration: int",
+                      "description: str",
+                      "prerequisites: List[str]",
+                      "department: str",
+                      "level: str"
+                    ],
+                    "entity": "Course",
+                    "context": "academic",
+                    "coordinating_bae": "CourseBAE"
+                  }
+                },
+                {
+                  "swea_agent": "FrontendSWEA",
+                  "task_type": "generate_ui",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "code: str",
+                      "credits: int",
+                      "duration: int",
+                      "description: str",
+                      "prerequisites: List[str]",
+                      "department: str",
+                      "level: str"
+                    ],
+                    "entity": "Course",
+                    "context": "academic",
+                    "coordinating_bae": "CourseBAE"
+                  }
+                },
+                {
+                  "swea_agent": "TestSWEA",
+                  "task_type": "generate_all_tests",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "code: str",
+                      "credits: int",
+                      "duration: int",
+                      "description: str",
+                      "prerequisites: List[str]",
+                      "department: str",
+                      "level: str"
+                    ],
+                    "entity": "Course",
+                    "context": "academic",
+                    "coordinating_bae": "CourseBAE"
+                  }
+                },
+                {
+                  "swea_agent": "TechLeadSWEA",
+                  "task_type": "review_and_approve",
+                  "payload": {
+                    "entity": "Course",
+                    "attributes": [
+                      "name: str",
+                      "code: str",
+                      "credits: int",
+                      "duration: int",
+                      "description: str",
+                      "prerequisites: List[str]",
+                      "department: str",
+                      "level: str"
+                    ],
+                    "context": "academic",
+                    "coordinating_bae": "CourseBAE"
+                  }
+                }
+              ],
+              "business_vocabulary": [
+                "course",
+                "curso",
+                "disciplina",
+                "mat\u00e9ria",
+                "subject"
+              ],
+              "entity_focus": "Course",
+              "entity": "Course",
+              "request_type": "creation",
+              "is_evolution": false
+            },
+            "success": true,
+            "error_message": null,
+            "timestamp": "2025-06-24T09:08:48.867215",
+            "duration": null
           }
         ]
       },
-      "timestamp": "2025-06-24T07:48:37.720346"
+      "timestamp": "2025-06-24T09:13:52.293161"
     }
   },
   "agents": {
@@ -24146,7 +24290,7 @@
               "course: str"
             ],
             "context": "academic",
-            "generated_at": "2025-06-24T07:45:20.245137",
+            "generated_at": "2025-06-24T09:01:42.096405",
             "business_rules": [
               "student",
               "registration_number",
@@ -24154,8 +24298,8 @@
             ],
             "code": ""
           },
-          "timestamp": "2025-06-24T07:45:20.245144",
-          "update_count": 63
+          "timestamp": "2025-06-24T09:02:47.146024",
+          "update_count": 64
         },
         "interactions": [
           {
@@ -30608,6 +30752,151 @@
             "success": true,
             "error_message": null,
             "timestamp": "2025-06-24T07:43:43.287957",
+            "duration": null
+          },
+          {
+            "interaction_id": "StudentBAE_1",
+            "task": "interpret_business_request",
+            "payload": {
+              "request": "Create a student entity with basic fields",
+              "context": "academic",
+              "entity_classification": {
+                "detected_entity": "student",
+                "confidence": 0.95,
+                "reasoning": "The user request explicitly mentions 'Create a student entity', indicating a clear intent to work with the student entity.",
+                "language_detected": "English",
+                "action_intent": "create"
+              }
+            },
+            "result": {
+              "interpreted_intent": "Create a student entity with basic fields",
+              "extracted_attributes": [
+                "name: str",
+                "registration_number: str",
+                "course: str"
+              ],
+              "domain_operations": [
+                "create_student",
+                "validate_registration_number_uniqueness",
+                "validate_email_uniqueness",
+                "validate_age",
+                "validate_gpa_range",
+                "enroll_in_course",
+                "validate_birth_date_consistency"
+              ],
+              "swea_coordination": [
+                {
+                  "swea_agent": "TechLeadSWEA",
+                  "task_type": "coordinate_system_generation",
+                  "payload": {
+                    "entity": "Student",
+                    "attributes": [
+                      "name: str",
+                      "registration_number: str",
+                      "course: str"
+                    ],
+                    "context": "academic",
+                    "coordinating_bae": "StudentBAE"
+                  }
+                },
+                {
+                  "swea_agent": "DatabaseSWEA",
+                  "task_type": "setup_database",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "registration_number: str",
+                      "course: str"
+                    ],
+                    "entity": "Student",
+                    "context": "academic",
+                    "coordinating_bae": "StudentBAE"
+                  }
+                },
+                {
+                  "swea_agent": "BackendSWEA",
+                  "task_type": "generate_model",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "registration_number: str",
+                      "course: str"
+                    ],
+                    "entity": "Student",
+                    "context": "academic",
+                    "coordinating_bae": "StudentBAE"
+                  }
+                },
+                {
+                  "swea_agent": "BackendSWEA",
+                  "task_type": "generate_api",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "registration_number: str",
+                      "course: str"
+                    ],
+                    "entity": "Student",
+                    "context": "academic",
+                    "coordinating_bae": "StudentBAE"
+                  }
+                },
+                {
+                  "swea_agent": "FrontendSWEA",
+                  "task_type": "generate_ui",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "registration_number: str",
+                      "course: str"
+                    ],
+                    "entity": "Student",
+                    "context": "academic",
+                    "coordinating_bae": "StudentBAE"
+                  }
+                },
+                {
+                  "swea_agent": "TestSWEA",
+                  "task_type": "generate_all_tests",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "registration_number: str",
+                      "course: str"
+                    ],
+                    "entity": "Student",
+                    "context": "academic",
+                    "coordinating_bae": "StudentBAE"
+                  }
+                },
+                {
+                  "swea_agent": "TechLeadSWEA",
+                  "task_type": "review_and_approve",
+                  "payload": {
+                    "entity": "Student",
+                    "attributes": [
+                      "name: str",
+                      "registration_number: str",
+                      "course: str"
+                    ],
+                    "context": "academic",
+                    "coordinating_bae": "StudentBAE"
+                  }
+                }
+              ],
+              "business_vocabulary": [
+                "student",
+                "registration_number",
+                "course"
+              ],
+              "entity_focus": "Student",
+              "entity": "Student",
+              "request_type": "creation",
+              "is_evolution": false
+            },
+            "success": true,
+            "error_message": null,
+            "timestamp": "2025-06-24T08:49:25.064637",
             "duration": null
           }
         ]
@@ -39626,202 +39915,20 @@
               "level: str"
             ],
             "context": "academic",
-            "generated_at": "2025-06-24T07:48:37.720331",
+            "generated_at": "2025-06-24T09:13:50.540631",
             "business_rules": [
               "course",
-              "registration",
-              "control"
+              "curso",
+              "disciplina",
+              "mat\u00e9ria",
+              "subject"
             ],
             "code": ""
           },
-          "timestamp": "2025-06-24T07:48:37.720337",
-          "update_count": 52
+          "timestamp": "2025-06-24T09:13:51.502968",
+          "update_count": 53
         },
         "interactions": [
-          {
-            "interaction_id": "CourseBAE_1",
-            "task": "interpret_business_request",
-            "payload": {
-              "request": "create course",
-              "context": "academic",
-              "entity_classification": {
-                "detected_entity": "course",
-                "confidence": 0.9,
-                "reasoning": "The user request explicitly mentions 'create course', which directly relates to managing courses/subjects.",
-                "language_detected": "English",
-                "action_intent": "create"
-              }
-            },
-            "result": {
-              "interpreted_intent": "create a new course",
-              "extracted_attributes": [
-                "name: str",
-                "code: str",
-                "credits: int",
-                "duration: int",
-                "description: str",
-                "prerequisites: List[str]",
-                "department: str",
-                "level: str"
-              ],
-              "domain_operations": [
-                "validate course code uniqueness",
-                "validate credits as positive integer",
-                "validate prerequisites against existing courses",
-                "validate duration specification",
-                "validate department assignment",
-                "validate course level"
-              ],
-              "swea_coordination": [
-                {
-                  "swea_agent": "TechLeadSWEA",
-                  "task_type": "coordinate_system_generation",
-                  "payload": {
-                    "entity": "Course",
-                    "attributes": [
-                      "name: str",
-                      "code: str",
-                      "credits: int",
-                      "duration: int",
-                      "description: str",
-                      "prerequisites: List[str]",
-                      "department: str",
-                      "level: str"
-                    ],
-                    "context": "academic",
-                    "coordinating_bae": "CourseBAE"
-                  }
-                },
-                {
-                  "swea_agent": "DatabaseSWEA",
-                  "task_type": "setup_database",
-                  "payload": {
-                    "attributes": [
-                      "name: str",
-                      "code: str",
-                      "credits: int",
-                      "duration: int",
-                      "description: str",
-                      "prerequisites: List[str]",
-                      "department: str",
-                      "level: str"
-                    ],
-                    "entity": "Course",
-                    "context": "academic",
-                    "coordinating_bae": "CourseBAE"
-                  }
-                },
-                {
-                  "swea_agent": "BackendSWEA",
-                  "task_type": "generate_model",
-                  "payload": {
-                    "attributes": [
-                      "name: str",
-                      "code: str",
-                      "credits: int",
-                      "duration: int",
-                      "description: str",
-                      "prerequisites: List[str]",
-                      "department: str",
-                      "level: str"
-                    ],
-                    "entity": "Course",
-                    "context": "academic",
-                    "coordinating_bae": "CourseBAE"
-                  }
-                },
-                {
-                  "swea_agent": "BackendSWEA",
-                  "task_type": "generate_api",
-                  "payload": {
-                    "attributes": [
-                      "name: str",
-                      "code: str",
-                      "credits: int",
-                      "duration: int",
-                      "description: str",
-                      "prerequisites: List[str]",
-                      "department: str",
-                      "level: str"
-                    ],
-                    "entity": "Course",
-                    "context": "academic",
-                    "coordinating_bae": "CourseBAE"
-                  }
-                },
-                {
-                  "swea_agent": "FrontendSWEA",
-                  "task_type": "generate_ui",
-                  "payload": {
-                    "attributes": [
-                      "name: str",
-                      "code: str",
-                      "credits: int",
-                      "duration: int",
-                      "description: str",
-                      "prerequisites: List[str]",
-                      "department: str",
-                      "level: str"
-                    ],
-                    "entity": "Course",
-                    "context": "academic",
-                    "coordinating_bae": "CourseBAE"
-                  }
-                },
-                {
-                  "swea_agent": "TestSWEA",
-                  "task_type": "generate_all_tests",
-                  "payload": {
-                    "attributes": [
-                      "name: str",
-                      "code: str",
-                      "credits: int",
-                      "duration: int",
-                      "description: str",
-                      "prerequisites: List[str]",
-                      "department: str",
-                      "level: str"
-                    ],
-                    "entity": "Course",
-                    "context": "academic",
-                    "coordinating_bae": "CourseBAE"
-                  }
-                },
-                {
-                  "swea_agent": "TechLeadSWEA",
-                  "task_type": "review_and_approve",
-                  "payload": {
-                    "entity": "Course",
-                    "attributes": [
-                      "name: str",
-                      "code: str",
-                      "credits: int",
-                      "duration: int",
-                      "description: str",
-                      "prerequisites: List[str]",
-                      "department: str",
-                      "level: str"
-                    ],
-                    "context": "academic",
-                    "coordinating_bae": "CourseBAE"
-                  }
-                }
-              ],
-              "business_vocabulary": [
-                "course",
-                "curso",
-                "disciplina",
-                "mat\u00e9ria",
-                "subject"
-              ],
-              "entity_focus": "Course",
-              "entity": "Course"
-            },
-            "success": true,
-            "error_message": null,
-            "timestamp": "2025-06-17T18:02:39.976894",
-            "duration": null
-          },
           {
             "interaction_id": "CourseBAE_1",
             "task": "interpret_business_request",
@@ -48257,6 +48364,187 @@
             "error_message": null,
             "timestamp": "2025-06-24T07:46:52.843919",
             "duration": null
+          },
+          {
+            "interaction_id": "CourseBAE_1",
+            "task": "interpret_business_request",
+            "payload": {
+              "request": "Add a course entity to the system",
+              "context": "academic",
+              "entity_classification": {
+                "detected_entity": "course",
+                "confidence": 1.0,
+                "reasoning": "The user explicitly mentions 'Add a course entity', indicating a clear intent to work with the course entity.",
+                "language_detected": "English",
+                "action_intent": "create"
+              }
+            },
+            "result": {
+              "interpreted_intent": "The business user wants to add a new course entity to the system.",
+              "extracted_attributes": [
+                "name: str",
+                "code: str",
+                "credits: int",
+                "duration: int",
+                "description: str",
+                "prerequisites: List[str]",
+                "department: str",
+                "level: str"
+              ],
+              "domain_operations": [
+                "create_course"
+              ],
+              "swea_coordination": [
+                {
+                  "swea_agent": "TechLeadSWEA",
+                  "task_type": "coordinate_system_generation",
+                  "payload": {
+                    "entity": "Course",
+                    "attributes": [
+                      "name: str",
+                      "code: str",
+                      "credits: int",
+                      "duration: int",
+                      "description: str",
+                      "prerequisites: List[str]",
+                      "department: str",
+                      "level: str"
+                    ],
+                    "context": "academic",
+                    "coordinating_bae": "CourseBAE"
+                  }
+                },
+                {
+                  "swea_agent": "DatabaseSWEA",
+                  "task_type": "setup_database",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "code: str",
+                      "credits: int",
+                      "duration: int",
+                      "description: str",
+                      "prerequisites: List[str]",
+                      "department: str",
+                      "level: str"
+                    ],
+                    "entity": "Course",
+                    "context": "academic",
+                    "coordinating_bae": "CourseBAE"
+                  }
+                },
+                {
+                  "swea_agent": "BackendSWEA",
+                  "task_type": "generate_model",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "code: str",
+                      "credits: int",
+                      "duration: int",
+                      "description: str",
+                      "prerequisites: List[str]",
+                      "department: str",
+                      "level: str"
+                    ],
+                    "entity": "Course",
+                    "context": "academic",
+                    "coordinating_bae": "CourseBAE"
+                  }
+                },
+                {
+                  "swea_agent": "BackendSWEA",
+                  "task_type": "generate_api",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "code: str",
+                      "credits: int",
+                      "duration: int",
+                      "description: str",
+                      "prerequisites: List[str]",
+                      "department: str",
+                      "level: str"
+                    ],
+                    "entity": "Course",
+                    "context": "academic",
+                    "coordinating_bae": "CourseBAE"
+                  }
+                },
+                {
+                  "swea_agent": "FrontendSWEA",
+                  "task_type": "generate_ui",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "code: str",
+                      "credits: int",
+                      "duration: int",
+                      "description: str",
+                      "prerequisites: List[str]",
+                      "department: str",
+                      "level: str"
+                    ],
+                    "entity": "Course",
+                    "context": "academic",
+                    "coordinating_bae": "CourseBAE"
+                  }
+                },
+                {
+                  "swea_agent": "TestSWEA",
+                  "task_type": "generate_all_tests",
+                  "payload": {
+                    "attributes": [
+                      "name: str",
+                      "code: str",
+                      "credits: int",
+                      "duration: int",
+                      "description: str",
+                      "prerequisites: List[str]",
+                      "department: str",
+                      "level: str"
+                    ],
+                    "entity": "Course",
+                    "context": "academic",
+                    "coordinating_bae": "CourseBAE"
+                  }
+                },
+                {
+                  "swea_agent": "TechLeadSWEA",
+                  "task_type": "review_and_approve",
+                  "payload": {
+                    "entity": "Course",
+                    "attributes": [
+                      "name: str",
+                      "code: str",
+                      "credits: int",
+                      "duration: int",
+                      "description: str",
+                      "prerequisites: List[str]",
+                      "department: str",
+                      "level: str"
+                    ],
+                    "context": "academic",
+                    "coordinating_bae": "CourseBAE"
+                  }
+                }
+              ],
+              "business_vocabulary": [
+                "course",
+                "curso",
+                "disciplina",
+                "mat\u00e9ria",
+                "subject"
+              ],
+              "entity_focus": "Course",
+              "entity": "Course",
+              "request_type": "creation",
+              "is_evolution": false
+            },
+            "success": true,
+            "error_message": null,
+            "timestamp": "2025-06-24T09:08:48.867215",
+            "duration": null
           }
         ]
       }
@@ -48271,7 +48559,7 @@
       "knowledge": {
         "entity": "student",
         "interpretation": {
-          "interpreted_intent": "The business user wants to create a system for managing student information and operations.",
+          "interpreted_intent": "Create a student entity with basic fields",
           "extracted_attributes": [
             "name: str",
             "registration_number: str",
@@ -48279,10 +48567,12 @@
           ],
           "domain_operations": [
             "create_student",
-            "update_student",
-            "delete_student",
-            "retrieve_student",
-            "enroll_student_in_course"
+            "validate_registration_number_uniqueness",
+            "validate_email_uniqueness",
+            "validate_age",
+            "validate_gpa_range",
+            "enroll_in_course",
+            "validate_birth_date_consistency"
           ],
           "swea_coordination": [
             {
@@ -48402,14 +48692,16 @@
         ],
         "domain_operations": [
           "create_student",
-          "update_student",
-          "delete_student",
-          "retrieve_student",
-          "enroll_student_in_course"
+          "validate_registration_number_uniqueness",
+          "validate_email_uniqueness",
+          "validate_age",
+          "validate_gpa_range",
+          "enroll_in_course",
+          "validate_birth_date_consistency"
         ],
-        "timestamp": "2025-06-24T07:45:20.278851"
+        "timestamp": "2025-06-24T09:03:43.905866"
       },
-      "timestamp": "2025-06-24T07:45:20.278862"
+      "timestamp": "2025-06-24T09:03:43.905909"
     },
     "course": {
       "entity": "course",
@@ -48761,5 +49053,5 @@
       "timestamp": "2025-06-24T07:53:36.831276"
     }
   },
-  "last_saved": "2025-06-24T07:53:36.831287"
+  "last_saved": "2025-06-24T09:13:52.293472"
 }

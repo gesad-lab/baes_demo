@@ -39,8 +39,8 @@ class BAEConversationalCLI:
             "servers_running": False,
             "database_path": None,
             "managed_system_path": None,
-            "api_port": 8100,
-            "ui_port": 8600,
+            "api_port": 8100,  # TODO: make this dynamic
+            "ui_port": 8600,  # TODO: make this dynamic
             "auto_restart_on_entity_changes": True,  # For PoC: auto-restart servers after entity changes
         }
         self.context = "initial"  # initial, evolving, managing
