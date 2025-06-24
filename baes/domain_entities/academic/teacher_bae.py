@@ -18,6 +18,10 @@ class TeacherBae(BaseBae):
             entity_name="Teacher",
             domain_keywords=["teacher", "professor", "docente", "instrutor", "instructor"],
         )
+
+        # Set domain for this BAE
+        self.domain = "academic"
+
         logger.info("TeacherBAE initialized for teacher domain entity management")
 
     def _initialize_domain_knowledge(self):

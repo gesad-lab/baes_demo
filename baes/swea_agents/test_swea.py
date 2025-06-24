@@ -23,7 +23,7 @@ class TestSWEA(BaseAgent):
         super().__init__("TestSWEA", "Test Generation and Execution Agent", "SWEA")
         self.llm_client = OpenAIClient()
         self._managed_system_manager = None  # Lazy initialization
-        self.max_fix_iterations = 3  # Maximum attempts to fix issues autonomously
+        self.max_fix_iterations = 10  # Maximum attempts to fix issues autonomously
         self.collaboration_history = []  # Track SWEA collaboration attempts
 
     @property
@@ -561,7 +561,7 @@ Return ONLY complete Python test code with imports and test classes.
         elif test_type == "integration_tests":
             return (
                 base_prompt
-                + """
+                + f"""
 Generate comprehensive integration tests for the FastAPI routes including:
 - CRUD operation tests (Create, Read, Update, Delete)
 - HTTP status code validation
@@ -570,6 +570,14 @@ Generate comprehensive integration tests for the FastAPI routes including:
 - Error handling tests
 - Authentication/authorization tests (if applicable)
 - Business rule enforcement tests
+
+CRITICAL IMPORT REQUIREMENTS:
+- Use 'from app.main import app' to import the FastAPI app (NOT 'from main import app')
+- Use 'from fastapi.testclient import TestClient' for HTTP testing
+- Mock database dependencies properly using: 'app.routes.{entity.lower()}_routes.get_db_connection'
+- Import models as 'from app.routes.{entity.lower()}_routes import {entity}Create, {entity}Response'
+- Use the correct file naming convention: {{entity_lower}}_routes.py (models are in the routes file)
+- Note: BackendSWEA generates models inside the routes file, not separately
 
 Return ONLY complete Python test code with imports, fixtures, and test classes.
 """

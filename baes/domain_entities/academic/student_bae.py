@@ -18,6 +18,9 @@ class StudentBae(BaseBae):
             entity_name="Student", domain_keywords=["student", "aluno", "estudante", "discente"]
         )
 
+        # Set domain for this BAE
+        self.domain = "academic"
+
         # Add compatibility attributes for integration tests
         self.primary_entity = "Student"
         self.current_entity = "Student"

@@ -7,12 +7,17 @@ CRITICAL: Generate ONLY complete Python code - no markdown, no explanations.
 
 For FastAPI routes, create an APIRouter with prefix="/api" and implement full CRUD operations using SQLite database.
 
+IMPORTANT DATA TYPE HANDLING:
+- For List[str] attributes: Store as TEXT in database (comma-separated), convert to/from list in Pydantic models
+- For complex types: Ensure consistency between database storage and Pydantic validation
+- Use proper serializers and validators for data conversion
+
 Required structure:
 1. Import APIRouter from fastapi
 2. Create router = APIRouter(prefix="/api", tags=["..."])
 3. Use sqlite3 for database operations
-4. Include proper Pydantic models
-5. Implement all CRUD endpoints
+4. Include proper Pydantic models with field validators for complex types
+5. Implement all CRUD endpoints with proper data conversion
 
 Example pattern for Student entity:
 - POST /api/students/ (create)
@@ -20,5 +25,29 @@ Example pattern for Student entity:
 - GET /api/students/{{id}} (get one)
 - PUT /api/students/{{id}} (update)
 - DELETE /api/students/{{id}} (delete)
+
+For List[str] fields like 'prerequisites', use this pattern:
+```python
+from pydantic import BaseModel, field_validator, field_serializer
+from typing import List
+
+class EntityCreate(BaseModel):
+    # ... other fields ...
+    prerequisites: List[str] = []
+
+    @field_serializer('prerequisites')
+    def serialize_prerequisites(self, value: List[str]) -> str:
+        return ','.join(value) if value else ''
+
+    @field_validator('prerequisites', mode='before')
+    def validate_prerequisites(cls, value):
+        if isinstance(value, str):
+            return value.split(',') if value else []
+        return value or []
+
+# In database operations, handle conversion:
+# Store: ','.join(data.prerequisites)
+# Retrieve: row['prerequisites'].split(',') if row['prerequisites'] else []
+```
 
 Generate the complete working code now:

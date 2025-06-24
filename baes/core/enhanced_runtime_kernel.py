@@ -318,79 +318,214 @@ class EnhancedRuntimeKernel:
     def _execute_coordination_plan(
         self, coordination_plan: List[Dict[str, Any]], coordinating_bae, context: str
     ) -> List[Dict[str, Any]]:
-        """Execute SWEA coordination plan orchestrated by BAE"""
+        """Execute SWEA coordination plan with TechLeadSWEA governance"""
         results = []
 
-        for task in coordination_plan:
-            swea_agent = task.get("swea_agent", "")
+        # Step 1: TechLeadSWEA analyzes and enhances the coordination plan
+        logger.info("🧠 TechLeadSWEA: Analyzing coordination plan for technical governance")
+
+        tech_analysis_payload = {
+            "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
+            "coordination_plan": coordination_plan,
+            "context": context,
+            "business_requirements": {
+                "domain_focus": True,
+                "semantic_coherence": True,
+                "quality_gates": True,
+            },
+        }
+
+        # TechLeadSWEA provides technical oversight and enhanced plan
+        tech_coordination_result = self.techlead_swea.handle_task(
+            "coordinate_system_generation", tech_analysis_payload
+        )
+
+        if tech_coordination_result.get("success"):
+            enhanced_plan = tech_coordination_result.get("data", {}).get(
+                "enhanced_coordination_plan", coordination_plan
+            )
+            quality_gates = tech_coordination_result.get("data", {}).get("quality_gates", {})
+
+            results.append(
+                {
+                    "task": "TechLeadSWEA.coordinate_system_generation",
+                    "success": True,
+                    "result": tech_coordination_result,
+                    "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
+                    "technical_governance": True,
+                }
+            )
+            logger.info("✅ TechLeadSWEA: Technical coordination plan established")
+        else:
+            enhanced_plan = coordination_plan
+            quality_gates = {}
+            logger.warning("⚠️ TechLeadSWEA coordination failed, proceeding with original plan")
+
+        # Step 2: Execute enhanced coordination plan under TechLeadSWEA supervision
+        for task in enhanced_plan:
+            swea_agent_name = task.get("swea_agent", "")
             task_type = task.get("task_type", "")
-            entity = task.get("entity", coordinating_bae.entity_name)
+            payload = task.get("payload", {})
 
-            logger.info("⚙️  Executing %s.%s for %s entity", swea_agent, task_type, entity)
+            # Skip TechLeadSWEA tasks in execution loop (already handled above)
+            if "techlead" in swea_agent_name.lower():
+                continue
 
-            # Route to appropriate SWEA agent
-            swea_agent_lower = swea_agent.lower()
-            if swea_agent_lower in [
+            # Add technical requirements from TechLeadSWEA to payload
+            if quality_gates:
+                payload["technical_requirements"] = task.get("technical_requirements", {})
+                payload["quality_criteria"] = task.get("quality_criteria", [])
+                payload["tech_lead_oversight"] = True
+
+            # Route to appropriate SWEA agent with TechLeadSWEA context
+            swea_agent_lower = swea_agent_name.lower()
+            agent = None
+
+            if swea_agent_lower in ["database", "databaseswea", "database_swea"]:
+                agent = self.database_swea
+            elif swea_agent_lower in [
                 "backend",
                 "backendswea",
                 "backend_swea",
+                "programmer",
+                "programmerswea",
+                "programmer_swea",
             ]:
                 agent = self.backend_swea
             elif swea_agent_lower in ["frontend", "frontendswea", "frontend_swea"]:
                 agent = self.frontend_swea
-            elif swea_agent_lower in ["database", "databaseswea", "database_swea"]:
-                agent = self.database_swea
             elif swea_agent_lower in ["test", "testswea", "test_swea"]:
                 agent = self.test_swea
-                # For collaborative testing, use the enhanced task
-                if task_type == "generate_all_tests":
-                    task_type = "generate_all_tests_with_collaboration"
-            elif swea_agent_lower in [
-                "techlead",
-                "techleadswea",
-                "techlead_swea",
-                "technical_lead",
-            ]:
-                agent = self.techlead_swea
             else:
                 available_agents = [
+                    "DatabaseSWEA",
                     "BackendSWEA",
                     "FrontendSWEA",
-                    "DatabaseSWEA",
                     "TestSWEA",
                     "TechLeadSWEA",
                 ]
-                logger.error("❌ Unknown SWEA agent: %s", swea_agent)
-                raise UnknownSWEAAgentError(swea_agent, available_agents)
+                logger.error("❌ Unknown SWEA agent: %s", swea_agent_name)
+                results.append(
+                    {
+                        "task": f"{swea_agent_name}.{task_type}",
+                        "success": False,
+                        "error": f"Unknown SWEA agent: {swea_agent_name}",
+                        "available_agents": available_agents,
+                        "technical_governance": False,
+                    }
+                )
+                continue
 
-            # Execute task with proper payload
-            task_payload = task.get("payload", {})
-            task_payload.update(
-                {"entity": entity, "context": context, "coordinating_bae": coordinating_bae.name}
+            # Execute task with TechLeadSWEA oversight
+            try:
+                logger.info(
+                    "🔧 Executing: %s.%s under TechLeadSWEA supervision", swea_agent_name, task_type
+                )
+                result = agent.handle_task(task_type, payload)
+
+                # TechLeadSWEA reviews the result for quality compliance
+                if result.get("success"):
+                    review_payload = {
+                        "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
+                        "swea_agent": swea_agent_name,
+                        "task_type": task_type,
+                        "result": result,
+                        "quality_gates": quality_gates,
+                    }
+
+                    review_result = self.techlead_swea.handle_task(
+                        "review_and_approve", review_payload
+                    )
+
+                    if review_result.get("success") and review_result.get("data", {}).get(
+                        "overall_approval", True
+                    ):
+                        results.append(
+                            {
+                                "task": f"{swea_agent_name}.{task_type}",
+                                "success": True,
+                                "result": result,
+                                "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
+                                "technical_review": "approved",
+                                "quality_score": review_result.get("data", {}).get(
+                                    "quality_score", 0
+                                ),
+                            }
+                        )
+                        logger.info("✅ TechLeadSWEA approved: %s.%s", swea_agent_name, task_type)
+                    else:
+                        # TechLeadSWEA rejected - request fixes
+                        feedback = review_result.get("data", {}).get("technical_feedback", [])
+                        logger.warning(
+                            "⚠️ TechLeadSWEA rejected: %s.%s - %s",
+                            swea_agent_name,
+                            task_type,
+                            feedback,
+                        )
+
+                        results.append(
+                            {
+                                "task": f"{swea_agent_name}.{task_type}",
+                                "success": False,
+                                "result": result,
+                                "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
+                                "technical_review": "rejected",
+                                "feedback": feedback,
+                                "requires_revision": True,
+                            }
+                        )
+                else:
+                    results.append(
+                        {
+                            "task": f"{swea_agent_name}.{task_type}",
+                            "success": False,
+                            "error": result.get("error", "Task execution failed"),
+                            "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
+                            "technical_governance": True,
+                        }
+                    )
+
+            except Exception as e:
+                logger.error("❌ Failed: %s.%s - %s", swea_agent_name, task_type, str(e))
+                results.append(
+                    {
+                        "task": f"{swea_agent_name}.{task_type}",
+                        "success": False,
+                        "error": str(e),
+                        "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
+                        "technical_governance": True,
+                    }
+                )
+
+        # Step 3: Final TechLeadSWEA system review and approval
+        if results:
+            final_review_payload = {
+                "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
+                "execution_results": results,
+                "context": context,
+                "coordination_complete": True,
+            }
+
+            final_review = self.techlead_swea.handle_task(
+                "review_and_approve", final_review_payload
             )
 
-            try:
-                result = agent.handle_task(task_type, task_payload)
-                results.append(
-                    {
-                        "task": f"{swea_agent}.{task_type}",
-                        "success": True,
-                        "result": result,
-                        "entity": entity,
-                    }
-                )
-                logger.info("✅ Task %s.%s completed successfully", swea_agent, task_type)
-            except Exception as e:
-                error_msg = f"SWEA task execution failed: {str(e)}"
-                logger.error("❌ %s", error_msg)
-                results.append(
-                    {
-                        "task": f"{swea_agent}.{task_type}",
-                        "success": False,
-                        "error": error_msg,
-                        "entity": entity,
-                    }
-                )
+            results.append(
+                {
+                    "task": "TechLeadSWEA.final_review",
+                    "success": final_review.get("success", False),
+                    "result": final_review,
+                    "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
+                    "final_technical_approval": final_review.get("data", {}).get(
+                        "overall_approval", False
+                    ),
+                }
+            )
+
+            if final_review.get("data", {}).get("overall_approval", False):
+                logger.info("🎉 TechLeadSWEA: System generation approved and ready for deployment")
+            else:
+                logger.warning("⚠️ TechLeadSWEA: System requires additional work before deployment")
 
         return results
 
@@ -581,7 +716,7 @@ class EnhancedRuntimeKernel:
     def _execute_evolution_tests(
         self, entity: str, execution_results: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Execute tests after system generation/evolution to validate changes work correctly"""
+        """Execute tests after system generation/evolution with TechLeadSWEA coordination"""
         try:
             # Check if TestSWEA was part of the execution results
             test_generation_result = None
@@ -622,6 +757,55 @@ class EnhancedRuntimeKernel:
                 "success", False
             )
 
+            # If tests fail, involve TechLeadSWEA for coordination
+            if not success:
+                logger.warning("⚠️ Tests failed - escalating to TechLeadSWEA for coordination")
+
+                test_failure_payload = {
+                    "entity": entity,
+                    "test_failures": [
+                        {
+                            "category": "test_execution_failure",
+                            "stderr": test_execution.get("stderr", ""),
+                            "stdout": test_execution.get("stdout", ""),
+                            "execution_results": execution_results,
+                        }
+                    ],
+                    "coordination_id": f"test_fix_{entity}_{self._get_timestamp()}",
+                }
+
+                # TechLeadSWEA coordinates test failure resolution
+                tech_coordination = self.techlead_swea.handle_task(
+                    "coordinate_test_fixes", test_failure_payload
+                )
+
+                if tech_coordination.get("success"):
+                    fix_decisions = tech_coordination.get("data", {}).get("fix_decisions", [])
+                    coordination_log = tech_coordination.get("data", {}).get("coordination_log", [])
+
+                    logger.info("🧠 TechLeadSWEA coordinated %d fix decisions", len(fix_decisions))
+                    for log_entry in coordination_log:
+                        logger.info("📋 TechLeadSWEA: %s", log_entry)
+
+                    # Execute fixes based on TechLeadSWEA decisions
+                    fixes_applied = self._execute_techlead_fix_decisions(
+                        fix_decisions, entity, execution_results
+                    )
+
+                    # Re-run tests after fixes
+                    if fixes_applied:
+                        logger.info("🔄 Re-running tests after TechLeadSWEA coordinated fixes")
+                        retry_result = self.test_swea.handle_task("execute_tests", test_payload)
+
+                        if retry_result.get("success") and retry_result.get("data", {}).get(
+                            "test_execution", {}
+                        ).get("success"):
+                            logger.info("✅ Tests passed after TechLeadSWEA coordination")
+                            success = True
+                            test_execution = retry_result.get("data", {}).get("test_execution", {})
+                        else:
+                            logger.warning("⚠️ Tests still failing after TechLeadSWEA coordination")
+
             result = {
                 "success": success,
                 "tests_executed": test_data.get("tests_executed", 0),
@@ -630,6 +814,7 @@ class EnhancedRuntimeKernel:
                 "execution_time": test_execution.get("execution_time", 0),
                 "entity": entity,
                 "evolution_validation": True,
+                "techlead_coordination": not success,  # True if TechLeadSWEA was involved
             }
 
             if not success:
@@ -646,9 +831,64 @@ class EnhancedRuntimeKernel:
                 "entity": entity,
             }
 
-    def _get_timestamp(self):
+    def _execute_techlead_fix_decisions(
+        self,
+        fix_decisions: List[Dict[str, Any]],
+        entity: str,
+        execution_results: List[Dict[str, Any]],
+    ) -> bool:
+        """Execute fix decisions coordinated by TechLeadSWEA"""
+        try:
+            fixes_applied = False
+
+            for decision in fix_decisions:
+                responsible_swea = decision.get("responsible_swea", "")
+                recommended_action = decision.get("recommended_action", "")
+                issue_type = decision.get("issue_type", "")
+
+                logger.info("🔧 Applying TechLeadSWEA fix: %s → %s", issue_type, recommended_action)
+
+                # Route fix to appropriate SWEA based on TechLeadSWEA decision
+                fix_payload = {
+                    "entity": entity,
+                    "fix_action": recommended_action,
+                    "issue_type": issue_type,
+                    "techlead_decision": decision,
+                    "execution_results": execution_results,
+                }
+
+                if (
+                    "backend" in responsible_swea.lower()
+                    or "programmer" in responsible_swea.lower()
+                ):
+                    fix_result = self.backend_swea.handle_task("fix_issues", fix_payload)
+                elif "frontend" in responsible_swea.lower():
+                    fix_result = self.frontend_swea.handle_task("fix_issues", fix_payload)
+                elif "database" in responsible_swea.lower():
+                    fix_result = self.database_swea.handle_task("fix_issues", fix_payload)
+                else:
+                    logger.warning("⚠️ Unknown SWEA for fix: %s", responsible_swea)
+                    continue
+
+                if fix_result and fix_result.get("success"):
+                    logger.info("✅ Fix applied successfully by %s", responsible_swea)
+                    fixes_applied = True
+                else:
+                    logger.warning(
+                        "⚠️ Fix failed for %s: %s",
+                        responsible_swea,
+                        fix_result.get("error", "Unknown error"),
+                    )
+
+            return fixes_applied
+
+        except Exception as e:
+            logger.error("❌ Failed to execute TechLeadSWEA fix decisions: %s", str(e))
+            return False
+
+    def _get_timestamp(self) -> str:
         """Get current timestamp"""
-        return datetime.now().isoformat()
+        return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 # CLI Interface

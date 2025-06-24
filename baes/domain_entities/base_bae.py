@@ -120,11 +120,6 @@ class BaseBae(BaseAgent):
         pass
 
     @abstractmethod
-    def _get_default_attributes(self) -> List[str]:
-        """Get default attributes for this domain entity - must be implemented by concrete BAEs"""
-        pass
-
-    @abstractmethod
     def _get_business_rules(self) -> List[str]:
         """Get business rules for this domain entity - must be implemented by concrete BAEs"""
         pass
@@ -187,410 +182,209 @@ class BaseBae(BaseAgent):
         return response.strip()
 
     def _interpret_business_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Interpret natural language business request for this domain entity"""
-        business_request = payload.get("request", "")
-        context = payload.get("context", "academic")
-
-        # Check if this is an evolution request by looking for existing schema and modification keywords
-        current_schema = self.get_memory("current_schema")
-
-        # First check: If no schema exists, this is definitely a creation request
-        if current_schema is None:
-            is_evolution_request = False
-        else:
-            # Evolution detection for requests that modify existing schemas
-            entity_lower = self.entity_name.lower()
-            request_lower = business_request.lower()
-
-            # Start with basic evolution indicators
-            is_evolution_request = False
-
-            # 1. Explicit attribute keywords (high confidence)
-            attribute_keywords = [
-                "add attribute",
-                "add field",
-                "add column",
-                "add property",
-                "remove attribute",
-                "remove field",
-                "remove column",
-                "remove property",
-                "delete attribute",
-                "delete field",
-                "modify attribute",
-                "update attribute",
-                "change attribute",
-                "alter attribute",
-                "rename attribute",
-                "new attribute",
-                "additional attribute",
-                "make optional",
-                "make required",
-                "change type",
-            ]
-
-            if any(keyword in request_lower for keyword in attribute_keywords):
-                is_evolution_request = True
-
-            # 2. Entity-specific patterns (medium confidence)
-            elif any(
-                pattern in request_lower
-                for pattern in [
-                    f"{entity_lower} entity needs",
-                    f"{entity_lower} entity should",
-                    f"for {entity_lower} entity,",
-                    f"to {entity_lower} entity",
-                    f"in {entity_lower} entity",
-                    f"from {entity_lower} entity",
-                ]
-            ):
-                is_evolution_request = True
-
-            # 3. Contextual evolution patterns (medium confidence)
-            elif (
-                any(
-                    pattern in request_lower
-                    for pattern in [
-                        "include",
-                        "extend",
-                        "enhance",
-                        "modify",
-                        "update",
-                        "change",
-                        "rename",
-                        "remove",
-                        "delete",
-                        "exclude",
-                        "drop",
-                    ]
-                )
-                and entity_lower in request_lower
-            ):
-                is_evolution_request = True
-
-            # 4. Specific attribute modification patterns
-            elif (
-                any(
-                    pattern in request_lower
-                    for pattern in [
-                        "add email",
-                        "add phone",
-                        "add age",
-                        "add birth",
-                        "add address",
-                        "remove email",
-                        "remove phone",
-                        "remove age",
-                        "remove birth",
-                        "with email",
-                        "with phone",
-                        "with age",
-                        "with birth",
-                    ]
-                )
-                and entity_lower in request_lower
-            ):
-                is_evolution_request = True
-
-            # 5. Exclude pure creation patterns
-            creation_only_patterns = [
-                f"create {entity_lower}",
-                f"add {entity_lower}",
-                f"generate {entity_lower}",
-                f"new {entity_lower}",
-                f"make {entity_lower}",
-            ]
-
-            # If it's a pure creation pattern without entity-specific modification language,
-            # treat as creation
-            if any(pattern == request_lower.strip() for pattern in creation_only_patterns):
-                is_evolution_request = False
-            elif any(pattern in request_lower for pattern in creation_only_patterns):
-                # Check if it also has modification language
-                modification_words = ["attribute", "field", "property", "with", "needs", "include"]
-                if not any(word in request_lower for word in modification_words):
-                    is_evolution_request = False
-
-        if is_evolution_request:
-            # This is an evolution request - route to evolve_schema
-            return self._handle_evolution_request(business_request, context, current_schema)
-
-        # This is a new entity creation request - continue with normal flow
-        prompt = f"""
-        As the {self.entity_name} BAE (Business Autonomous Entity), interpret this business request:
-        "{business_request}"
-
-        Entity Focus: {self.entity_name}
-        Domain Keywords: {', '.join(self.domain_keywords)}
-        Context: {context}
-        Default Attributes: {', '.join(self._get_default_attributes())}
-        Business Rules: {'; '.join(self._get_business_rules())}
-
-        Analyze what domain entity operations are needed and extract the attributes mentioned in the request.
-
-        Return a JSON structure with:
-        - interpreted_intent: what the business user wants
-        - extracted_attributes: list of attributes mentioned in the request (ONLY the ones explicitly mentioned)
-        - domain_operations: list of domain entity operations needed
-        - swea_coordination: list of SWEA task objects, each with "swea_agent", "task_type", and "payload" keys
-        - business_vocabulary: key terms that must be preserved in technical implementation
-        - entity_focus: confirm this is about {self.entity_name} entities
-
-        For extracted_attributes, look carefully for field names in the request like:
-        - "name" -> "name: str"
-        - "registration number" -> "registration_number: str"
-        - "course" -> "course: str"
-        - "email" -> "email: str"
-        - "age" -> "age: int"
-
-        ONLY include attributes that are explicitly mentioned in the business request. Do NOT add default attributes that aren't requested.
-
-        Available SWEA Agents:
-        - TechLeadSWEA: Technical coordination, architecture decisions, quality gates
-        - DatabaseSWEA: Database setup and schema management
-        - BackendSWEA: Model and API generation
-        - FrontendSWEA: UI generation
-        - TestSWEA: Test generation and execution
-
-        Example swea_coordination format (with TechLeadSWEA oversight):
-        [
-            {{"swea_agent": "TechLeadSWEA", "task_type": "coordinate_system_generation", "payload": {{"entity": "{self.entity_name}", "attributes": ["name: str", "email: str"]}}}},
-            {{"swea_agent": "DatabaseSWEA", "task_type": "setup_database", "payload": {{"attributes": ["name: str", "email: str"]}}}},
-            {{"swea_agent": "BackendSWEA", "task_type": "generate_model", "payload": {{"attributes": ["name: str", "email: str"]}}}},
-            {{"swea_agent": "BackendSWEA", "task_type": "generate_api", "payload": {{"attributes": ["name: str", "email: str"]}}}},
-            {{"swea_agent": "FrontendSWEA", "task_type": "generate_ui", "payload": {{"attributes": ["name: str", "email: str"]}}}},
-            {{"swea_agent": "TestSWEA", "task_type": "generate_all_tests", "payload": {{"attributes": ["name: str", "email: str"]}}}},
-            {{"swea_agent": "TechLeadSWEA", "task_type": "review_and_approve", "payload": {{"entity": "{self.entity_name}", "attributes": ["name: str", "email: str"]}}}}
-        ]
-        """
-
-        response = self.llm.generate_domain_entity_response(prompt, self.entity_name)
-        cleaned_response = self._clean_json_response(response)
-
+        """Interpret business request and create SWEA coordination plan with TechLeadSWEA governance"""
         try:
-            interpretation = json.loads(cleaned_response)
-            interpretation["entity"] = self.entity_name
-            interpretation["request_type"] = "creation"
-            interpretation["is_evolution"] = False
+            # Extract attributes from the request
+            extracted_attributes = self._extract_attributes_from_request(payload.get("request", ""))
 
-            # Extract attributes from the interpretation
-            extracted_attributes = interpretation.get("extracted_attributes", [])
+            # Determine if this is evolution or new generation
+            is_evolution = self._is_evolution_request(payload.get("request", ""))
 
-            # For new entity creation, if no specific attributes were mentioned, use defaults
-            # This handles cases like "add student" or "create student" where no specific attributes are mentioned
-            if not extracted_attributes or (len(extracted_attributes) == 0):
-                extracted_attributes = self._get_default_attributes()
-                # Update the interpretation with the default attributes
-                interpretation["extracted_attributes"] = extracted_attributes
-                print(f"ℹ️  Using default attributes for {self.entity_name}: {extracted_attributes}")
+            interpretation = {
+                "entity": self.entity_name,
+                "domain": self.domain,
+                "attributes": extracted_attributes,
+                "is_evolution": is_evolution,
+                "request_type": "evolution" if is_evolution else "generation",
+                "business_context": payload.get("request", ""),
+                "semantic_coherence": True,
+                "domain_knowledge_preserved": True,
+            }
 
-            # If attributes were extracted but seem incomplete for basic entity creation,
-            # merge with essential defaults (for cases where LLM only extracts some attributes)
-            elif len(extracted_attributes) < 3:  # Most entities need at least 3 basic attributes
-                default_attrs = self._get_default_attributes()
-                # Merge extracted with defaults, preserving extracted ones
-                merged_attrs = list(extracted_attributes)
-                for default_attr in default_attrs:
-                    if default_attr not in merged_attrs:
-                        merged_attrs.append(default_attr)
-                extracted_attributes = merged_attrs
-                interpretation["extracted_attributes"] = extracted_attributes
-                print(f"ℹ️  Merged attributes for {self.entity_name}: {extracted_attributes}")
-
-            # Ensure swea_coordination is properly formatted as list of dicts
-            if "swea_coordination" in interpretation:
-                coordination = interpretation["swea_coordination"]
-                if isinstance(coordination, list):
-                    # Fix any string items or improperly formatted items and validate agents
-                    fixed_coordination = []
-                    valid_agents = [
-                        "DatabaseSWEA",
-                        "BackendSWEA",
-                        "FrontendSWEA",
-                        "TestSWEA",
-                        "TechLeadSWEA",
-                    ]
-
-                    for item in coordination:
-                        if isinstance(item, str):
-                            # Convert string to dict format
-                            fixed_coordination.append(
-                                {
-                                    "swea_agent": "BackendSWEA",
-                                    "task_type": "generate_component",
-                                    "payload": {"attributes": extracted_attributes},
-                                }
-                            )
-                        elif isinstance(item, dict):
-                            # Ensure required keys exist
-                            if "swea_agent" not in item:
-                                item["swea_agent"] = "BackendSWEA"
-                            if "task_type" not in item:
-                                item["task_type"] = "generate_component"
-                            if "payload" not in item:
-                                item["payload"] = {}
-
-                            # CRITICAL FIX: Ensure attributes are in payload and use the corrected extracted_attributes
-                            item["payload"]["attributes"] = extracted_attributes
-
-                            # Validate agent exists and task is supported
-                            agent_name = item["swea_agent"]
-                            task_type = item["task_type"]
-
-                            # Only include valid agents
-                            if agent_name in valid_agents:
-                                # Validate task types for each agent
-                                if agent_name == "DatabaseSWEA" and task_type not in [
-                                    "setup_database"
-                                ]:
-                                    item["task_type"] = "setup_database"
-                                elif agent_name == "BackendSWEA" and task_type not in [
-                                    "generate_model",
-                                    "generate_api",
-                                ]:
-                                    item["task_type"] = (
-                                        "generate_model"
-                                        if "model" in task_type.lower()
-                                        else "generate_api"
-                                    )
-                                elif agent_name == "FrontendSWEA" and task_type not in [
-                                    "generate_ui"
-                                ]:
-                                    item["task_type"] = "generate_ui"
-                                elif agent_name == "TestSWEA" and task_type not in [
-                                    "generate_unit_tests",
-                                    "generate_integration_tests",
-                                    "generate_ui_tests",
-                                    "execute_tests",
-                                    "generate_all_tests",
-                                ]:
-                                    item["task_type"] = "generate_all_tests"
-                                elif agent_name == "TechLeadSWEA" and task_type not in [
-                                    "coordinate_system_generation",
-                                    "review_and_approve",
-                                    "resolve_technical_conflict",
-                                    "optimize_architecture",
-                                    "manage_quality_gate",
-                                    "coordinate_test_fixes",
-                                    "make_tech_decision",
-                                    "assess_system_health",
-                                ]:
-                                    # Default TechLeadSWEA task
-                                    item["task_type"] = "coordinate_system_generation"
-
-                                fixed_coordination.append(item)
-                            else:
-                                # Skip unknown agents but log for debugging
-                                print(f"⚠️  Skipping unknown SWEA agent: {agent_name}")
-
-                    interpretation["swea_coordination"] = fixed_coordination
-            else:
-                # Enhanced coordination plan with TechLeadSWEA oversight
-                base_coordination_plan = [
-                    {
-                        "swea_agent": "DatabaseSWEA",
-                        "task_type": "setup_database",
-                        "payload": {"attributes": extracted_attributes},
+            # Create comprehensive SWEA coordination plan with TechLeadSWEA governance
+            # TechLeadSWEA acts as the technical brain coordinating all other SWEAs
+            coordination_plan = [
+                {
+                    "swea_agent": "TechLeadSWEA",
+                    "task_type": "coordinate_system_generation",
+                    "payload": {
+                        "entity": self.entity_name,
+                        "attributes": extracted_attributes,
+                        "context": payload.get("request", ""),
+                        "is_evolution": is_evolution,
+                        "business_requirements": {
+                            "domain_focus": True,
+                            "semantic_coherence": True,
+                            "quality_gates": True,
+                            "technical_governance": True,
+                        },
                     },
-                    {
-                        "swea_agent": "BackendSWEA",
-                        "task_type": "generate_model",
-                        "payload": {"attributes": extracted_attributes},
+                    "priority": 1,
+                    "governance_role": "technical_coordinator",
+                    "technical_requirements": {
+                        "code_quality": "high",
+                        "test_coverage": "comprehensive",
+                        "documentation": "business_vocabulary",
+                        "performance": "optimized",
                     },
-                    {
-                        "swea_agent": "BackendSWEA",
-                        "task_type": "generate_api",
-                        "payload": {"attributes": extracted_attributes},
+                    "quality_criteria": [
+                        "semantic_coherence_validation",
+                        "domain_knowledge_preservation",
+                        "business_vocabulary_alignment",
+                        "technical_standards_compliance",
+                    ],
+                },
+                {
+                    "swea_agent": "DatabaseSWEA",
+                    "task_type": "setup_database" if not is_evolution else "migrate_schema",
+                    "payload": {
+                        "entity": self.entity_name,
+                        "attributes": extracted_attributes,
+                        "context": payload.get("request", ""),
+                        "preserve_data": is_evolution,
+                        "business_rules": True,
                     },
-                    {
-                        "swea_agent": "FrontendSWEA",
-                        "task_type": "generate_ui",
-                        "payload": {"attributes": extracted_attributes},
+                    "priority": 2,
+                    "requires_approval": "TechLeadSWEA",
+                    "technical_requirements": {
+                        "data_integrity": "strict",
+                        "performance": "optimized",
+                        "business_constraints": "enforced",
                     },
-                    {
-                        "swea_agent": "TestSWEA",
-                        "task_type": "generate_all_tests",
-                        "payload": {"attributes": extracted_attributes},
+                    "quality_criteria": [
+                        "schema_validation",
+                        "data_preservation",
+                        "referential_integrity",
+                    ],
+                },
+                {
+                    "swea_agent": "BackendSWEA",
+                    "task_type": "generate_model",
+                    "payload": {
+                        "entity": self.entity_name,
+                        "attributes": extracted_attributes,
+                        "context": payload.get("request", ""),
+                        "domain_focus": True,
+                        "semantic_coherence": True,
                     },
-                ]
+                    "priority": 3,
+                    "requires_approval": "TechLeadSWEA",
+                    "technical_requirements": {
+                        "validation": "comprehensive",
+                        "serialization": "optimized",
+                        "business_rules": "embedded",
+                    },
+                    "quality_criteria": [
+                        "pydantic_compliance",
+                        "business_vocabulary_usage",
+                        "validation_completeness",
+                    ],
+                },
+                {
+                    "swea_agent": "BackendSWEA",
+                    "task_type": "generate_api",
+                    "payload": {
+                        "entity": self.entity_name,
+                        "attributes": extracted_attributes,
+                        "context": payload.get("request", ""),
+                        "crud_operations": True,
+                        "business_vocabulary": True,
+                    },
+                    "priority": 4,
+                    "requires_approval": "TechLeadSWEA",
+                    "technical_requirements": {
+                        "rest_compliance": "strict",
+                        "error_handling": "comprehensive",
+                        "documentation": "openapi_complete",
+                    },
+                    "quality_criteria": [
+                        "api_design_standards",
+                        "error_handling_completeness",
+                        "business_operation_alignment",
+                    ],
+                },
+                {
+                    "swea_agent": "FrontendSWEA",
+                    "task_type": "generate_ui",
+                    "payload": {
+                        "entity": self.entity_name,
+                        "attributes": extracted_attributes,
+                        "context": payload.get("request", ""),
+                        "business_vocabulary": True,
+                        "user_friendly": True,
+                    },
+                    "priority": 5,
+                    "requires_approval": "TechLeadSWEA",
+                    "technical_requirements": {
+                        "usability": "high",
+                        "responsiveness": "mobile_ready",
+                        "accessibility": "wcag_compliant",
+                    },
+                    "quality_criteria": [
+                        "ui_usability",
+                        "business_workflow_alignment",
+                        "error_feedback_quality",
+                    ],
+                },
+                {
+                    "swea_agent": "TestSWEA",
+                    "task_type": "generate_all_tests_with_collaboration",
+                    "payload": {
+                        "entity": self.entity_name,
+                        "attributes": extracted_attributes,
+                        "context": payload.get("request", ""),
+                        "test_types": ["unit", "integration", "api"],
+                        "coverage_target": "comprehensive",
+                    },
+                    "priority": 6,
+                    "requires_approval": "TechLeadSWEA",
+                    "technical_requirements": {
+                        "coverage": "90_percent_minimum",
+                        "test_quality": "production_ready",
+                        "automation": "full",
+                    },
+                    "quality_criteria": [
+                        "test_coverage_validation",
+                        "test_quality_assessment",
+                        "automation_completeness",
+                    ],
+                },
+                {
+                    "swea_agent": "TechLeadSWEA",
+                    "task_type": "review_and_approve",
+                    "payload": {
+                        "entity": self.entity_name,
+                        "context": payload.get("request", ""),
+                        "system_components": ["database", "backend", "frontend", "tests"],
+                        "final_review": True,
+                    },
+                    "priority": 7,
+                    "governance_role": "final_approval",
+                    "technical_requirements": {
+                        "overall_quality": "production_ready",
+                        "integration": "seamless",
+                        "deployment_ready": True,
+                    },
+                    "quality_criteria": [
+                        "system_integration_validation",
+                        "deployment_readiness",
+                        "quality_gates_compliance",
+                    ],
+                },
+            ]
 
-                # TechLeadSWEA coordination and quality gate
-                interpretation["swea_coordination"] = (
-                    [
-                        # First: TechLeadSWEA analyzes requirements and creates technical plan
-                        {
-                            "swea_agent": "TechLeadSWEA",
-                            "task_type": "coordinate_system_generation",
-                            "payload": {
-                                "entity": self.entity_name,
-                                "attributes": extracted_attributes,
-                            },
-                        }
-                    ]
-                    + base_coordination_plan
-                    + [
-                        # Last: TechLeadSWEA reviews and approves the complete system
-                        {
-                            "swea_agent": "TechLeadSWEA",
-                            "task_type": "review_and_approve",
-                            "payload": {
-                                "entity": self.entity_name,
-                                "attributes": extracted_attributes,
-                            },
-                        }
-                    ]
-                )
+            interpretation["swea_coordination"] = coordination_plan
+            interpretation["technical_governance"] = "TechLeadSWEA"
+            interpretation["coordination_strategy"] = "centralized_technical_governance"
 
             return interpretation
 
-        except json.JSONDecodeError:
-            # Fallback with default coordination plan if JSON parsing fails
-            extracted_attributes = self._get_default_attributes()
+        except Exception as e:
+            logger.error("❌ Failed to interpret business request: %s", str(e))
             return {
+                "error": f"Business request interpretation failed: {str(e)}",
                 "entity": self.entity_name,
-                "interpreted_intent": f"Create {self.entity_name} with default attributes",
-                "extracted_attributes": extracted_attributes,
-                "domain_operations": ["create_entity"],
-                "swea_coordination": [
-                    {
-                        "swea_agent": "TechLeadSWEA",
-                        "task_type": "coordinate_system_generation",
-                        "payload": {"entity": self.entity_name, "attributes": extracted_attributes},
-                    },
-                    {
-                        "swea_agent": "DatabaseSWEA",
-                        "task_type": "setup_database",
-                        "payload": {"attributes": extracted_attributes},
-                    },
-                    {
-                        "swea_agent": "BackendSWEA",
-                        "task_type": "generate_model",
-                        "payload": {"attributes": extracted_attributes},
-                    },
-                    {
-                        "swea_agent": "BackendSWEA",
-                        "task_type": "generate_api",
-                        "payload": {"attributes": extracted_attributes},
-                    },
-                    {
-                        "swea_agent": "FrontendSWEA",
-                        "task_type": "generate_ui",
-                        "payload": {"attributes": extracted_attributes},
-                    },
-                    {
-                        "swea_agent": "TestSWEA",
-                        "task_type": "generate_all_tests",
-                        "payload": {"attributes": extracted_attributes},
-                    },
-                    {
-                        "swea_agent": "TechLeadSWEA",
-                        "task_type": "review_and_approve",
-                        "payload": {"entity": self.entity_name, "attributes": extracted_attributes},
-                    },
-                ],
-                "business_vocabulary": [self.entity_name.lower()],
-                "entity_focus": self.entity_name,
-                "json_parse_error": True,
+                "success": False,
             }
 
     def _handle_evolution_request(
@@ -843,51 +637,64 @@ class BaseBae(BaseAgent):
             "entity_focus": self.entity_name,
         }
 
-    def _extract_attributes_from_request(self, business_request: str, prompt: str) -> List[str]:
-        """Extract attributes from request using LLM"""
-        response = self.llm.generate_domain_entity_response(prompt, self.entity_name)
-        cleaned_response = self._clean_json_response(response)
+    def _extract_attributes_from_request(self, request: str) -> List[str]:
+        """Extract attributes from natural language request"""
+        # Simple attribute extraction logic
+        common_attributes = {
+            "name": "name: str",
+            "email": "email: str",
+            "age": "age: int",
+            "phone": "phone: str",
+            "address": "address: str",
+            "birth": "birth_date: date",
+            "grade": "grade_point_average: float",
+            "registration": "registration_number: str",
+            "course": "course: str",
+            "enrollment": "enrollment_date: date",
+        }
 
-        try:
-            new_attributes = json.loads(cleaned_response)
-            if not isinstance(new_attributes, list):
-                new_attributes = ["email: str"]  # Default fallback
-        except json.JSONDecodeError:
-            # Extract attributes manually as fallback
-            new_attributes = []
-            request_lower = business_request.lower()
+        extracted = []
+        request_lower = request.lower()
 
-            # Common attribute patterns
-            if "email" in request_lower:
-                new_attributes.append("email: str")
-            if "age" in request_lower and "add" in request_lower:
-                new_attributes.append("age: int")
-            if "phone" in request_lower:
-                new_attributes.append("phone: str")
-            if "birth" in request_lower and "date" in request_lower:
-                new_attributes.append("birth_date: date")
-            if "gpa" in request_lower:
-                new_attributes.append("gpa: float")
-            if "address" in request_lower:
-                new_attributes.append("address: str")
+        for keyword, attribute in common_attributes.items():
+            if keyword in request_lower:
+                extracted.append(attribute)
 
-            # Generic patterns
-            if "with" in request_lower and not new_attributes:
-                # Extract attribute after "with"
-                words = request_lower.split()
-                try:
-                    with_idx = words.index("with")
-                    if with_idx + 1 < len(words):
-                        attr_name = words[with_idx + 1].replace("_", " ").strip()
-                        if attr_name not in ["student", "entity", "the", "a", "an"]:
-                            new_attributes.append(f"{attr_name}: str")
-                except (ValueError, IndexError):
-                    pass
+        # If no attributes found, use defaults
+        if not extracted:
+            extracted = self._get_default_attributes()
 
-            if not new_attributes:
-                new_attributes = ["email: str"]  # Default fallback
+        return extracted
 
-        return new_attributes
+    def _is_evolution_request(self, request: str) -> bool:
+        """Determine if this is an evolution request"""
+        evolution_keywords = [
+            "add",
+            "modify",
+            "update",
+            "change",
+            "remove",
+            "delete",
+            "include",
+            "extend",
+            "enhance",
+            "alter",
+            "rename",
+        ]
+
+        request_lower = request.lower()
+        return any(keyword in request_lower for keyword in evolution_keywords)
+
+    def _get_default_attributes(self) -> List[str]:
+        """Get default attributes for this entity type"""
+        if self.entity_name.lower() == "student":
+            return ["name: str", "email: str", "age: int"]
+        elif self.entity_name.lower() == "course":
+            return ["name: str", "code: str", "credits: int"]
+        elif self.entity_name.lower() == "teacher":
+            return ["name: str", "email: str", "department: str"]
+        else:
+            return ["name: str", "description: str"]
 
     def _handle_complex_evolution(
         self, business_request: str, context: str, current_attributes: List[str]

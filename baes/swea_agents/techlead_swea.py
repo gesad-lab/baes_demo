@@ -1,9 +1,12 @@
 import json
+import logging
 from datetime import datetime
 from typing import Any, Dict, List
 
 from ..agents.base_agent import BaseAgent
 from ..llm.openai_client import OpenAIClient
+
+logger = logging.getLogger(__name__)
 
 
 class TechLeadSWEA(BaseAgent):
@@ -33,6 +36,11 @@ class TechLeadSWEA(BaseAgent):
         self.swea_performance_metrics = {}
         self.conflict_resolution_history = []
 
+        # Governance history tracking
+        self.coordination_history = {}
+        self.review_history = []
+        self.test_coordination_history = {}
+
     # Supported task identifiers
     _SUPPORTED_TASKS = {
         "coordinate_system_generation": "_coordinate_system_generation",
@@ -46,192 +54,240 @@ class TechLeadSWEA(BaseAgent):
     }
 
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Dispatch task to internal coordination and decision-making methods."""
-        if task not in self._SUPPORTED_TASKS:
-            return self.create_error_response(
-                task,
-                f"Unknown task. Supported tasks: {list(self._SUPPORTED_TASKS.keys())}",
-                "invalid_task",
-            )
-
-        method = getattr(self, self._SUPPORTED_TASKS[task])
-        try:
-            return method(payload)
-        except Exception as e:
-            return self.create_error_response(task, str(e), "execution_error")
+        """Handle technical leadership tasks with comprehensive governance"""
+        if task == "coordinate_system_generation":
+            return self._coordinate_system_generation(payload)
+        elif task == "review_and_approve":
+            return self._review_and_approve(payload)
+        elif task == "resolve_technical_conflict":
+            return self._resolve_technical_conflict(payload)
+        elif task == "coordinate_test_fixes":
+            return self._coordinate_test_fixes(payload)
+        elif task == "make_tech_decision":
+            return self._make_tech_decision(payload)
+        elif task == "assess_system_health":
+            return self._assess_system_health(payload)
+        elif task == "optimize_architecture":
+            return self._optimize_architecture(payload)
+        elif task == "manage_quality_gate":
+            return self._manage_quality_gate(payload)
+        else:
+            return {"error": f"Unknown TechLeadSWEA task: {task}", "success": False}
 
     # ------------------------------------------------------------------
     # Core Coordination Methods
     # ------------------------------------------------------------------
 
     def _coordinate_system_generation(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Coordinate the entire system generation process across all SWEAs."""
-        entity = payload.get("entity", "Unknown")
-        business_requirements = payload.get("business_requirements", {})
-        bae_coordination_plan = payload.get("bae_coordination_plan", [])
+        """Coordinate complete system generation with technical governance"""
+        try:
+            entity = payload.get("entity", "Unknown")
+            attributes = payload.get("attributes", [])
+            context = payload.get("context", "")
+            is_evolution = payload.get("is_evolution", False)
+            business_requirements = payload.get("business_requirements", {})
 
-        # Step 1: Make technical architecture decisions
-        arch_decisions = self._make_architecture_decisions(entity, business_requirements)
+            logger.info("🧠 TechLeadSWEA: Coordinating system generation for %s entity", entity)
 
-        # Step 2: Create detailed SWEA coordination plan
-        enhanced_plan = self._create_enhanced_coordination_plan(
-            bae_coordination_plan, arch_decisions
-        )
+            # Analyze technical requirements and create enhanced coordination plan
+            technical_analysis = self._analyze_technical_requirements(
+                entity, attributes, context, is_evolution
+            )
 
-        # Step 3: Set quality gates and success criteria
-        quality_gates = self._define_quality_gates(entity, business_requirements)
+            # Define quality gates based on business requirements
+            quality_gates = self._define_quality_gates(business_requirements, is_evolution)
 
-        # Step 4: Establish performance and security requirements
-        tech_requirements = self._establish_technical_requirements(entity, business_requirements)
+            # Create enhanced coordination plan with technical governance
+            enhanced_plan = self._create_enhanced_coordination_plan(
+                entity, attributes, context, is_evolution, technical_analysis, quality_gates
+            )
 
-        coordination_result = {
-            "entity": entity,
-            "technical_leader": "TechLeadSWEA",
-            "architecture_decisions": arch_decisions,
-            "enhanced_coordination_plan": enhanced_plan,
-            "quality_gates": quality_gates,
-            "technical_requirements": tech_requirements,
-            "coordination_id": f"coord_{entity}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        }
+            # Store coordination state for tracking
+            coordination_id = f"coord_{entity}_{self._get_timestamp()}"
+            self.coordination_history[coordination_id] = {
+                "entity": entity,
+                "attributes": attributes,
+                "context": context,
+                "is_evolution": is_evolution,
+                "technical_analysis": technical_analysis,
+                "quality_gates": quality_gates,
+                "enhanced_plan": enhanced_plan,
+                "status": "coordinating",
+                "created_at": self._get_timestamp(),
+            }
 
-        # Store coordination plan for tracking
-        self.active_coordination_plans[coordination_result["coordination_id"]] = coordination_result
+            return {
+                "success": True,
+                "data": {
+                    "coordination_id": coordination_id,
+                    "enhanced_coordination_plan": enhanced_plan,
+                    "technical_analysis": technical_analysis,
+                    "quality_gates": quality_gates,
+                    "governance_strategy": "centralized_technical_oversight",
+                    "approval_workflow": "sequential_with_quality_gates",
+                },
+                "message": f"Technical coordination plan established for {entity}",
+                "technical_governance": True,
+            }
 
-        return self.create_success_response("coordinate_system_generation", coordination_result)
+        except Exception as e:
+            logger.error("❌ TechLeadSWEA coordination failed: %s", str(e))
+            return {
+                "success": False,
+                "error": f"Technical coordination failed: {str(e)}",
+                "technical_governance": False,
+            }
 
     def _coordinate_test_fixes(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Coordinate test failure fixes between TestSWEA and other SWEAs."""
-        test_failures = payload.get("test_failures", [])
-        entity = payload.get("entity", "Unknown")
-        coordination_id = payload.get("coordination_id", None)
-
-        fix_coordination_log = []
-        fix_decisions = []
-
-        for failure in test_failures:
-            # Analyze the failure and make technical decision
-            fix_decision = self._analyze_test_failure_and_decide(failure, entity)
-            fix_decisions.append(fix_decision)
-
-            fix_coordination_log.append(
-                f"🔧 TechLead Decision: {fix_decision['issue_type']} → "
-                f"{fix_decision['responsible_swea']} should {fix_decision['recommended_action']}"
+        """Coordinate test failure resolution with SWEA collaboration"""
+        try:
+            entity = payload.get("entity", "Unknown")
+            test_failures = payload.get("test_failures", [])
+            coordination_id = payload.get(
+                "coordination_id", f"test_fix_{entity}_{self._get_timestamp()}"
             )
 
-            # Create specific task for the responsible SWEA
-            swea_task = self._create_swea_fix_task(fix_decision, failure)
-            fix_coordination_log.append(
-                f"📋 Task assigned to {fix_decision['responsible_swea']}: {swea_task['task_description']}"
+            logger.info(
+                "🧠 TechLeadSWEA: Coordinating test fixes for %s (%d failures)",
+                entity,
+                len(test_failures),
             )
 
-        coordination_result = {
-            "entity": entity,
-            "coordination_id": coordination_id,
-            "fix_decisions": fix_decisions,
-            "coordination_log": fix_coordination_log,
-            "total_issues": len(test_failures),
-            "technical_leader_involved": True,
-            "next_steps": self._define_next_steps(fix_decisions),
-        }
+            # Analyze test failures and categorize issues
+            failure_analysis = self._analyze_test_failures(test_failures)
 
-        return self.create_success_response("coordinate_test_fixes", coordination_result)
+            # Create fix decisions with SWEA assignments
+            fix_decisions = self._create_fix_decisions(failure_analysis, entity)
+
+            # Generate coordination log
+            coordination_log = [
+                f"Analyzing {len(test_failures)} test failures for {entity}",
+                f"Identified {len(failure_analysis.get('categories', []))} issue categories",
+                f"Created {len(fix_decisions)} fix decisions",
+                f"Coordination strategy: {failure_analysis.get('strategy', 'sequential_fixes')}",
+            ]
+
+            # Store coordination state
+            self.test_coordination_history[coordination_id] = {
+                "entity": entity,
+                "test_failures": test_failures,
+                "failure_analysis": failure_analysis,
+                "fix_decisions": fix_decisions,
+                "coordination_log": coordination_log,
+                "status": "coordinating_fixes",
+                "created_at": self._get_timestamp(),
+            }
+
+            return {
+                "success": True,
+                "data": {
+                    "coordination_id": coordination_id,
+                    "fix_decisions": fix_decisions,
+                    "failure_analysis": failure_analysis,
+                    "coordination_log": coordination_log,
+                    "estimated_fix_time": self._estimate_fix_time(fix_decisions),
+                },
+                "message": f"Test fix coordination plan created for {entity}",
+                "technical_governance": True,
+            }
+
+        except Exception as e:
+            logger.error("❌ TechLeadSWEA test coordination failed: %s", str(e))
+            return {
+                "success": False,
+                "error": f"Test coordination failed: {str(e)}",
+                "technical_governance": False,
+            }
 
     def _review_and_approve(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Review generated artifacts and approve/reject with technical feedback."""
-        artifacts = payload.get("artifacts", [])
-        entity = payload.get("entity", "Unknown")
-        coordination_id = payload.get("coordination_id", None)
+        """Review SWEA outputs and make approval decisions with quality gate enforcement"""
+        try:
+            entity = payload.get("entity", "Unknown")
+            swea_agent = payload.get("swea_agent", "")
+            task_type = payload.get("task_type", "")
+            result = payload.get("result", {})
+            quality_gates = payload.get("quality_gates", {})
+            final_review = payload.get("final_review", False)
 
-        review_results = []
-        overall_approval = True
-        technical_feedback = []
+            if final_review:
+                return self._conduct_final_system_review(payload)
 
-        for artifact in artifacts:
-            artifact_review = self._review_artifact(artifact, entity)
-            review_results.append(artifact_review)
+            logger.info("🧠 TechLeadSWEA: Reviewing %s.%s for %s", swea_agent, task_type, entity)
 
-            if not artifact_review["approved"]:
-                overall_approval = False
-                technical_feedback.extend(artifact_review["feedback"])
+            # Comprehensive quality assessment
+            quality_assessment = self._assess_component_quality(
+                swea_agent, task_type, result, quality_gates
+            )
 
-        # Generate technical recommendations
-        tech_recommendations = self._generate_technical_recommendations(review_results, entity)
+            # Technical standards compliance check
+            compliance_check = self._check_technical_compliance(swea_agent, task_type, result)
 
-        approval_result = {
-            "entity": entity,
-            "coordination_id": coordination_id,
-            "overall_approval": overall_approval,
-            "artifact_reviews": review_results,
-            "technical_feedback": technical_feedback,
-            "technical_recommendations": tech_recommendations,
-            "quality_score": self._calculate_quality_score(review_results),
-            "next_actions": self._determine_next_actions(overall_approval, technical_feedback),
-        }
+            # Business alignment validation
+            business_alignment = self._validate_business_alignment(entity, result)
 
-        return self.create_success_response("review_and_approve", approval_result)
+            # Overall approval decision
+            overall_approval = (
+                quality_assessment.get("meets_standards", False)
+                and compliance_check.get("compliant", False)
+                and business_alignment.get("aligned", False)
+            )
 
-    def _generate_technical_recommendations(
-        self, review_results: List[Dict[str, Any]], entity: str
-    ) -> List[str]:
-        """Generate technical recommendations based on artifact reviews."""
-        recommendations = []
+            # Generate technical feedback
+            technical_feedback = []
+            if not quality_assessment.get("meets_standards", False):
+                technical_feedback.extend(quality_assessment.get("issues", []))
+            if not compliance_check.get("compliant", False):
+                technical_feedback.extend(compliance_check.get("violations", []))
+            if not business_alignment.get("aligned", False):
+                technical_feedback.extend(business_alignment.get("misalignments", []))
 
-        # Analyze review results for patterns
-        failed_reviews = [r for r in review_results if not r.get("approved", True)]
+            # Calculate quality score
+            quality_score = self._calculate_quality_score(
+                quality_assessment, compliance_check, business_alignment
+            )
 
-        if failed_reviews:
-            recommendations.append("Address quality issues before deployment")
+            # Record review decision
+            review_record = {
+                "entity": entity,
+                "swea_agent": swea_agent,
+                "task_type": task_type,
+                "quality_score": quality_score,
+                "overall_approval": overall_approval,
+                "technical_feedback": technical_feedback,
+                "reviewed_at": self._get_timestamp(),
+                "reviewer": "TechLeadSWEA",
+            }
+            self.review_history.append(review_record)
 
-            # Group issues by type
-            issue_types = {}
-            for review in failed_reviews:
-                for issue in review.get("feedback", []):
-                    issue_type = self._categorize_issue(issue)
-                    if issue_type not in issue_types:
-                        issue_types[issue_type] = []
-                    issue_types[issue_type].append(issue)
+            feedback = []
+            if not quality_assessment.get("meets_standards", False):
+                feedback.extend(quality_assessment.get("issues", []))
+            if not compliance_check.get("compliant", False):
+                feedback.extend(compliance_check.get("violations", []))
+            if not business_alignment.get("aligned", False):
+                feedback.extend(business_alignment.get("misalignments", []))
 
-            # Generate specific recommendations
-            for issue_type, issues in issue_types.items():
-                if issue_type == "code_quality":
-                    recommendations.append(
-                        "Improve code quality: refactor complex methods, add documentation"
-                    )
-                elif issue_type == "security":
-                    recommendations.append(
-                        "Address security concerns: validate inputs, sanitize outputs"
-                    )
-                elif issue_type == "performance":
-                    recommendations.append(
-                        "Optimize performance: add indexes, cache frequently accessed data"
-                    )
-                elif issue_type == "testing":
-                    recommendations.append(
-                        "Enhance test coverage: add edge cases, improve assertions"
-                    )
-        else:
-            recommendations.append("All artifacts meet quality standards")
-            recommendations.append("System ready for deployment")
-            recommendations.append("Consider performance monitoring in production")
+            return {
+                "success": True,
+                "data": {
+                    "overall_approval": overall_approval,
+                    "quality_score": quality_score,
+                    "technical_feedback": technical_feedback,
+                    "entity": entity,
+                    "feedback": feedback,
+                },
+                "message": f"Review completed for {swea_agent}.{task_type}",
+                "technical_governance": True,
+            }
 
-        return recommendations
-
-    def _categorize_issue(self, issue: str) -> str:
-        """Categorize a technical issue for recommendation generation."""
-        issue_lower = issue.lower()
-
-        if any(
-            keyword in issue_lower for keyword in ["security", "validation", "sanitize", "auth"]
-        ):
-            return "security"
-        elif any(
-            keyword in issue_lower for keyword in ["performance", "slow", "optimize", "cache"]
-        ):
-            return "performance"
-        elif any(keyword in issue_lower for keyword in ["test", "coverage", "assertion", "mock"]):
-            return "testing"
-        else:
-            return "code_quality"
+        except Exception as e:
+            logger.error("❌ TechLeadSWEA review failed: %s", str(e))
+            return {
+                "success": False,
+                "error": f"Technical review failed: {str(e)}",
+                "overall_approval": False,
+                "technical_governance": False,
+            }
 
     def _resolve_technical_conflict(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Resolve conflicts between different SWEAs or technical approaches."""
@@ -453,179 +509,158 @@ class TechLeadSWEA(BaseAgent):
         return next_steps
 
     def _create_enhanced_coordination_plan(
-        self, base_plan: List[Dict[str, Any]], arch_decisions: Dict[str, Any]
+        self,
+        entity: str,
+        attributes: List[str],
+        context: str,
+        is_evolution: bool,
+        technical_analysis: Dict[str, Any],
+        quality_gates: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
-        """Enhance the BAE coordination plan with technical requirements."""
-
-        enhanced_plan = []
-
-        for task in base_plan:
-            enhanced_task = {
-                **task,  # Keep original BAE task
-                "technical_requirements": self._get_tech_requirements_for_task(
-                    task, arch_decisions
-                ),
-                "quality_criteria": self._get_quality_criteria_for_task(task, arch_decisions),
-                "dependencies": self._identify_task_dependencies(task, base_plan),
-                "estimated_complexity": self._estimate_task_complexity(task),
-            }
-            enhanced_plan.append(enhanced_task)
-
-        # Add TechLead review task
-        enhanced_plan.append(
+        """Create enhanced coordination plan with technical governance"""
+        base_plan = [
             {
-                "swea_agent": "TechLeadSWEA",
-                "task_type": "review_and_approve",
-                "description": "Technical review and approval of all generated artifacts",
-                "dependencies": [task["swea_agent"] for task in base_plan],
-                "quality_criteria": [
-                    "architecture_compliance",
-                    "performance_standards",
-                    "security_requirements",
-                ],
-            }
-        )
+                "swea_agent": "DatabaseSWEA",
+                "task_type": "setup_database" if not is_evolution else "migrate_schema",
+                "payload": {
+                    "entity": entity,
+                    "attributes": attributes,
+                    "context": context,
+                    "preserve_data": is_evolution,
+                    "business_rules": True,
+                },
+                "priority": 1,
+                "requires_approval": True,
+                "technical_requirements": technical_analysis.get("database_requirements", {}),
+                "quality_criteria": quality_gates.get("business_alignment", {}),
+            },
+            {
+                "swea_agent": "BackendSWEA",
+                "task_type": "generate_model",
+                "payload": {
+                    "entity": entity,
+                    "attributes": attributes,
+                    "context": context,
+                    "domain_focus": True,
+                    "semantic_coherence": True,
+                },
+                "priority": 2,
+                "requires_approval": True,
+                "technical_requirements": technical_analysis.get("api_requirements", {}),
+                "quality_criteria": quality_gates.get("code_quality", {}),
+            },
+            {
+                "swea_agent": "BackendSWEA",
+                "task_type": "generate_api",
+                "payload": {
+                    "entity": entity,
+                    "attributes": attributes,
+                    "context": context,
+                    "crud_operations": True,
+                    "business_vocabulary": True,
+                },
+                "priority": 3,
+                "requires_approval": True,
+                "technical_requirements": technical_analysis.get("api_requirements", {}),
+                "quality_criteria": quality_gates.get("performance", {}),
+            },
+            {
+                "swea_agent": "FrontendSWEA",
+                "task_type": "generate_ui",
+                "payload": {
+                    "entity": entity,
+                    "attributes": attributes,
+                    "context": context,
+                    "business_vocabulary": True,
+                    "user_friendly": True,
+                },
+                "priority": 4,
+                "requires_approval": True,
+                "technical_requirements": technical_analysis.get("ui_requirements", {}),
+                "quality_criteria": quality_gates.get("business_alignment", {}),
+            },
+            {
+                "swea_agent": "TestSWEA",
+                "task_type": "generate_all_tests_with_collaboration",
+                "payload": {
+                    "entity": entity,
+                    "attributes": attributes,
+                    "context": context,
+                    "test_types": ["unit", "integration", "api"],
+                    "coverage_target": "comprehensive",
+                },
+                "priority": 5,
+                "requires_approval": True,
+                "technical_requirements": technical_analysis.get("testing_requirements", {}),
+                "quality_criteria": quality_gates.get("test_coverage", {}),
+            },
+        ]
 
-        return enhanced_plan
+        return base_plan
 
     def _define_quality_gates(
-        self, entity: str, business_requirements: Dict[str, Any]
+        self, business_requirements: Dict[str, Any], is_evolution: bool
     ) -> Dict[str, Any]:
-        """Define quality gates that all artifacts must pass."""
-
+        """Define quality gates based on business requirements"""
         return {
             "code_quality": {
-                "syntax_validation": True,
-                "naming_conventions": True,
-                "documentation_coverage": "> 80%",
-                "complexity_limits": {"cyclomatic": "< 10", "nesting": "< 4"},
+                "min_score": 8.0,
+                "linting": "strict",
+                "formatting": "black_compliant",
+                "complexity": "low_to_medium",
             },
-            "functionality": {
-                "unit_test_coverage": "> 90%",
-                "integration_test_coverage": "> 80%",
-                "all_crud_operations": True,
-                "error_handling": True,
-            },
+            "test_coverage": {"minimum": 85, "target": 95, "critical_paths": 100},
             "performance": {
-                "api_response_time": "< 200ms",
-                "ui_load_time": "< 2s",
-                "database_query_optimization": True,
+                "api_response_time": 200,  # ms
+                "ui_load_time": 2000,  # ms
+                "database_query_time": 100,  # ms
             },
             "security": {
-                "input_validation": True,
-                "sql_injection_prevention": True,
-                "xss_prevention": True,
-                "data_sanitization": True,
+                "input_validation": "comprehensive",
+                "sql_injection_protection": "enabled",
+                "xss_protection": "enabled",
             },
             "business_alignment": {
-                "domain_vocabulary_preserved": True,
-                "business_rules_enforced": True,
-                "semantic_coherence": True,
+                "vocabulary_preservation": "strict",
+                "domain_coherence": "high",
+                "semantic_consistency": "enforced",
             },
         }
 
-    def _establish_technical_requirements(
-        self, entity: str, business_requirements: Dict[str, Any]
+    def _analyze_technical_requirements(
+        self, entity: str, attributes: List[str], context: str, is_evolution: bool
     ) -> Dict[str, Any]:
-        """Establish technical requirements for the system."""
+        """Analyze technical requirements for system generation"""
         return {
-            "scalability": "handle 1000+ concurrent users",
-            "availability": "99.9% uptime",
-            "maintainability": "modular, well-documented code",
-            "testability": "comprehensive test coverage",
-            "security": "secure by design principles",
-        }
-
-    def _get_tech_requirements_for_task(
-        self, task: Dict[str, Any], arch_decisions: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Get specific technical requirements for a task."""
-        swea_agent = task.get("swea_agent", "")
-
-        if "Database" in swea_agent:
-            return {
-                "schema_normalization": arch_decisions.get("database_strategy", "normalized"),
-                "indexing_required": True,
-                "foreign_key_constraints": True,
-            }
-        elif "Backend" in swea_agent:
-            return {
-                "api_pattern": arch_decisions.get("api_pattern", "restful"),
-                "validation_level": "strict",
-                "error_handling": "comprehensive",
-            }
-        elif "Frontend" in swea_agent:
-            return {
-                "ui_pattern": arch_decisions.get("ui_pattern", "component_based"),
-                "responsiveness": "required",
+            "complexity_level": "medium" if len(attributes) <= 5 else "high",
+            "database_requirements": {
+                "tables_needed": 1,
+                "relationships": "minimal" if not is_evolution else "preserve_existing",
+                "indexes": ["primary_key", "business_key"],
+                "constraints": ["not_null", "unique_business_key"],
+            },
+            "api_requirements": {
+                "endpoints": 5,  # CRUD + list
+                "authentication": "basic",
+                "validation": "comprehensive",
+                "error_handling": "production_ready",
+            },
+            "ui_requirements": {
+                "components": ["list", "create", "edit", "delete"],
+                "responsiveness": "mobile_ready",
                 "accessibility": "wcag_aa",
-            }
-        elif "Test" in swea_agent:
-            return {
-                "testing_strategy": arch_decisions.get("testing_strategy", "pyramid"),
-                "coverage_target": "90%",
-                "test_types": ["unit", "integration", "e2e"],
-            }
-
-        return {}
-
-    def _get_quality_criteria_for_task(
-        self, task: Dict[str, Any], arch_decisions: Dict[str, Any]
-    ) -> List[str]:
-        """Get quality criteria that the task output must meet."""
-        swea_agent = task.get("swea_agent", "")
-
-        base_criteria = ["syntax_valid", "follows_naming_conventions", "documented"]
-
-        if "Database" in swea_agent:
-            return base_criteria + ["schema_normalized", "indexes_optimized", "constraints_defined"]
-        elif "Backend" in swea_agent:
-            return base_criteria + [
-                "restful_design",
-                "validation_implemented",
-                "error_handling_complete",
-            ]
-        elif "Frontend" in swea_agent:
-            return base_criteria + ["user_friendly", "responsive_design", "accessibility_compliant"]
-        elif "Test" in swea_agent:
-            return base_criteria + [
-                "comprehensive_coverage",
-                "reliable_execution",
-                "clear_assertions",
-            ]
-
-        return base_criteria
-
-    def _identify_task_dependencies(
-        self, task: Dict[str, Any], all_tasks: List[Dict[str, Any]]
-    ) -> List[str]:
-        """Identify dependencies for a task."""
-        swea_agent = task.get("swea_agent", "")
-        dependencies = []
-
-        # Basic dependency rules
-        if "Backend" in swea_agent:
-            dependencies.append("DatabaseSWEA")
-        elif "Frontend" in swea_agent:
-            dependencies.extend(["DatabaseSWEA", "BackendSWEA"])
-        elif "Test" in swea_agent:
-            dependencies.extend(["DatabaseSWEA", "BackendSWEA", "FrontendSWEA"])
-
-        return dependencies
-
-    def _estimate_task_complexity(self, task: Dict[str, Any]) -> str:
-        """Estimate the complexity of a task."""
-        swea_agent = task.get("swea_agent", "")
-
-        complexity_map = {
-            "DatabaseSWEA": "medium",
-            "BackendSWEA": "high",
-            "FrontendSWEA": "high",
-            "TestSWEA": "medium",
-            "TechLeadSWEA": "low",  # Review tasks are typically lower complexity
+            },
+            "testing_requirements": {
+                "coverage_target": 90,
+                "test_types": ["unit", "integration", "api"],
+                "automation": "full",
+            },
+            "performance_targets": {
+                "api_response": "< 200ms",
+                "ui_load": "< 2s",
+                "database_query": "< 100ms",
+            },
         }
-
-        return complexity_map.get(swea_agent, "medium")
 
     # ------------------------------------------------------------------
     # Helper Methods
@@ -642,13 +677,13 @@ class TechLeadSWEA(BaseAgent):
             "class " in artifact_content or "def " in artifact_content or "@" in artifact_content
         )
         has_documentation = '"""' in artifact_content or "# " in artifact_content
-        follows_naming = entity.lower() in artifact_content.lower()
+        follows_naming_conventions = entity.lower() in artifact_content.lower()
 
         # Calculate approval score
         quality_checks = {
             "syntax_valid": syntax_valid,
             "has_documentation": has_documentation,
-            "follows_naming_conventions": follows_naming,
+            "follows_naming_conventions": follows_naming_conventions,
             "content_length_adequate": len(artifact_content) > 100,
         }
 
@@ -660,7 +695,7 @@ class TechLeadSWEA(BaseAgent):
             feedback.append("Improve code syntax and structure")
         if not has_documentation:
             feedback.append("Add comprehensive documentation")
-        if not follows_naming:
+        if not follows_naming_conventions:
             feedback.append(f"Ensure naming conventions include {entity} entity reference")
 
         return {
@@ -671,25 +706,340 @@ class TechLeadSWEA(BaseAgent):
             "feedback": feedback,
         }
 
-    def _calculate_quality_score(self, review_results: List[Dict[str, Any]]) -> float:
-        """Calculate overall quality score from all artifact reviews."""
-        if not review_results:
-            return 0.0
-
-        total_score = sum(result["quality_score"] for result in review_results)
-        return total_score / len(review_results)
-
     def _determine_next_actions(
         self, overall_approval: bool, technical_feedback: List[str]
     ) -> List[str]:
-        """Determine next actions based on review results."""
+        """Determine next actions based on review results"""
         if overall_approval:
-            return ["proceed_to_deployment", "monitor_system_performance", "collect_usage_metrics"]
+            return ["Proceed with deployment", "Monitor system performance"]
         else:
-            return [
-                "address_technical_feedback",
-                "re_submit_for_review",
-                "coordinate_swea_improvements",
-            ] + [
-                f"fix: {feedback}" for feedback in technical_feedback[:3]
-            ]  # Top 3 issues
+            actions = ["Address technical feedback", "Re-run quality gates"]
+            if technical_feedback:
+                actions.extend([f"Fix: {feedback}" for feedback in technical_feedback[:3]])
+            return actions
+
+    def _analyze_test_failures(self, test_failures: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Analyze test failures and categorize issues"""
+        categories = {}
+        strategy = "sequential_fixes"
+
+        for failure in test_failures:
+            category = failure.get("category", "unknown")
+            if category not in categories:
+                categories[category] = []
+            categories[category].append(failure)
+
+        return {
+            "categories": categories,
+            "total_failures": len(test_failures),
+            "strategy": strategy,
+            "priority": "high" if len(test_failures) > 5 else "medium",
+        }
+
+    def _create_fix_decisions(
+        self, failure_analysis: Dict[str, Any], entity: str
+    ) -> List[Dict[str, Any]]:
+        """Create fix decisions with SWEA assignments"""
+        fix_decisions = []
+        categories = failure_analysis.get("categories", {})
+
+        for category, failures in categories.items():
+            if category == "import_error":
+                fix_decisions.append(
+                    {
+                        "issue_type": "import_error",
+                        "responsible_swea": "BackendSWEA",
+                        "recommended_action": "fix_import_paths",
+                        "priority": "high",
+                        "estimated_effort": "low",
+                    }
+                )
+            elif category == "test_execution_failure":
+                fix_decisions.append(
+                    {
+                        "issue_type": "test_execution_failure",
+                        "responsible_swea": "TestSWEA",
+                        "recommended_action": "fix_test_configuration",
+                        "priority": "high",
+                        "estimated_effort": "medium",
+                    }
+                )
+            elif category == "api_error":
+                fix_decisions.append(
+                    {
+                        "issue_type": "api_error",
+                        "responsible_swea": "BackendSWEA",
+                        "recommended_action": "fix_api_endpoints",
+                        "priority": "medium",
+                        "estimated_effort": "medium",
+                    }
+                )
+            else:
+                fix_decisions.append(
+                    {
+                        "issue_type": category,
+                        "responsible_swea": "BackendSWEA",
+                        "recommended_action": "general_fix",
+                        "priority": "medium",
+                        "estimated_effort": "medium",
+                    }
+                )
+
+        return fix_decisions
+
+    def _estimate_fix_time(self, fix_decisions: List[Dict[str, Any]]) -> int:
+        """Estimate total fix time in minutes"""
+        effort_map = {"low": 5, "medium": 15, "high": 30}
+        total_time = 0
+
+        for decision in fix_decisions:
+            effort = decision.get("estimated_effort", "medium")
+            total_time += effort_map.get(effort, 15)
+
+        return total_time
+
+    def _assess_component_quality(
+        self, swea_agent: str, task_type: str, result: Dict[str, Any], quality_gates: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Assess quality of SWEA component output"""
+        meets_standards = True
+        issues = []
+
+        # Basic quality checks
+        if not result.get("success", False):
+            meets_standards = False
+            issues.append("Task execution failed")
+
+        # Agent-specific quality checks
+        if "Backend" in swea_agent:
+            if "generate_model" in task_type and not result.get("data", {}).get("model_code"):
+                meets_standards = False
+                issues.append("Missing model code generation")
+            elif "generate_api" in task_type and not result.get("data", {}).get("api_code"):
+                meets_standards = False
+                issues.append("Missing API code generation")
+
+        elif "Frontend" in swea_agent:
+            if not result.get("data", {}).get("ui_code"):
+                meets_standards = False
+                issues.append("Missing UI code generation")
+
+        elif "Database" in swea_agent:
+            if not result.get("data", {}).get("database_setup"):
+                meets_standards = False
+                issues.append("Missing database setup")
+
+        return {
+            "meets_standards": meets_standards,
+            "issues": issues,
+            "quality_level": "high" if meets_standards else "low",
+        }
+
+    def _check_technical_compliance(
+        self, swea_agent: str, task_type: str, result: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Check technical standards compliance"""
+        compliant = True
+        violations = []
+
+        # Check for basic compliance indicators
+        data = result.get("data", {})
+
+        if "Backend" in swea_agent:
+            # Check for proper code structure
+            if "generate_model" in task_type:
+                model_code = data.get("model_code", "")
+                if "from pydantic import BaseModel" not in model_code:
+                    compliant = False
+                    violations.append("Missing Pydantic BaseModel import")
+
+            elif "generate_api" in task_type:
+                api_code = data.get("api_code", "")
+                if "from fastapi import" not in api_code:
+                    compliant = False
+                    violations.append("Missing FastAPI imports")
+
+        return {
+            "compliant": compliant,
+            "violations": violations,
+            "compliance_level": "high" if compliant else "low",
+        }
+
+    def _validate_business_alignment(self, entity: str, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate business alignment of SWEA output"""
+        try:
+            # Check if result contains expected business vocabulary
+            result_content = str(result).lower()
+            entity_lower = entity.lower()
+
+            # Business vocabulary alignment checks
+            has_entity_reference = entity_lower in result_content
+            follows_naming_convention = entity_lower in result_content and (
+                "model" in result_content or "class" in result_content
+            )
+
+            # Domain-specific vocabulary preservation
+            business_terms = ["create", "read", "update", "delete", "list"]
+            has_business_terms = any(term in result_content for term in business_terms)
+
+            # Semantic coherence check
+            semantic_coherence = has_entity_reference and has_business_terms
+
+            misalignments = []
+            if not has_entity_reference:
+                misalignments.append(f"Missing {entity} entity reference")
+            if not follows_naming_convention:
+                misalignments.append("Naming convention not followed")
+            if not has_business_terms:
+                misalignments.append("Missing business vocabulary terms")
+
+            return {
+                "aligned": len(misalignments) == 0,
+                "alignment_score": 1.0 - (len(misalignments) / 3.0),
+                "misalignments": misalignments,
+                "semantic_coherence": semantic_coherence,
+            }
+
+        except Exception as e:
+            return {
+                "aligned": False,
+                "alignment_score": 0.0,
+                "misalignments": [f"Business alignment validation failed: {str(e)}"],
+                "semantic_coherence": False,
+            }
+
+    def _calculate_quality_score(
+        self,
+        quality_assessment: Dict[str, Any],
+        compliance_check: Dict[str, Any],
+        business_alignment: Dict[str, Any],
+    ) -> float:
+        """Calculate overall quality score"""
+        quality_weight = 0.4
+        compliance_weight = 0.3
+        alignment_weight = 0.3
+
+        quality_score = 1.0 if quality_assessment.get("meets_standards", False) else 0.0
+        compliance_score = 1.0 if compliance_check.get("compliant", False) else 0.0
+        alignment_score = business_alignment.get("alignment_score", 0.0)
+
+        overall_score = (
+            quality_score * quality_weight
+            + compliance_score * compliance_weight
+            + alignment_score * alignment_weight
+        )
+
+        return round(overall_score, 2)
+
+    def _conduct_final_system_review(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Conduct final comprehensive system review"""
+        try:
+            entity = payload.get("entity", "Unknown")
+            execution_results = payload.get("execution_results", [])
+
+            logger.info("🧠 TechLeadSWEA: Conducting final system review for %s", entity)
+
+            # Analyze all execution results
+            overall_success = True
+            component_reviews = []
+
+            for result in execution_results:
+                if result.get("success", False):
+                    component_reviews.append(
+                        {
+                            "component": result.get("task", "unknown"),
+                            "status": "approved",
+                            "quality_score": result.get("quality_score", 0.8),
+                        }
+                    )
+                else:
+                    overall_success = False
+                    component_reviews.append(
+                        {
+                            "component": result.get("task", "unknown"),
+                            "status": "rejected",
+                            "issues": [result.get("error", "Unknown error")],
+                        }
+                    )
+
+            # System integration assessment
+            integration_score = self._assess_system_integration(execution_results)
+
+            # Deployment readiness check
+            deployment_ready = overall_success and integration_score > 0.7
+
+            final_recommendations = []
+            if deployment_ready:
+                final_recommendations.extend(
+                    [
+                        "System meets technical standards for deployment",
+                        "All quality gates passed successfully",
+                        "Recommended for production deployment",
+                    ]
+                )
+            else:
+                final_recommendations.extend(
+                    [
+                        "System requires additional work before deployment",
+                        "Address component issues identified in review",
+                        "Re-run quality gates after fixes",
+                    ]
+                )
+
+            return {
+                "success": True,
+                "data": {
+                    "overall_approval": deployment_ready,
+                    "system_quality_score": integration_score,
+                    "component_reviews": component_reviews,
+                    "deployment_ready": deployment_ready,
+                    "final_recommendations": final_recommendations,
+                    "review_summary": {
+                        "total_components": len(execution_results),
+                        "approved_components": len(
+                            [r for r in component_reviews if r["status"] == "approved"]
+                        ),
+                        "rejected_components": len(
+                            [r for r in component_reviews if r["status"] == "rejected"]
+                        ),
+                    },
+                },
+                "message": f"Final system review completed for {entity}",
+                "technical_governance": True,
+            }
+
+        except Exception as e:
+            logger.error("❌ TechLeadSWEA final review failed: %s", str(e))
+            return {
+                "success": False,
+                "error": f"Final system review failed: {str(e)}",
+                "overall_approval": False,
+                "technical_governance": False,
+            }
+
+    def _assess_system_integration(self, execution_results: List[Dict[str, Any]]) -> float:
+        """Assess overall system integration quality"""
+        if not execution_results:
+            return 0.0
+
+        successful_components = len([r for r in execution_results if r.get("success", False)])
+        total_components = len(execution_results)
+
+        integration_score = successful_components / total_components
+
+        # Bonus for having all core components
+        core_components = ["DatabaseSWEA", "BackendSWEA", "FrontendSWEA"]
+        present_core = [
+            c for c in core_components if any(c in r.get("task", "") for r in execution_results)
+        ]
+
+        if len(present_core) == len(core_components):
+            integration_score += 0.1  # 10% bonus for complete system
+
+        return min(integration_score, 1.0)
+
+    def _get_timestamp(self) -> str:
+        """Get current timestamp"""
+        from datetime import datetime
+
+        return datetime.now().strftime("%Y%m%d_%H%M%S")
