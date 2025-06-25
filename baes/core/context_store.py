@@ -36,7 +36,7 @@ class ContextStore:
         if not os.path.exists(storage_path) or os.path.getsize(storage_path) == 0:
             self._save_to_storage()
 
-        logger.info(f"ContextStore initialized with storage: {storage_path}")
+        logger.debug(f"ContextStore initialized with storage: {storage_path}")
 
     def store_domain_context(
         self, context_name: str, context_data: Dict[str, Any], entity_focus: str = "Student"
@@ -59,7 +59,7 @@ class ContextStore:
             # Save to persistent storage
             self._save_to_storage()
 
-            logger.info(f"Stored domain context: {context_name} for entity: {entity_focus}")
+            logger.debug(f"Stored domain context: {context_name} for entity: {entity_focus}")
             return True
 
         except Exception as e:
@@ -155,7 +155,7 @@ class ContextStore:
             self.domain_knowledge[entity] = knowledge_entry
             self._save_to_storage()
 
-            logger.info(f"Preserved domain knowledge for entity: {entity}")
+            logger.debug(f"Preserved domain knowledge for entity: {entity}")
             return True
 
         except Exception as e:
@@ -194,7 +194,7 @@ class ContextStore:
                 self.evolution_history.append(evolution_entry)
                 self._save_to_storage()
 
-                logger.info(
+                logger.debug(
                     f"Tracked evolution: {evolution_event.get('entity')} - {evolution_event.get('operation')}"
                 )
                 return True
@@ -216,7 +216,7 @@ class ContextStore:
             if agent_name in self.agent_memories:
                 del self.agent_memories[agent_name]
                 self._save_to_storage()
-                logger.info(f"Cleared memory for agent: {agent_name}")
+                logger.debug(f"Cleared memory for agent: {agent_name}")
                 return True
             return False
         except Exception as e:
@@ -344,7 +344,7 @@ class ContextStore:
             if backup_path:
                 with open(backup_path, "w") as f:
                     json.dump(backup_data, f, indent=2)
-                logger.info(f"Backup saved to: {backup_path}")
+                logger.debug(f"Backup saved to: {backup_path}")
 
             return backup_data
 
@@ -382,7 +382,7 @@ class ContextStore:
             # Save restored data to storage
             self._save_to_storage()
 
-            logger.info(f"Successfully restored from backup: {backup_path}")
+            logger.debug(f"Successfully restored from backup: {backup_path}")
             return True
 
         except Exception as e:
@@ -405,7 +405,7 @@ class ContextStore:
             self.business_vocabularies[vocab_key] = vocab_entry
             self._save_to_storage()
 
-            logger.info(f"Stored business vocabulary for {context}/{entity_focus}")
+            logger.debug(f"Stored business vocabulary for {context}/{entity_focus}")
             return True
 
         except Exception as e:
@@ -444,7 +444,7 @@ class ContextStore:
             self.entity_relationships[relationship_key] = relationship_data
             self._save_to_storage()
 
-            logger.info(
+            logger.debug(
                 f"Stored relationship: {primary_entity} -> {related_entity} ({relationship_type})"
             )
             return True
@@ -487,7 +487,7 @@ class ContextStore:
             self.evolution_history.append(evolution_entry)
             self._save_to_storage()
 
-            logger.info(f"Recorded evolution: {entity} - {evolution_type}")
+            logger.debug(f"Recorded evolution: {entity} - {evolution_type}")
             return True
 
         except Exception as e:
@@ -532,7 +532,7 @@ class ContextStore:
                 if context_name in self.domain_contexts:
                     del self.domain_contexts[context_name]
                     self._save_to_storage()
-                    logger.info(f"Cleared context: {context_name}")
+                    logger.debug(f"Cleared context: {context_name}")
                 return True
             else:
                 # Clear all
@@ -542,7 +542,7 @@ class ContextStore:
                 self.entity_relationships.clear()
                 self.evolution_history.clear()
                 self._save_to_storage()
-                logger.info("Cleared all contexts")
+                logger.debug("Cleared all contexts")
                 return True
 
         except Exception as e:
@@ -624,9 +624,9 @@ class ContextStore:
                                     "preserved_timestamp": datetime.now().isoformat(),
                                 }
 
-                logger.info("Loaded existing context store data")
+                logger.debug("Loaded existing context store data")
             else:
-                logger.info("No existing context store found, starting fresh")
+                logger.debug("No existing context store found, starting fresh")
 
         except Exception as e:
             logger.error(f"Failed to load context store: {str(e)}")

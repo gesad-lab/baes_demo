@@ -103,6 +103,9 @@ class BAEConversationalCLI:
         else:
             self._clear_session()
 
+        # restart the servers
+        self._restart_servers()
+
         while True:
             try:
                 user_input = self.get_user_input()
@@ -212,11 +215,7 @@ class BAEConversationalCLI:
 
         if managed_system_path.exists():
             print(f"🗑️  Removing managed system directory: {managed_system_path}")
-            try:
-                shutil.rmtree(managed_system_path)
-                print("✅ Managed system directory removed")
-            except Exception as e:
-                print(f"⚠️  Could not remove managed system directory: {e}")
+            shutil.rmtree(managed_system_path)
 
         # Reset system state
         self.current_system_state = {
@@ -612,8 +611,6 @@ class BAEConversationalCLI:
 
     def _restart_servers(self):
         """Restart the generated system servers"""
-        print("🔄 Restarting servers...")
-
         # Kill existing servers on our ports
         self._kill_servers_on_ports()
 
@@ -630,7 +627,7 @@ class BAEConversationalCLI:
             return
 
         # Start servers directly using ManagedSystemManager
-        print("🚀 Starting fresh server instances...")
+        # print("🚀 Starting fresh server instances...")
         try:
             # Ensure structure and files are up to date
             managed_system_manager.ensure_managed_system_structure()
@@ -681,16 +678,15 @@ class BAEConversationalCLI:
                     for pid in pids:
                         if pid:
                             try:
-                                print(f"🔄 Stopping process {pid} on port {port}")
                                 subprocess.run(["kill", "-TERM", pid], timeout=5)
                             except Exception:
                                 # Try force kill if graceful doesn't work
                                 try:
                                     subprocess.run(["kill", "-KILL", pid], timeout=5)
                                 except Exception:
-                                    pass
+                                    raise Exception(f"Could not stop process on port {port}")
             except Exception as e:
-                print(f"⚠️  Could not stop process on port {port}: {e}")
+                raise Exception(f"Could not stop process on port {port}:\n{e}")
 
         self.current_system_state["servers_running"] = False
 
@@ -710,7 +706,7 @@ class BAEConversationalCLI:
             print(f"🎨 Streamlit: http://localhost:{self.current_system_state['ui_port']}")
             return
 
-        print("🚀 Starting server instances...")
+        # print("🚀 Starting server instances...")
         try:
             # Ensure structure and files are up to date
             managed_system_manager.ensure_managed_system_structure()

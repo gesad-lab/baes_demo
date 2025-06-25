@@ -23,7 +23,7 @@ class BaseAgent(ABC):
         self.creation_time = datetime.now()
         self.interaction_count = 0
 
-        logger.info(f"Initialized {agent_type} agent: {name} with role: {role}")
+        logger.debug(f"Initialized {agent_type} agent: {name} with role: {role}")
 
     @abstractmethod
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -75,10 +75,10 @@ class BaseAgent(ABC):
         if key:
             if key in self.memory:
                 del self.memory[key]
-                logger.info(f"{self.name}: Cleared memory key '{key}'")
+                logger.debug(f"{self.name}: Cleared memory key '{key}'")
         else:
             self.memory.clear()
-            logger.info(f"{self.name}: Cleared all memory")
+            logger.debug(f"{self.name}: Cleared all memory")
 
     def log_interaction(
         self,
@@ -114,9 +114,9 @@ class BaseAgent(ABC):
 
         # Log based on success
         if success:
-            logger.info(f"{self.name}: Successfully handled task '{task}'")
+            logger.debug(f"{self.name}: Successfully handled task '{task}'")
         else:
-            logger.error(f"{self.name}: Failed to handle task '{task}': {error_message}")
+            logger.debug(f"{self.name}: Failed to handle task '{task}': {error_message}")
 
     def get_interaction_history(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get interaction history"""

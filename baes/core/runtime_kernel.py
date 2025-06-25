@@ -14,7 +14,7 @@ class RuntimeKernel:
 
     def __init__(self, context_store_path: str = "database/context_store.json"):
         self.enhanced_kernel = EnhancedRuntimeKernel(context_store_path)
-        logger.info("RuntimeKernel initialized with Enhanced BAE support")
+        logger.debug("RuntimeKernel initialized with Enhanced BAE support")
 
     # ------------------------------------------------------------------
     # Public API - Legacy compatibility methods
@@ -23,7 +23,7 @@ class RuntimeKernel:
         self, natural_language_request: str, context: str = "academic", start_servers: bool = True
     ):
         """Legacy compatibility method that delegates to Enhanced Runtime Kernel"""
-        logger.info("📥 Legacy run method - delegating to Enhanced Runtime Kernel")
+        logger.debug("📥 Legacy run method - delegating to Enhanced Runtime Kernel")
 
         result = self.enhanced_kernel.process_natural_language_request(
             natural_language_request, context, start_servers
@@ -35,7 +35,7 @@ class RuntimeKernel:
             )
             return
 
-        logger.info("✅ Legacy run method completed successfully via Enhanced Runtime Kernel")
+        logger.debug("✅ Legacy run method completed successfully via Enhanced Runtime Kernel")
 
     # ------------------------------------------------------------------
     # Legacy Compatibility Properties

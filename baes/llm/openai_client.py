@@ -23,7 +23,7 @@ class OpenAIClient:
     def __init__(self):
         self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        logger.info(f"Initialized OpenAI client with model: {self.model}")
+        logger.debug(f"Initialized OpenAI client with model: {self.model}")
 
     def _extract_json_from_response(self, response: str) -> str:
         """Extract JSON from response that might be wrapped in markdown code blocks"""

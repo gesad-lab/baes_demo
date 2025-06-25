@@ -39,7 +39,7 @@ class BaseBae(BaseAgent):
         # Load previously stored schema if available (for evolution detection after restart)
         self._load_stored_schema()
 
-        logger.info(f"{self.entity_name}BAE initialized with domain keywords: {domain_keywords}")
+        logger.debug(f"{self.entity_name}BAE initialized with domain keywords: {domain_keywords}")
 
     def _load_stored_schema(self):
         """Load previously stored schema from persistent memory for evolution detection"""
@@ -48,7 +48,7 @@ class BaseBae(BaseAgent):
             stored_schema = self.get_memory("current_schema")
             if stored_schema:
                 self.current_schema = stored_schema
-                logger.info(
+                logger.debug(
                     f"📥 Loaded stored schema for {self.entity_name} with {len(stored_schema.get('attributes', []))} attributes"
                 )
                 return
@@ -77,7 +77,7 @@ class BaseBae(BaseAgent):
                         actual_schema = stored_schema
 
                     self.current_schema = actual_schema
-                    logger.info(
+                    logger.debug(
                         f"📥 Restored schema for {self.entity_name} from context store with {len(actual_schema.get('attributes', []))} attributes"
                     )
                     return
@@ -101,7 +101,7 @@ class BaseBae(BaseAgent):
                     self.current_schema = stored_schema
                     # Also store it in memory for future use
                     self.update_memory("current_schema", stored_schema)
-                    logger.info(
+                    logger.debug(
                         f"📥 Reconstructed schema for {self.entity_name} from domain knowledge with {len(stored_schema['attributes'])} attributes"
                     )
                     return

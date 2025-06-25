@@ -73,7 +73,7 @@ class EnhancedRuntimeKernel:
 
         self.execution_history = []
 
-        logger.info(
+        logger.debug(
             "Enhanced Runtime Kernel initialized with %d BAEs",
             len(self.bae_registry.get_supported_entities()),
         )
@@ -126,14 +126,14 @@ class EnhancedRuntimeKernel:
         """
         Process natural language request with proper entity routing and error handling
         """
-        logger.info("📥 Processing request: %s", request)
+        logger.debug("📥 Processing request: %s", request)
 
         # Step 1: Entity Recognition using OpenAI
         entity_classification = self.entity_recognizer.recognize_entity(request)
         detected_entity = entity_classification.get("detected_entity", "unknown")
         confidence = entity_classification.get("confidence", 0.0)
 
-        logger.info("🔍 Entity detection: %s (confidence: %.2f)", detected_entity, confidence)
+        logger.debug("🔍 Entity detection: %s (confidence: %.2f)", detected_entity, confidence)
 
         # Step 2: Check if entity is supported
         if detected_entity == "unknown" or not self.bae_registry.is_entity_supported(
@@ -177,7 +177,7 @@ class EnhancedRuntimeKernel:
         execution_results = []
 
         if coordination_plan:
-            logger.info("⚙️  Executing coordination plan with %d tasks", len(coordination_plan))
+            logger.debug("⚙️  Executing coordination plan with %d tasks", len(coordination_plan))
             try:
                 execution_results = self._execute_coordination_plan(
                     coordination_plan, target_bae, context
@@ -243,7 +243,7 @@ class EnhancedRuntimeKernel:
             )
             if test_execution_result.get("success"):
                 action = "evolution" if is_evolution else "creation"
-                logger.info(
+                logger.debug(
                     "✅ %s tests executed successfully for %s", action.capitalize(), detected_entity
                 )
             else:
@@ -276,7 +276,7 @@ class EnhancedRuntimeKernel:
             "domain_knowledge_preserved": True,
         }
 
-        logger.info("✅ Request processed successfully for %s entity", detected_entity)
+        logger.debug("✅ Request processed successfully for %s entity", detected_entity)
         return result
 
     def _create_unsupported_entity_error(
@@ -322,7 +322,7 @@ class EnhancedRuntimeKernel:
         results = []
 
         # Step 1: TechLeadSWEA analyzes and enhances the coordination plan
-        logger.info("🧠 TechLeadSWEA: Analyzing coordination plan for technical governance")
+        logger.debug("🧠 TechLeadSWEA: Analyzing coordination plan for technical governance")
 
         tech_analysis_payload = {
             "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
@@ -355,7 +355,7 @@ class EnhancedRuntimeKernel:
                     "technical_governance": True,
                 }
             )
-            logger.info("✅ TechLeadSWEA: Technical coordination plan established")
+            logger.debug("✅ TechLeadSWEA: Technical coordination plan established")
         else:
             enhanced_plan = coordination_plan
             quality_gates = {}
@@ -418,7 +418,7 @@ class EnhancedRuntimeKernel:
 
             # Execute task with TechLeadSWEA oversight
             try:
-                logger.info(
+                logger.debug(
                     "🔧 Executing: %s.%s under TechLeadSWEA supervision", swea_agent_name, task_type
                 )
                 result = agent.handle_task(task_type, payload)
@@ -452,7 +452,7 @@ class EnhancedRuntimeKernel:
                                 ),
                             }
                         )
-                        logger.info("✅ TechLeadSWEA approved: %s.%s", swea_agent_name, task_type)
+                        logger.debug("✅ TechLeadSWEA approved: %s.%s", swea_agent_name, task_type)
                     else:
                         # TechLeadSWEA rejected - request fixes
                         feedback = review_result.get("data", {}).get("technical_feedback", [])
@@ -523,7 +523,7 @@ class EnhancedRuntimeKernel:
             )
 
             if final_review.get("data", {}).get("overall_approval", False):
-                logger.info("🎉 TechLeadSWEA: System generation approved and ready for deployment")
+                logger.debug("🎉 TechLeadSWEA: System generation approved and ready for deployment")
             else:
                 logger.warning("⚠️ TechLeadSWEA: System requires additional work before deployment")
 
@@ -548,7 +548,7 @@ class EnhancedRuntimeKernel:
         try:
             self._reload_api_loader()
             self._reload_ui_loader()
-            logger.info("🔄 System components reloaded")
+            logger.debug("🔄 System components reloaded")
         except Exception as e:
             logger.warning("⚠️  Failed to reload components: %s", str(e))
 
@@ -580,7 +580,7 @@ class EnhancedRuntimeKernel:
             self.managed_system_manager.update_system_files()
 
             managed_system_path = self.managed_system_manager.managed_system_path
-            logger.info("🚀 Starting servers from managed system at: %s", managed_system_path)
+            logger.debug("🚀 Starting servers from managed system at: %s", managed_system_path)
 
             # Create log directory for server outputs
             log_dir = managed_system_path / "logs"
@@ -602,10 +602,10 @@ class EnhancedRuntimeKernel:
                         stdout=log_file,
                         stderr=subprocess.STDOUT,
                     )  # nosec B603 B607
-                logger.info("🚀 Servers started using managed system startup script")
+                logger.debug("🚀 Servers started using managed system startup script")
             else:
                 # Fallback to manual server startup with output redirection
-                logger.info(
+                logger.debug(
                     "🔄 Using fallback server startup (managed system startup script not found)"
                 )
 
@@ -627,7 +627,7 @@ class EnhancedRuntimeKernel:
                     subprocess.Popen(
                         api_cmd, cwd=managed_system_path, stdout=api_log, stderr=subprocess.STDOUT
                     )  # nosec B603
-                logger.info(
+                logger.debug(
                     "🚀 FastAPI server started at http://%s:%s (from managed system)",
                     Config.API_HOST,
                     Config.API_PORT,
@@ -658,7 +658,7 @@ class EnhancedRuntimeKernel:
                         subprocess.Popen(
                             ui_cmd, cwd=managed_system_path, stdout=ui_log, stderr=subprocess.STDOUT
                         )  # nosec B603
-                    logger.info(
+                    logger.debug(
                         "🎨 Streamlit UI started at http://%s:%s (from managed system)",
                         Config.UI_HOST,
                         Config.UI_PORT,
@@ -668,18 +668,18 @@ class EnhancedRuntimeKernel:
 
             # Log managed system information
             info = self.managed_system_manager.get_managed_system_info()
-            logger.info(
+            logger.debug(
                 "📊 Managed System Info: %d entities, structure complete: %s",
                 len(info["entities"]),
                 info["structure_complete"],
             )
 
             # Inform user about log files
-            logger.info("📝 Server logs available at: %s", log_dir)
+            logger.debug("📝 Server logs available at: %s", log_dir)
 
         except Exception as e:
             logger.error("❌ Failed to start servers from managed system: %s", str(e))
-            logger.info(
+            logger.debug(
                 "💡 Try running the managed system manually: cd %s && ./start_servers.sh",
                 self.managed_system_manager.managed_system_path,
             )
@@ -783,9 +783,9 @@ class EnhancedRuntimeKernel:
                     fix_decisions = tech_coordination.get("data", {}).get("fix_decisions", [])
                     coordination_log = tech_coordination.get("data", {}).get("coordination_log", [])
 
-                    logger.info("🧠 TechLeadSWEA coordinated %d fix decisions", len(fix_decisions))
+                    logger.debug("🧠 TechLeadSWEA coordinated %d fix decisions", len(fix_decisions))
                     for log_entry in coordination_log:
-                        logger.info("📋 TechLeadSWEA: %s", log_entry)
+                        logger.debug("📋 TechLeadSWEA: %s", log_entry)
 
                     # Execute fixes based on TechLeadSWEA decisions
                     fixes_applied = self._execute_techlead_fix_decisions(
@@ -794,13 +794,13 @@ class EnhancedRuntimeKernel:
 
                     # Re-run tests after fixes
                     if fixes_applied:
-                        logger.info("🔄 Re-running tests after TechLeadSWEA coordinated fixes")
+                        logger.debug("🔄 Re-running tests after TechLeadSWEA coordinated fixes")
                         retry_result = self.test_swea.handle_task("execute_tests", test_payload)
 
                         if retry_result.get("success") and retry_result.get("data", {}).get(
                             "test_execution", {}
                         ).get("success"):
-                            logger.info("✅ Tests passed after TechLeadSWEA coordination")
+                            logger.debug("✅ Tests passed after TechLeadSWEA coordination")
                             success = True
                             test_execution = retry_result.get("data", {}).get("test_execution", {})
                         else:
@@ -846,7 +846,9 @@ class EnhancedRuntimeKernel:
                 recommended_action = decision.get("recommended_action", "")
                 issue_type = decision.get("issue_type", "")
 
-                logger.info("🔧 Applying TechLeadSWEA fix: %s → %s", issue_type, recommended_action)
+                logger.debug(
+                    "🔧 Applying TechLeadSWEA fix: %s → %s", issue_type, recommended_action
+                )
 
                 # Route fix to appropriate SWEA based on TechLeadSWEA decision
                 fix_payload = {
@@ -871,7 +873,7 @@ class EnhancedRuntimeKernel:
                     continue
 
                 if fix_result and fix_result.get("success"):
-                    logger.info("✅ Fix applied successfully by %s", responsible_swea)
+                    logger.debug("✅ Fix applied successfully by %s", responsible_swea)
                     fixes_applied = True
                 else:
                     logger.warning(

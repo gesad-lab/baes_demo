@@ -19,7 +19,7 @@ class EnhancedBAERegistry:
         self.baes: Dict[str, BaseBAE] = {}
         self.metadata: Dict[str, Dict[str, Any]] = {}
         self._initialize_baes()
-        logger.info(f"BAE Registry initialized with {len(self.baes)} entities")
+        logger.debug(f"BAE Registry initialized with {len(self.baes)} entities")
 
     def _initialize_baes(self):
         """Initialize all supported BAEs with their metadata"""
@@ -50,7 +50,7 @@ class EnhancedBAERegistry:
                 "version": "1.0",
                 "last_updated": None,
             }
-            logger.info("StudentBAE initialized successfully")
+            logger.debug("StudentBAE initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize StudentBAE: {e}")
 
@@ -79,7 +79,7 @@ class EnhancedBAERegistry:
                 "version": "1.0",
                 "last_updated": None,
             }
-            logger.info("CourseBAE initialized successfully")
+            logger.debug("CourseBAE initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize CourseBAE: {e}")
 
@@ -108,7 +108,7 @@ class EnhancedBAERegistry:
                 "version": "1.0",
                 "last_updated": None,
             }
-            logger.info("TeacherBAE initialized successfully")
+            logger.debug("TeacherBAE initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize TeacherBAE: {e}")
 
@@ -158,7 +158,7 @@ class EnhancedBAERegistry:
         """Update metadata for specific BAE"""
         if entity_type in self.metadata:
             self.metadata[entity_type][key] = value
-            logger.info(f"Updated {entity_type} BAE metadata: {key} = {value}")
+            logger.debug(f"Updated {entity_type} BAE metadata: {key} = {value}")
 
     def get_registry_summary(self) -> Dict[str, Any]:
         """Get summary of registry status"""

@@ -38,7 +38,7 @@ class GenericBae(BaseAgent):
 
         # Initialize with core domain knowledge
         self._initialize_domain_knowledge()
-        logger.info(
+        logger.debug(
             f"{bae_name} initialized as {primary_entity} entity representative with dynamic adaptation"
         )
 
@@ -108,7 +108,7 @@ class GenericBae(BaseAgent):
         business_request = payload["request"]
         context = payload.get("context", "academic")
 
-        logger.info(f"{self.name} interpreting business request: {business_request}")
+        logger.debug(f"{self.name} interpreting business request: {business_request}")
 
         # Use OpenAI to interpret the business request
         interpretation = self.llm_client.interpret_business_request(business_request, context)
@@ -122,7 +122,7 @@ class GenericBae(BaseAgent):
         # Dynamic entity adaptation based on interpretation
         detected_entity = interpretation.get("entity_focus", self.primary_entity)
         if detected_entity and detected_entity != self.current_entity:
-            logger.info(
+            logger.debug(
                 f"{self.name} adapting from {self.current_entity} to {detected_entity} entity"
             )
             self.current_entity = detected_entity
@@ -173,7 +173,7 @@ class GenericBae(BaseAgent):
         old_entity = self.current_entity
         self.current_entity = new_entity
 
-        logger.info(f"{self.name} adapted from {old_entity} to {new_entity}")
+        logger.debug(f"{self.name} adapted from {old_entity} to {new_entity}")
 
         return self.create_success_response(
             "adapt_entity",
