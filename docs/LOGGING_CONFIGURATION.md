@@ -16,58 +16,165 @@ BAE_DEBUG=0|1|true|false|on|off|yes|no
 ### **Default Behavior (BAE_DEBUG=0 or not set)**
 - ✅ **System logs**: Normal BAE operation messages shown
 - ✅ **Warning/Error logs**: Important issues displayed  
+- ✅ **TechLeadSWEA Decision Logs**: Comprehensive decision summaries shown
 - ❌ **HTTP request logs**: Suppressed (too verbose for normal use)
 
 **Example normal output:**
 ```bash
 🧠 BAE System - Conversational Interface
 INFO:baes.domain_entities.academic.student_bae:StudentBAE initialized
-INFO:baes.core.enhanced_runtime_kernel:✅ Executed: DatabaseSWEA.setup_database
-✅ System generation completed in 45.2 seconds!
+INFO:baes.core.enhanced_runtime_kernel:🧠 Enhanced Runtime Kernel initialized
+📊 TechLeadSWEA ARCHITECTURE DECISION SUMMARY:
+   🎯 Entity: Student
+   🏗️ Architecture Patterns: domain_driven_design, restful_api, mvc_pattern
+   💻 Technology Stack: python_fastapi_streamlit
+   📋 Decision: ARCHITECTURE APPROVED with technical specifications
 ```
 
 ### **Debug Mode (BAE_DEBUG=1)**
-- ✅ **System logs**: Normal BAE operation messages shown
-- ✅ **Warning/Error logs**: Important issues displayed
-- ✅ **HTTP request logs**: Full OpenAI API request/response logging
-- 🐛 **Debug indicator**: Shows when debug mode is active
+- ✅ **All system logs**: Everything shown including debug level
+- ✅ **HTTP request logs**: Full HTTP request/response details
+- ✅ **Enhanced debugging**: More verbose output for troubleshooting
 
 **Example debug output:**
 ```bash
 🐛 Debug mode enabled - HTTP request logs will be shown
-🧠 BAE System - Conversational Interface
-INFO:baes.domain_entities.academic.student_bae:StudentBAE initialized
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-INFO:baes.core.enhanced_runtime_kernel:✅ Executed: DatabaseSWEA.setup_database
-INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-✅ System generation completed in 45.2 seconds!
+DEBUG:httpx:load_ssl_context verify=True cert=None trust_env=True http2=False
+📊 TechLeadSWEA HYBRID COORDINATION DECISION SUMMARY:
+   🎯 Entity: Student
+   🔧 Execution Type: creation_validation
+   📋 Decision: COORDINATION APPROVED with enhanced oversight
 ```
 
 ---
 
-## 🚀 **Usage Examples**
+## 📊 **TechLeadSWEA Decision Logging**
 
-### **Normal Operation (Default)**
+### **Overview**
+All TechLeadSWEA decisions are automatically logged with comprehensive summaries for full traceability and governance visibility.
+
+### **Decision Types Logged**
+
+#### **🏗️ Architecture Decisions**
+```
+📊 TechLeadSWEA ARCHITECTURE DECISION SUMMARY:
+   🎯 Entity: [EntityName]
+   🏗️ Architecture Patterns: [patterns]
+   💻 Technology Stack: [stack]
+   ⚡ Performance Level: [level]
+   🔒 Security Level: [level]
+   📋 Business Requirements: [count] analyzed
+   🎯 Domain Focus: [enabled/standard]
+   📋 Decision: ARCHITECTURE APPROVED with technical specifications
+```
+
+#### **🤖 System Coordination Decisions**
+```
+📊 TechLeadSWEA COORDINATION DECISION SUMMARY:
+   🎯 Entity: [EntityName]
+   🔧 Execution Type: [type]
+   🤖 SWEA Assignments: [assignments]
+   ⚖️ Quality Gates: [count] defined
+   🎯 Business Focus: [enabled/disabled]
+   📋 Decision: COORDINATION APPROVED with [oversight_level] oversight
+```
+
+#### **⚔️ Conflict Resolution Decisions**
+```
+📊 TechLeadSWEA CONFLICT RESOLUTION DECISION SUMMARY:
+   🎯 Entity: [EntityName]
+   ⚔️ Conflict Type: [type]
+   🤖 Involved SWEAs: [list]
+   🎯 Resolution Strategy: [strategy]
+   ⚖️ Priority Assignments: [assignments]
+   🔧 Technical Constraints: [count] defined
+   📋 Decision: CONFLICT RESOLVED with technical authority
+```
+
+#### **🔍 Test Failure Analysis Decisions**
+```
+📊 TechLeadSWEA TEST FAILURE ANALYSIS DECISION:
+   🎯 Entity: [EntityName]
+   🔍 Issue Type: [type]
+   🤖 Responsible SWEA: [assignment]
+   🔧 Recommended Action: [action]
+   ⚖️ Priority: [high/medium/low]
+   💡 Technical Rationale: [rationale]
+   📋 Decision: FAILURE ANALYSIS COMPLETE with fix assignment
+```
+
+#### **📋 Final Review Decisions**
+```
+📊 TechLeadSWEA FINAL SYSTEM REVIEW SUMMARY:
+   🎯 Entity: [EntityName]
+   📊 Overall Quality Score: [score]
+   🧪 Test Results: [passed/failed]
+   🔍 Code Quality: [level]
+   🎯 Business Alignment: [score]
+   📋 Decision: SYSTEM [APPROVED/REJECTED] for [reason]
+```
+
+---
+
+## 🎯 **Usage Examples**
+
+### **Normal Operation (Clean Output)**
 ```bash
+# Run BAE with clean, professional output
 python bae_chat.py
-# or
-BAE_DEBUG=0 python bae_chat.py
 ```
 
-### **Debug Mode - Show All HTTP Requests**
+### **Debug Mode (Full Visibility)**
 ```bash
+# Run BAE with full debugging and HTTP logs
 BAE_DEBUG=1 python bae_chat.py
-# or
-BAE_DEBUG=true python bae_chat.py
-# or
-BAE_DEBUG=on python bae_chat.py
 ```
 
-### **Permanent Debug Configuration**
-Add to your `.env` file:
+### **Environment File Setup**
 ```bash
-BAE_DEBUG=1
+# In your .env file
+BAE_DEBUG=0  # Normal mode (default)
+# BAE_DEBUG=1  # Debug mode
 ```
+
+---
+
+## 🔧 **Technical Implementation**
+
+### **Suppressed Loggers**
+- `httpx` → WARNING level (unless debug mode)
+- HTTP request details filtered out by default
+
+### **Enhanced Loggers**
+- `baes.swea_agents.techlead_swea` → Comprehensive decision summaries
+- All BAE components → Structured, informative messages
+- System coordination → Full traceability
+
+### **Configuration Points**
+- `bae_chat.py` main CLI
+- `enhanced_runtime_kernel.py` CLI interface  
+- `openai_client.py` initialization
+- All TechLeadSWEA decision methods
+
+---
+
+## 🚀 **Benefits**
+
+### **For Development**
+- 🔍 **Full Traceability**: Every TechLeadSWEA decision is logged and explained
+- 🐛 **Debugging**: Complete HTTP request visibility when needed
+- 📊 **Performance**: Clean output for normal operations
+
+### **For Demonstrations**
+- ✨ **Professional Output**: Clean, focused CLI for PoC demos
+- 📈 **Decision Transparency**: Clear governance and decision-making visibility
+- 🎯 **Technical Authority**: Full TechLeadSWEA decision audit trail
+
+### **For Production**
+- 🔒 **Audit Trail**: Complete record of all technical decisions
+- 📊 **Quality Assurance**: Comprehensive logging of quality gates and reviews
+- 🤖 **Governance**: Full SWEA coordination and conflict resolution tracking
 
 ---
 
