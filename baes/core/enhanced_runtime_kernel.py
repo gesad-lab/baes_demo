@@ -5,7 +5,8 @@ import os
 import subprocess  # nosec B404
 import sys
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from collections import defaultdict, deque
 
 from dotenv import load_dotenv
 
@@ -90,6 +91,14 @@ class EnhancedRuntimeKernel:
         self._techlead_swea = None
 
         self.execution_history = []
+
+        # Phase 3: Retry pattern monitoring and prevention
+        self.retry_patterns = defaultdict(lambda: {"count": 0, "last_errors": deque(maxlen=5), "timestamps": deque(maxlen=10)})
+        self.failure_analytics = {
+            "common_failures": defaultdict(int),
+            "recovery_strategies": defaultdict(int),
+            "success_after_retry": defaultdict(int)
+        }
 
         logger.debug(
             "Enhanced Runtime Kernel initialized with %d BAEs",
@@ -519,25 +528,33 @@ class EnhancedRuntimeKernel:
                             "review_and_approve", review_payload
                         )
 
-                        if review_result.get("success") and review_result.get("data", {}).get(
-                            "overall_approval", True
-                        ):
-                            # Task approved - success!
-                            results.append(
-                                {
-                                    "task": f"{swea_agent_name}.{task_type}",
-                                    "success": True,
-                                    "result": result,
-                                    "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
-                                    "technical_review": "approved",
-                                    "quality_score": review_result.get("data", {}).get(
-                                        "quality_score", 0
-                                    ),
-                                    "retry_count": retry_count,
-                                }
-                            )
-                            logger.debug("✅ TechLeadSWEA approved: %s.%s%s", swea_agent_name, task_type, retry_suffix)
-                            task_success = True
+                        if review_result.get("success", False):
+                            overall_approval = review_result.get("data", {}).get("overall_approval", False)
+                            if overall_approval:
+                                # TechLeadSWEA approved
+                                logger.info(
+                                    "✅ TechLeadSWEA approved: %s.%s%s",
+                                    swea_agent_name,
+                                    task_type,
+                                    retry_suffix,
+                                )
+                                
+                                # Phase 3: Track successful retry if this was a retry attempt
+                                if retry_count > 0:
+                                    task_key = f"{swea_agent_name}.{task_type}"
+                                    self.failure_analytics["success_after_retry"][task_key] += 1
+                                    logger.info(f"📈 Success after retry tracked for {task_key} (attempt {retry_count + 1})")
+
+                                results.append(
+                                    {
+                                        "task": f"{swea_agent_name}.{task_type}",
+                                        "success": True,
+                                        "result": result,
+                                        "quality_approved": True,
+                                        "retry_count": retry_count,
+                                    }
+                                )
+                                break  # Success - exit retry loop
                         else:
                             # TechLeadSWEA rejected - prepare for retry or final failure
                             feedback = review_result.get("data", {}).get("technical_feedback", [])
@@ -554,27 +571,50 @@ class EnhancedRuntimeKernel:
                                 logger.info("🔄 Preparing retry %d/%d for %s.%s with feedback", 
                                           retry_count + 1, max_retries, swea_agent_name, task_type)
                                 
+                                # Phase 3: Track retry pattern and get prevention strategy
+                                task_key = f"{swea_agent_name}.{task_type}"
+                                self._track_retry_pattern(task_key, str(feedback), retry_count + 1)
+                                prevention_strategy = self._get_retry_prevention_strategy(task_key)
+                                
+                                logger.debug(f"Prevention strategy for {task_key}: {prevention_strategy['reasoning']}")
+                                
                                 # Add feedback to payload for next retry
                                 payload["techlead_feedback"] = feedback
                                 payload["expected_output"] = self._get_expected_output_for_task(
                                     swea_agent_name, task_type, getattr(coordinating_bae, "entity_name", "Unknown")
                                 )
                                 payload["previous_errors"] = feedback
-                                retry_count += 1
-                            else:
-                                # Max retries reached - raise error to interrupt generation process
-                                logger.error("❌ Max retries reached for %s.%s - execution failed", 
-                                           swea_agent_name, task_type)
                                 
-                                raise MaxRetriesReachedError(
-                                    task_name=f"{swea_agent_name}.{task_type}",
-                                    swea_agent=swea_agent_name,
-                                    task_type=task_type,
-                                    retry_count=retry_count,
-                                    max_retries=max_retries,
-                                    last_error="TechLeadSWEA quality review failed",
-                                    feedback=[]
+                                # Apply prevention strategy (Phase 3)
+                                if prevention_strategy["additional_validation"]:
+                                    payload["force_validation"] = True
+                                    logger.info("🛡️  Applying additional validation for retry")
+                                
+                                if prevention_strategy["use_fallback"]:
+                                    payload["use_fallback_strategy"] = True
+                                    logger.info("🔄 Applying fallback strategy for retry")
+                                
+                                retry_count += 1
+
+                            else:
+                                # Max retries reached - create comprehensive error report
+                                task_key = f"{swea_agent_name}.{task_type}"
+                                self._track_retry_pattern(task_key, "MAX_RETRIES_REACHED", max_retries)
+                                
+                                # Track that we failed even with retries
+                                self.failure_analytics["common_failures"]["max_retries_reached"] += 1
+                                
+                                # Generate monitoring report for this failure
+                                monitoring_report = self._generate_monitoring_report()
+                                logger.error("📊 Retry monitoring report: %s", monitoring_report)
+                                
+                                error_msg = (
+                                    f"Maximum retries ({max_retries}) reached for task '{swea_agent_name}.{task_type}' "
+                                    f"({task_key}). Last error: {str(feedback)}. Generation process interrupted."
                                 )
+                                
+                                logger.error("❌ Max retries reached for %s.%s - execution failed", swea_agent_name, task_type)
+                                raise MaxRetriesReachedError(error_msg)
                     else:
                         # SWEA task execution failed
                         error_msg = result.get("error", "Unknown execution error")
@@ -1049,6 +1089,127 @@ class EnhancedRuntimeKernel:
 - Must implement proper error handling"""
             
         return f"Expected successful execution with proper output format for {swea_agent}.{task_type}"
+
+    def _track_retry_pattern(self, task_key: str, error: str, retry_count: int):
+        """Track retry patterns for monitoring and prevention (Phase 3)"""
+        pattern = self.retry_patterns[task_key]
+        pattern["count"] = retry_count
+        pattern["last_errors"].append(error)
+        pattern["timestamps"].append(datetime.now().isoformat())
+        
+        # Track common failure patterns
+        if "dict" in error and "strip" in error:
+            self.failure_analytics["common_failures"]["dict_strip_error"] += 1
+        elif "JSON" in error and "parse" in error:
+            self.failure_analytics["common_failures"]["json_parse_error"] += 1
+        elif "database" in error.lower() and "table" in error.lower():
+            self.failure_analytics["common_failures"]["database_table_error"] += 1
+        
+        logger.debug(f"Retry pattern tracked for {task_key}: {retry_count} attempts, latest error: {error}")
+
+    def _get_retry_prevention_strategy(self, task_key: str) -> Dict[str, Any]:
+        """Get prevention strategy based on historical retry patterns (Phase 3)"""
+        pattern = self.retry_patterns.get(task_key, {})
+        last_errors = list(pattern.get("last_errors", []))
+        
+        strategy = {
+            "use_fallback": False,
+            "additional_validation": False,
+            "modified_prompt": False,
+            "reasoning": "No specific strategy needed"
+        }
+        
+        # Analyze error patterns
+        if any("dict" in error and "strip" in error for error in last_errors):
+            strategy.update({
+                "additional_validation": True,
+                "reasoning": "Previous dict/strip errors detected - using enhanced validation"
+            })
+        
+        if any("JSON" in error for error in last_errors):
+            strategy.update({
+                "modified_prompt": True,
+                "reasoning": "JSON parsing issues detected - using modified prompt"
+            })
+        
+        if len(last_errors) >= 3:  # Recurring failures
+            strategy.update({
+                "use_fallback": True,
+                "reasoning": "Recurring failures detected - using fallback strategy"
+            })
+        
+        return strategy
+
+    def _validate_llm_response_format(self, response: Dict[str, Any], expected_fields: List[str]) -> bool:
+        """Validate LLM response format to prevent common errors (Phase 3)"""
+        try:
+            # Check required fields exist
+            for field in expected_fields:
+                if field not in response:
+                    logger.warning(f"LLM response missing required field: {field}")
+                    return False
+            
+            # Check attributes field format specifically (prevent dict/strip error)
+            if "attributes" in response:
+                attributes = response["attributes"]
+                if not isinstance(attributes, list):
+                    logger.warning(f"LLM response 'attributes' field is not a list: {type(attributes)}")
+                    return False
+                
+                # Check each attribute for problematic formats
+                for i, attr in enumerate(attributes):
+                    if isinstance(attr, dict):
+                        if "name" not in attr or "type" not in attr:
+                            logger.warning(f"LLM response attribute {i} is dict but missing name/type: {attr}")
+                            return False
+                    elif not isinstance(attr, str):
+                        logger.warning(f"LLM response attribute {i} is neither string nor valid dict: {type(attr)}")
+                        return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"LLM response validation failed: {e}")
+            return False
+
+    def _generate_monitoring_report(self) -> Dict[str, Any]:
+        """Generate monitoring report for retry patterns and failures (Phase 3)"""
+        report = {
+            "timestamp": datetime.now().isoformat(),
+            "retry_patterns": dict(self.retry_patterns),
+            "failure_analytics": dict(self.failure_analytics),
+            "recommendations": []
+        }
+        
+        # Analyze patterns and generate recommendations
+        if self.failure_analytics["common_failures"]["dict_strip_error"] > 0:
+            report["recommendations"].append({
+                "issue": "Dict/strip errors detected",
+                "recommendation": "Ensure all SWEA agents use _validate_interpretation_structure()",
+                "priority": "high"
+            })
+        
+        if self.failure_analytics["common_failures"]["json_parse_error"] > 2:
+            report["recommendations"].append({
+                "issue": "Frequent JSON parsing errors",
+                "recommendation": "Review LLM prompt templates for JSON format guidance",
+                "priority": "medium"
+            })
+        
+        # Check for tasks with high retry counts
+        high_retry_tasks = [
+            task for task, pattern in self.retry_patterns.items() 
+            if pattern["count"] >= 2
+        ]
+        
+        if high_retry_tasks:
+            report["recommendations"].append({
+                "issue": f"High retry counts detected for: {', '.join(high_retry_tasks)}",
+                "recommendation": "Review task implementation and add additional error handling",
+                "priority": "medium"
+            })
+        
+        return report
 
 
 # CLI Interface
