@@ -46,6 +46,7 @@ class DatabaseSWEA(BaseAgent):
         This approach can handle any type of feedback without hardcoded conditions.
         """
         if not feedback:
+            logger.debug(f"DatabaseSWEA: No feedback provided, using original attributes for {entity}")
             return {
                 "attributes": original_attributes,
                 "additional_requirements": [],
@@ -54,6 +55,7 @@ class DatabaseSWEA(BaseAgent):
             }
 
         feedback_text = "\n".join(feedback)
+        logger.debug(f"DatabaseSWEA: Interpreting feedback for {entity}: {feedback_text}")
         
         system_prompt = f"""You are a database design expert helping to interpret feedback for improving a database setup.
 
@@ -81,6 +83,8 @@ GUIDELINES:
 - Consider database best practices (indexes, constraints, relationships)
 - Handle any type of feedback, even unexpected ones
 - If feedback is unclear, make reasonable database design assumptions
+- ALWAYS return valid JSON in the specified format
+- Ensure attributes are simple strings like "name:str" or "email:str"
 """
 
         user_prompt = f"""Based on the feedback provided, what database setup changes should be made for the {entity} entity?
@@ -95,15 +99,18 @@ Please provide the JSON response with database improvements."""
 
         try:
             response = self.llm_client.generate_response(user_prompt, system_prompt)
+            logger.debug(f"DatabaseSWEA: Raw LLM response: {response}")
             
             # Try to parse JSON response
             import json
             try:
                 interpretation = json.loads(response)
                 logger.info(f"DatabaseSWEA interpreted feedback: {interpretation.get('explanation', 'No explanation provided')}")
+                logger.debug(f"DatabaseSWEA: Parsed interpretation: {interpretation}")
                 return interpretation
-            except json.JSONDecodeError:
-                logger.warning(f"DatabaseSWEA could not parse LLM response as JSON: {response}")
+            except json.JSONDecodeError as json_error:
+                logger.warning(f"DatabaseSWEA could not parse LLM response as JSON: {json_error}")
+                logger.warning(f"DatabaseSWEA raw response: {response}")
                 # Fallback: extract attributes from response text
                 return self._extract_attributes_from_text(response, original_attributes)
                 
@@ -140,9 +147,90 @@ Please provide the JSON response with database improvements."""
             "explanation": "Extracted information from text response (JSON parsing failed)"
         }
 
+    def _validate_interpretation_structure(self, interpretation: Dict[str, Any]) -> Dict[str, Any]:
+        """Ensure interpretation has correct structure with proper data types"""
+        validated = {
+            "attributes": [],
+            "additional_requirements": [],
+            "constraints": [],
+            "modifications": [],
+            "explanation": interpretation.get("explanation", "No explanation provided")
+        }
+        
+        # Normalize attributes to consistent string format
+        raw_attributes = interpretation.get("attributes", [])
+        logger.debug(f"DatabaseSWEA: Processing {len(raw_attributes)} attributes with types: {[type(attr) for attr in raw_attributes]}")
+        
+        for attr in raw_attributes:
+            if isinstance(attr, dict):
+                # Convert dict to "name:type" string format
+                name = attr.get("name", "field")
+                typ = attr.get("type", "str")
+                validated["attributes"].append(f"{name}:{typ}")
+                logger.debug(f"DatabaseSWEA: Converted dict attribute to string: {name}:{typ}")
+            elif isinstance(attr, str):
+                validated["attributes"].append(attr)
+            else:
+                # Fallback - convert to string
+                str_attr = str(attr)
+                validated["attributes"].append(str_attr)
+                logger.warning(f"DatabaseSWEA: Converted unexpected attribute type {type(attr)} to string: {str_attr}")
+        
+        # Ensure other fields are lists of strings
+        for field in ["additional_requirements", "constraints", "modifications"]:
+            raw_list = interpretation.get(field, [])
+            validated[field] = [str(item) for item in raw_list if item]
+        
+        logger.debug(f"DatabaseSWEA: Validated interpretation with {len(validated['attributes'])} normalized attributes")
+        return validated
+
+    def _create_fallback_database(self, entity: str, db_file: str) -> Dict[str, Any]:
+        """Create a basic fallback database when interpretation fails"""
+        try:
+            # Create basic table with minimal schema
+            table_name = entity.lower() + "s"
+            basic_columns = [
+                "id INTEGER PRIMARY KEY AUTOINCREMENT",
+                "name TEXT NOT NULL",
+                "email TEXT",
+                "created_at TEXT DEFAULT CURRENT_TIMESTAMP"
+            ]
+            columns_sql_str = ", ".join(basic_columns)
+
+            with sqlite3.connect(db_file) as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
+                cursor.execute(f"CREATE TABLE {table_name} ({columns_sql_str})")
+                conn.commit()
+
+            result = {
+                "database_path": db_file,
+                "table": table_name,
+                "columns": basic_columns,
+                "managed_system": True,
+                "fallback_used": True,
+                "improvements_applied": {
+                    "attributes": ["name:str", "email:str", "created_at:str"],
+                    "additional_requirements": [],
+                    "constraints": [],
+                    "modifications": ["Used fallback schema due to interpretation error"],
+                    "explanation": "Fallback database created with basic schema"
+                }
+            }
+            
+            logger.info(f"DatabaseSWEA: Created fallback database for {entity} at {db_file}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"DatabaseSWEA: Fallback database creation failed: {e}")
+            raise
+
     def _apply_database_improvements(self, interpretation: Dict[str, Any], entity: str, db_file: str) -> Dict[str, Any]:
         """Apply the interpreted improvements to the database setup"""
         try:
+            # Validate and normalize interpretation structure (Phase 1 fix)
+            interpretation = self._validate_interpretation_structure(interpretation)
+            
             attributes = interpretation.get("attributes", [])
             additional_requirements = interpretation.get("additional_requirements", [])
             constraints = interpretation.get("constraints", [])
@@ -155,15 +243,31 @@ Please provide the JSON response with database improvements."""
             columns_sql: List[str] = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
 
             for attr in attributes:
-                if ":" in attr:
-                    name, typ = [p.strip() for p in attr.split(":", 1)]
+                # Robust attribute processing (Phase 1 fix)
+                if isinstance(attr, dict):
+                    # LLM returned structured attribute info
+                    name = attr.get("name", "unknown_field")
+                    typ = attr.get("type", "str")
+                    logger.debug(f"DatabaseSWEA: Processing dict attribute: {name}:{typ}")
+                elif isinstance(attr, str):
+                    # Traditional string format
+                    if ":" in attr:
+                        name, typ = [p.strip() for p in attr.split(":", 1)]
+                    else:
+                        name, typ = attr.strip(), "str"
+                    logger.debug(f"DatabaseSWEA: Processing string attribute: {name}:{typ}")
                 else:
-                    name, typ = attr.strip(), "str"
+                    # Fallback for unexpected formats (Phase 1 fix)
+                    logger.warning(f"DatabaseSWEA: Unexpected attribute format: {attr} (type: {type(attr)})")
+                    name, typ = str(attr), "str"
+                
+                # Sanitize field name
+                name = name.replace(" ", "_").lower()
                 sql_type = type_map.get(typ.replace("Optional[", "").replace("]", ""), "TEXT")
                 columns_sql.append(f"{name} {sql_type}")
 
             columns_sql_str = ", ".join(columns_sql)
-            table_name = entity.lower() + "s"  # simple pluralisation
+            table_name = entity.lower() + "s"
 
             with sqlite3.connect(db_file) as conn:
                 cursor = conn.cursor()
@@ -187,6 +291,7 @@ Please provide the JSON response with database improvements."""
                 "database_path": db_file,
                 "table": table_name,
                 "columns": columns_sql,
+                "tables_created": [table_name],  # Add this for TechLeadSWEA validation
                 "managed_system": True,
                 "improvements_applied": {
                     "attributes": attributes,
@@ -202,7 +307,12 @@ Please provide the JSON response with database improvements."""
             
         except Exception as e:
             logger.error(f"Failed to apply database improvements: {e}")
-            raise
+            logger.error(f"Interpretation data: {interpretation}")
+            logger.error(f"Attribute types: {[type(attr) for attr in interpretation.get('attributes', [])]}")
+            
+            # Provide fallback database creation with basic schema (Phase 1 fix)
+            logger.info("DatabaseSWEA: Attempting fallback database creation...")
+            return self._create_fallback_database(entity, db_file)
 
     # ------------------------------------------------------------------
     def _setup_database(self, payload: Dict[str, Any]) -> Dict[str, Any]:
