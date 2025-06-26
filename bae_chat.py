@@ -754,9 +754,11 @@ class BAEConversationalCLI:
             )
 
             if entity_added:
-                print("\n🔄 New entity detected! Refreshing servers to update web UI...")
-                print("💡 For PoC: Auto-restarting servers to show new entity in web interface")
-
+                # Use presentation logger for clean server restart
+                from baes.utils.presentation_logger import get_presentation_logger
+                presentation_logger = get_presentation_logger()
+                presentation_logger.server_restart("New entity detected")
+                
                 # Auto-restart servers to refresh the UI
                 self._restart_servers()
 

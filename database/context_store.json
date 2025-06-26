@@ -48971,9 +48971,9 @@
         "context": "academic",
         "business_vocabulary": [],
         "domain_operations": [],
-        "timestamp": "20250626_155939"
+        "timestamp": "20250626_162550"
       },
-      "timestamp": "2025-06-26T15:59:39.525929"
+      "timestamp": "2025-06-26T16:25:50.023424"
     },
     "course": {
       "entity": "course",
@@ -49346,5 +49346,5 @@
       "timestamp": "2025-06-24T07:53:36.831276"
     }
   },
-  "last_saved": "2025-06-26T15:59:39.525951"
+  "last_saved": "2025-06-26T16:25:50.023451"
 }

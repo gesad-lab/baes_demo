@@ -19,12 +19,17 @@ from baes.swea_agents.database_swea import DatabaseSWEA
 from baes.swea_agents.frontend_swea import FrontendSWEA
 from baes.swea_agents.techlead_swea import TechLeadSWEA
 from baes.swea_agents.test_swea import TestSWEA
+from baes.utils.presentation_logger import get_presentation_logger, configure_presentation_logging, is_debug_mode
 from config import Config
 
 load_dotenv()
 
+# Configure presentation logging if not in debug mode
+if not is_debug_mode():
+    configure_presentation_logging()
 
 logger = logging.getLogger(__name__)
+presentation_logger = get_presentation_logger()
 
 
 class UnknownSWEAAgentError(Exception):
@@ -527,8 +532,15 @@ class EnhancedRuntimeKernel:
         
         This provides early problem identification and prevents wasted effort on dependent tasks.
         """
-        logger.info("🔄 Executing coordination plan with immediate TechLeadSWEA review (%d tasks)", len(coordination_plan))
+        # Use debug logging for technical details
+        if is_debug_mode():
+            logger.info("🔄 Executing coordination plan with immediate TechLeadSWEA review (%d tasks)", len(coordination_plan))
+        
         results = []
+        entity_name = getattr(coordinating_bae, 'entity_name', 'System')
+        
+        # Start presentation logging
+        presentation_logger.start_generation(entity_name)
 
         # Get max retries from environment
         max_retries = int(os.getenv("BAE_MAX_RETRIES", "3"))
@@ -536,7 +548,13 @@ class EnhancedRuntimeKernel:
         # Sequential execution with immediate review
         for task_index, task in enumerate(coordination_plan):
             task_name = f"{task.get('swea_agent', 'Unknown')}.{task.get('task_type', 'unknown')}"
-            logger.info("🎯 Task %d/%d: %s", task_index + 1, len(coordination_plan), task_name)
+            
+            # Presentation logging for step start
+            presentation_logger.step_start(task_index + 1, len(coordination_plan), task_name)
+            
+            # Debug logging for technical details
+            if is_debug_mode():
+                logger.info("🎯 Task %d/%d: %s", task_index + 1, len(coordination_plan), task_name)
             
             # Validate mandatory attributes for agent communication
             validation_error = self._validate_task_attributes(task)
@@ -577,8 +595,14 @@ class EnhancedRuntimeKernel:
             
             while not task_success and retry_count <= max_retries:
                 try:
+                    # Show retry if this isn't the first attempt
+                    if retry_count > 0:
+                        simplified_name = self._get_simplified_task_name(task_name)
+                        presentation_logger.step_retry(task_index + 1, retry_count, max_retries, simplified_name)
+                    
                     # Execute the SWEA task
-                    logger.info("🔧 Executing %s (attempt %d/%d)", task_name, retry_count + 1, max_retries + 1)
+                    if is_debug_mode():
+                        logger.info("🔧 Executing %s (attempt %d/%d)", task_name, retry_count + 1, max_retries + 1)
                     result = agent.handle_task(task_type, payload)
                     
                     # Check if this is a final review task
@@ -602,7 +626,17 @@ class EnhancedRuntimeKernel:
                         
                         if review_result.get("success") and review_result.get("data", {}).get("overall_approval", False):
                             # Final review approved
-                            logger.info("✅ %s APPROVED by TechLeadSWEA - System ready for deployment", task_name)
+                            quality_score = review_result.get("data", {}).get("system_quality_score", 0.0)
+                            simplified_name = self._get_simplified_task_name(task_name)
+                            
+                            # Presentation logging
+                            presentation_logger.techlead_review(True, simplified_name, quality_score)
+                            presentation_logger.step_success(task_index + 1, simplified_name)
+                            
+                            # Debug logging
+                            if is_debug_mode():
+                                logger.info("✅ %s APPROVED by TechLeadSWEA - System ready for deployment", task_name)
+                            
                             results.append({
                                 "task": task_name,
                                 "success": True,
@@ -610,7 +644,7 @@ class EnhancedRuntimeKernel:
                                 "techlead_approved": True,
                                 "final_review": True,
                                 "deployment_ready": review_result.get("data", {}).get("deployment_ready", False),
-                                "system_quality_score": review_result.get("data", {}).get("system_quality_score", 0.0),
+                                "system_quality_score": quality_score,
                                 "retry_count": retry_count
                             })
                             task_success = True
@@ -668,13 +702,23 @@ class EnhancedRuntimeKernel:
                         
                         if review_result.get("success") and review_result.get("data", {}).get("overall_approval", False):
                             # Task approved by TechLeadSWEA
-                            logger.info("✅ %s APPROVED by TechLeadSWEA", task_name)
+                            quality_score = review_result.get("data", {}).get("quality_score", 0.0)
+                            simplified_name = self._get_simplified_task_name(task_name)
+                            
+                            # Presentation logging
+                            presentation_logger.techlead_review(True, simplified_name, quality_score)
+                            presentation_logger.step_success(task_index + 1, simplified_name, self._extract_task_details(task_name, result))
+                            
+                            # Debug logging
+                            if is_debug_mode():
+                                logger.info("✅ %s APPROVED by TechLeadSWEA", task_name)
+                            
                             results.append({
                                 "task": task_name,
                                 "success": True,
                                 "result": result,
                                 "techlead_approved": True,
-                                "quality_score": review_result.get("data", {}).get("quality_score", 0.0),
+                                "quality_score": quality_score,
                                 "retry_count": retry_count
                             })
                             task_success = True
@@ -683,14 +727,28 @@ class EnhancedRuntimeKernel:
                             # Task rejected by TechLeadSWEA
                             technical_feedback = review_result.get("data", {}).get("technical_feedback", [])
                             feedback_history.extend(technical_feedback)
+                            simplified_name = self._get_simplified_task_name(task_name)
                             
-                            logger.warning("❌ %s REJECTED by TechLeadSWEA (attempt %d/%d)", 
-                                         task_name, retry_count + 1, max_retries + 1)
+                            # Presentation logging
+                            presentation_logger.techlead_review(False, simplified_name)
                             
+                            # Debug logging
+                            if is_debug_mode():
+                                logger.warning("❌ %s REJECTED by TechLeadSWEA (attempt %d/%d)", 
+                                             task_name, retry_count + 1, max_retries + 1)
+                                if technical_feedback:
+                                    logger.warning("📝 TechLeadSWEA feedback:")
+                                    for feedback in technical_feedback:
+                                        logger.warning("   • %s", feedback)
+                            
+                            # Log detailed error for fixing
                             if technical_feedback:
-                                logger.warning("📝 TechLeadSWEA feedback:")
-                                for feedback in technical_feedback:
-                                    logger.warning("   • %s", feedback)
+                                presentation_logger.log_error_for_fixing({
+                                    "task": task_name,
+                                    "retry_count": retry_count + 1,
+                                    "max_retries": max_retries + 1,
+                                    "feedback": technical_feedback
+                                })
                             
                             # Check if we should retry
                             if retry_count < max_retries:
@@ -723,17 +781,34 @@ class EnhancedRuntimeKernel:
                     
                 except Exception as e:
                     last_error = str(e)
-                    logger.error("❌ %s execution failed: %s", task_name, last_error)
+                    simplified_name = self._get_simplified_task_name(task_name)
+                    
+                    # Presentation logging
+                    presentation_logger.step_error(task_index + 1, simplified_name, last_error, retry_count >= max_retries)
+                    
+                    # Debug logging
+                    if is_debug_mode():
+                        logger.error("❌ %s execution failed: %s", task_name, last_error)
+                    
+                    # Log detailed error for fixing
+                    presentation_logger.log_error_for_fixing({
+                        "task": task_name,
+                        "retry_count": retry_count + 1,
+                        "error": last_error,
+                        "exception_type": type(e).__name__
+                    })
                     
                     # Check if we should retry
                     if retry_count < max_retries:
                         retry_count += 1
-                        logger.info("🔄 Retrying %s after execution error (attempt %d/%d)...", 
-                                  task_name, retry_count + 1, max_retries + 1)
+                        if is_debug_mode():
+                            logger.info("🔄 Retrying %s after execution error (attempt %d/%d)...", 
+                                      task_name, retry_count + 1, max_retries + 1)
                     else:
                         # Max retries reached
-                        logger.error("🛑 %s FAILED after %d attempts - stopping coordination plan", 
-                                   task_name, max_retries + 1)
+                        if is_debug_mode():
+                            logger.error("🛑 %s FAILED after %d attempts - stopping coordination plan", 
+                                       task_name, max_retries + 1)
                         results.append({
                             "task": task_name,
                             "success": False,
@@ -747,7 +822,14 @@ class EnhancedRuntimeKernel:
                             last_error, feedback_history
                         )
 
-        logger.info("✅ Coordination plan completed successfully - all %d tasks approved by TechLeadSWEA", len(coordination_plan))
+        # Presentation completion logging
+        successful_tasks = sum(1 for r in results if r.get("success", False))
+        presentation_logger.generation_complete(entity_name, successful_tasks == len(coordination_plan), successful_tasks)
+        
+        # Debug logging
+        if is_debug_mode():
+            logger.info("✅ Coordination plan completed successfully - all %d tasks approved by TechLeadSWEA", len(coordination_plan))
+        
         return results
 
     def _validate_task_attributes(self, task: Dict[str, Any]) -> str:
@@ -1139,6 +1221,58 @@ class EnhancedRuntimeKernel:
     def _get_timestamp(self) -> str:
         """Get current timestamp"""
         return datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    def _get_simplified_task_name(self, task_name: str) -> str:
+        """Convert technical task name to simplified presentation name"""
+        if "coordinate_system_generation" in task_name:
+            return "TechLead Coordination"
+        elif "setup_database" in task_name:
+            return "Database Setup"
+        elif "generate_model" in task_name:
+            return "Model Generation"
+        elif "generate_api" in task_name:
+            return "API Generation"
+        elif "generate_ui" in task_name:
+            return "UI Generation"
+        elif "generate_all_tests" in task_name:
+            return "Test Generation"
+        elif "review_and_approve" in task_name:
+            return "Final Review"
+        else:
+            # Fallback: clean up technical names
+            clean_name = task_name.replace("SWEA.", "").replace("_", " ").title()
+            return clean_name.replace("Swea", "").strip()
+    
+    def _extract_task_details(self, task_name: str, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract simple details from task result for presentation"""
+        details = {}
+        
+        if "setup_database" in task_name:
+            details["database_created"] = True
+        elif "generate_model" in task_name:
+            # Try to extract lines of code from result
+            if result and isinstance(result, dict):
+                content = result.get("model_content", "")
+                if content:
+                    lines = len(content.split('\n')) if content else 0
+                    if lines > 0:
+                        details["model_lines"] = lines
+        elif "generate_api" in task_name:
+            if result and isinstance(result, dict):
+                # Count API endpoints mentioned in result
+                content = str(result.get("api_content", ""))
+                endpoint_count = content.count("@router.") + content.count("def ")
+                if endpoint_count > 0:
+                    details["api_endpoints"] = endpoint_count
+        elif "generate_ui" in task_name:
+            if result and isinstance(result, dict):
+                # Count UI components
+                content = str(result.get("ui_content", ""))
+                component_count = content.count("st.") + content.count("def ")
+                if component_count > 0:
+                    details["ui_components"] = component_count
+        
+        return details
 
     def _get_expected_output_for_task(self, swea_agent: str, task_type: str, entity: str) -> str:
         """Get expected output description for a specific SWEA task to guide retry attempts"""

@@ -11,6 +11,10 @@ from ..llm.openai_client import OpenAIClient
 
 logger = logging.getLogger(__name__)
 
+def is_debug_mode():
+    """Check if debug mode is enabled"""
+    return os.getenv("BAE_DEBUG", "0").lower() in ("1", "true", "on", "yes")
+
 
 class BaseBae(BaseAgent):
     """
@@ -389,9 +393,10 @@ class BaseBae(BaseAgent):
             # Preserve domain knowledge for reusability
             self._update_domain_knowledge(payload.get("request", ""), extracted_attributes)
 
-            logger.info(
-                f"✅ {self.entity_name}BAE: Interpreted request with {len(extracted_attributes)} attributes and {len(coordination_plan)} SWEA tasks"
-            )
+            if is_debug_mode():
+                logger.info(
+                    f"✅ {self.entity_name}BAE: Interpreted request with {len(extracted_attributes)} attributes and {len(coordination_plan)} SWEA tasks"
+                )
 
             return interpretation
 

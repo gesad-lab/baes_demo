@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -7,6 +8,10 @@ from ..agents.base_agent import BaseAgent
 from ..llm.openai_client import OpenAIClient
 
 logger = logging.getLogger(__name__)
+
+def is_debug_mode():
+    """Check if debug mode is enabled"""
+    return os.getenv("BAE_DEBUG", "0").lower() in ("1", "true", "on", "yes")
 
 
 class TechLeadSWEA(BaseAgent):
@@ -90,7 +95,8 @@ class TechLeadSWEA(BaseAgent):
             is_evolution = payload.get("is_evolution", False)
             business_requirements = payload.get("business_requirements", {})
 
-            logger.info("🧠 TechLeadSWEA: Coordinating system generation for %s entity", entity)
+            if is_debug_mode():
+                logger.info("🧠 TechLeadSWEA: Coordinating system generation for %s entity", entity)
 
             # Analyze technical requirements and create enhanced coordination plan
             technical_analysis = self._analyze_technical_requirements(
@@ -2041,10 +2047,12 @@ What's the root cause and how should it be fixed?"""
             rationale: Brief explanation of why this decision was made
             **kwargs: Additional context-specific information
         """
-        logger.info("🧠 TechLeadSWEA %s: %s → %s (%s)", 
-                   decision_type.upper(), entity, decision, rationale)
-        
-        # Log additional context if provided
-        for key, value in kwargs.items():
-            if value is not None:
-                logger.info("   📋 %s: %s", key.replace('_', ' ').title(), value)
+        # Only log technical details in debug mode
+        if is_debug_mode():
+            logger.info("🧠 TechLeadSWEA %s: %s → %s (%s)", 
+                       decision_type.upper(), entity, decision, rationale)
+            
+            # Log additional context if provided
+            for key, value in kwargs.items():
+                if value is not None:
+                    logger.info("   📋 %s: %s", key.replace('_', ' ').title(), value)
