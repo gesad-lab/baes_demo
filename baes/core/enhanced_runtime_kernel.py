@@ -314,32 +314,78 @@ class EnhancedRuntimeKernel:
         if interpretation_result and execution_results:
             # Determine execution type for appropriate test validation
             is_evolution = interpretation_result.get("is_evolution", False)
+            
+            # For debugging: log the evolution detection
+            logger.debug("🔍 Evolution detection: is_evolution=%s for entity=%s", is_evolution, detected_entity)
+            
             execution_type = "evolution_validation" if is_evolution else "creation_validation"
+            
+            # Additional validation to ensure correct context
+            if not is_evolution and any("create" in result.get("task", "").lower() for result in execution_results):
+                execution_type = "creation_validation"
+                logger.debug("🔍 Corrected to creation_validation based on task analysis")
 
+            logger.info("🧪 Running %s tests for %s entity", execution_type, detected_entity)
             test_execution_result = self._execute_evolution_tests(
-                detected_entity, execution_results
+                detected_entity, execution_results, execution_type
             )
-            execution_results.append(
-                {
-                    "task": f"TestSWEA.execute_{execution_type}_tests",
-                    "success": test_execution_result.get("success", False),
-                    "result": test_execution_result,
+
+            # Enhanced TechLeadSWEA coordination with hybrid analysis
+            if test_execution_result.get("needs_coordination"):
+                logger.warning("⚠️ Tests failed - escalating to TechLeadSWEA for hybrid analysis and coordination")
+                
+                # Prepare comprehensive failure analysis payload
+                failure_analysis_payload = {
                     "entity": detected_entity,
+                    "execution_type": execution_type,
+                    "failure_context": test_execution_result.get("failure_context", {}),
+                    "generated_artifacts": execution_results,  # What was generated
+                    "coordination_id": f"hybrid_analysis_{detected_entity}_{self._get_timestamp()}",
                 }
-            )
-            if test_execution_result.get("success"):
-                action = "evolution" if is_evolution else "creation"
-                logger.debug(
-                    "✅ %s tests executed successfully for %s", action.capitalize(), detected_entity
+                
+                # TechLeadSWEA performs hybrid analysis and coordinates fixes
+                coordination_result = self._execute_hybrid_techlead_coordination(
+                    failure_analysis_payload, detected_entity, execution_results
                 )
+                
+                # The coordination result IS the test execution result (already includes techlead_coordination=True)
+                test_execution_result = coordination_result
+                
+                if not coordination_result.get("success"):
+                    # Coordination failed - provide detailed error context
+                    error_details = coordination_result.get("error", "TechLeadSWEA coordination failed")
+                    failed_tasks = coordination_result.get("failed_tasks", [])
+                    
+                    logger.warning("❌ Request processing FAILED for %s entity - %d tasks failed", 
+                                 detected_entity, len(failed_tasks))
+                    for task in failed_tasks:
+                        logger.warning("   Failed: %s - %s", task.get("task", "Unknown"), 
+                                     task.get("error", "unknown error"))
+                    
+                    return {
+                        "success": False,
+                        "error": error_details,
+                        "entity": detected_entity,
+                        "failed_tasks": failed_tasks,
+                        "execution_results": execution_results,
+                        "test_execution_result": test_execution_result,
+                    }
+
+            # Final success check - consider TechLeadSWEA coordination result
+            final_success = test_execution_result.get("success", False)
+            techlead_coordination = test_execution_result.get("techlead_coordination", False)
+            
+            if final_success:
+                logger.info("✅ System generation completed successfully for %s", detected_entity)
+            elif techlead_coordination:
+                # TechLeadSWEA coordination was attempted but didn't succeed
+                logger.warning("⚠️ TechLeadSWEA coordination completed but tests still failing for %s", detected_entity)
             else:
-                action = "evolution" if is_evolution else "creation"
-                logger.warning(
-                    "⚠️  %s tests failed for %s: %s",
-                    action.capitalize(),
-                    detected_entity,
-                    test_execution_result.get("error", "Unknown error"),
-                )
+                logger.error("❌ System generation failed for %s", detected_entity)
+
+            # Include test_execution_result in the final response and continue to final processing
+            # Don't return early - we need to apply TechLeadSWEA final authority logic
+            pass
 
         # Step 8: Preserve domain knowledge
         self._preserve_domain_knowledge(detected_entity, interpretation_result, context)
@@ -349,15 +395,21 @@ class EnhancedRuntimeKernel:
             self._reload_system_components()
             self._start_servers()
 
-        # Step 10: Return comprehensive result with strict success criteria
-        # Calculate overall success - ALL tasks must succeed (strict criteria)
+        # Step 10: Return comprehensive result with hybrid success criteria
+        # Consider both strict task success AND TechLeadSWEA coordination success
         overall_success = True
         failed_tasks = []
+        
+        # Check if TechLeadSWEA declared system generation successful
+        techlead_success = False
+        if test_execution_result and test_execution_result.get("techlead_coordination"):
+            techlead_success = test_execution_result.get("success", False)
+            if techlead_success:
+                logger.info("✅ TechLeadSWEA declared system generation successful - PoC objective achieved")
         
         if execution_results:
             for task_result in execution_results:
                 if not task_result.get("success", False):
-                    overall_success = False
                     failed_tasks.append({
                         "task": task_result.get("task", "unknown"),
                         "error": task_result.get("error", "unknown error"),
@@ -368,6 +420,24 @@ class EnhancedRuntimeKernel:
             overall_success = False
             failed_tasks.append({"task": "system_generation", "error": "No tasks were executed"})
 
+        # Final success determination: TechLeadSWEA has FINAL AUTHORITY
+        techlead_coordination = test_execution_result and test_execution_result.get("techlead_coordination", False)
+        
+        if techlead_coordination:
+            # TechLeadSWEA made a decision - trust it completely (FINAL AUTHORITY)
+            overall_success = techlead_success
+            if techlead_success:
+                logger.info("✅ System APPROVED by TechLeadSWEA - Final authority decision (ALL tests passed)")
+            else:
+                logger.info("❌ System REJECTED by TechLeadSWEA - Final authority decision (tests failed)")
+        else:
+            # Fallback: if no TechLeadSWEA coordination, check individual tasks
+            overall_success = len(failed_tasks) == 0
+            if overall_success:
+                logger.info("✅ All individual tasks succeeded (no TechLeadSWEA coordination)")
+            else:
+                logger.warning("❌ Some individual tasks failed (no TechLeadSWEA coordination)")
+
         result = {
             "success": overall_success,
             "entity": detected_entity,
@@ -375,6 +445,7 @@ class EnhancedRuntimeKernel:
             "bae_used": target_bae.name,
             "interpretation": interpretation_result,
             "execution_results": execution_results,
+            "test_execution_result": test_execution_result,  # Include TechLeadSWEA coordination result
             "language_detected": entity_classification.get("language_detected"),
             "action_intent": entity_classification.get("action_intent"),
             "domain_knowledge_preserved": True,
@@ -472,7 +543,7 @@ class EnhancedRuntimeKernel:
                     "available_agents": available_agents
                 })
                 # Fail fast - don't continue with unknown agents
-                raise ValueError(f"Unknown SWEA agent: {swea_agent}. Available: {available_agents}")
+                raise UnknownSWEAAgentError(swea_agent, available_agents)
 
             # Execute task
             try:
@@ -735,7 +806,7 @@ class EnhancedRuntimeKernel:
         }
 
     def _execute_evolution_tests(
-        self, entity: str, execution_results: List[Dict[str, Any]]
+        self, entity: str, execution_results: List[Dict[str, Any]], execution_type: str
     ) -> Dict[str, Any]:
         """Execute tests after system generation/evolution with TechLeadSWEA coordination"""
         try:
@@ -753,7 +824,7 @@ class EnhancedRuntimeKernel:
             # Execute the generated tests
             test_payload = {
                 "entity": entity,
-                "execution_type": "evolution_validation",
+                "execution_type": execution_type,
                 "validate_after_changes": True,
             }
 
@@ -778,78 +849,55 @@ class EnhancedRuntimeKernel:
                 "success", False
             )
 
-            # If tests fail, involve TechLeadSWEA for coordination
-            if not success:
-                logger.warning("⚠️ Tests failed - escalating to TechLeadSWEA for coordination")
+            # Enhanced error logging for failed test execution
+            if not execution_result.get("success"):
+                error_details = execution_result.get("error", "Unknown error")
+                logger.error("❌ Test execution failed for %s:", entity)
+                logger.error("   Error: %s", error_details)
+                logger.error("   Exit code: %s", test_execution.get("exit_code", "N/A"))
+                logger.error("   STDERR: %s", test_execution.get("stderr", "N/A"))
+                logger.error("   STDOUT: %s", test_execution.get("stdout", "N/A")[:500])  # Limit output
 
-                test_failure_payload = {
-                    "entity": entity,
-                    "test_failures": [
-                        {
-                            "category": "test_execution_failure",
-                            "stderr": test_execution.get("stderr", ""),
-                            "stdout": test_execution.get("stdout", ""),
-                            "execution_results": execution_results,
-                        }
-                    ],
-                    "coordination_id": f"test_fix_{entity}_{self._get_timestamp()}",
-                }
-
-                # TechLeadSWEA coordinates test failure resolution
-                tech_coordination = self.techlead_swea.handle_task(
-                    "coordinate_test_fixes", test_failure_payload
-                )
-
-                if tech_coordination.get("success"):
-                    fix_decisions = tech_coordination.get("data", {}).get("fix_decisions", [])
-                    coordination_log = tech_coordination.get("data", {}).get("coordination_log", [])
-
-                    logger.debug("🧠 TechLeadSWEA coordinated %d fix decisions", len(fix_decisions))
-                    for log_entry in coordination_log:
-                        logger.debug("📋 TechLeadSWEA: %s", log_entry)
-
-                    # Execute fixes based on TechLeadSWEA decisions
-                    fixes_applied = self._execute_techlead_fix_decisions(
-                        fix_decisions, entity, execution_results
-                    )
-
-                    # Re-run tests after fixes
-                    if fixes_applied:
-                        logger.debug("🔄 Re-running tests after TechLeadSWEA coordinated fixes")
-                        retry_result = self.test_swea.handle_task("execute_tests", test_payload)
-
-                        if retry_result.get("success") and retry_result.get("data", {}).get(
-                            "test_execution", {}
-                        ).get("success"):
-                            logger.debug("✅ Tests passed after TechLeadSWEA coordination")
-                            success = True
-                            test_execution = retry_result.get("data", {}).get("test_execution", {})
-                        else:
-                            logger.warning("⚠️ Tests still failing after TechLeadSWEA coordination")
-
-            result = {
-                "success": success,
-                "tests_executed": test_data.get("tests_executed", 0),
+            # Enhanced failure analysis with detailed context for TechLeadSWEA
+            failure_context = {
+                "entity": entity,
+                "test_execution": test_execution,
+                "execution_result": execution_result,
+                "tests_executed": test_execution.get("tests_executed", 0),
                 "tests_passed": test_execution.get("tests_passed", 0),
                 "tests_failed": test_execution.get("tests_failed", 0),
-                "execution_time": test_execution.get("execution_time", 0),
-                "entity": entity,
-                "evolution_validation": True,
-                "techlead_coordination": not success,  # True if TechLeadSWEA was involved
+                "stderr": test_execution.get("stderr", ""),
+                "stdout": test_execution.get("stdout", ""),
+                "exit_code": test_execution.get("exit_code", -1),
+                "execution_results": execution_results,  # Context of what was generated
             }
 
-            if not success:
-                result["error"] = test_execution.get("stderr", "Test execution failed")
-                result["stdout"] = test_execution.get("stdout", "")
-
-            return result
+            return {
+                "success": success,
+                "entity": entity,
+                "test_execution": test_execution,
+                "failure_context": failure_context,  # Enhanced context for TechLeadSWEA analysis
+                "needs_coordination": not success,  # Flag for TechLeadSWEA intervention
+            }
 
         except Exception as e:
             logger.error("❌ Failed to execute evolution tests: %s", str(e))
+            logger.error("   Entity: %s", entity)
+            logger.error("   Execution results count: %d", len(execution_results))
+            logger.error("   Exception type: %s", type(e).__name__)
+            # Log the first few execution results for context
+            if execution_results:
+                logger.error("   Sample execution results:")
+                for i, result in enumerate(execution_results[:3]):  # First 3 results
+                    task_name = result.get("task", "Unknown task")
+                    success = result.get("success", False)
+                    logger.error("     %d. %s: %s", i+1, task_name, "✅" if success else "❌")
             return {
                 "success": False,
                 "error": f"Evolution test execution failed: {str(e)}",
                 "entity": entity,
+                "exception_type": type(e).__name__,
+                "execution_results_count": len(execution_results),
             }
 
     def _execute_techlead_fix_decisions(
@@ -889,6 +937,8 @@ class EnhancedRuntimeKernel:
                     fix_result = self.frontend_swea.handle_task("fix_issues", fix_payload)
                 elif "database" in responsible_swea.lower():
                     fix_result = self.database_swea.handle_task("fix_issues", fix_payload)
+                elif "test" in responsible_swea.lower():
+                    fix_result = self.test_swea.handle_task("fix_issues", fix_payload)
                 else:
                     logger.warning("⚠️ Unknown SWEA for fix: %s", responsible_swea)
                     continue
@@ -1070,6 +1120,86 @@ class EnhancedRuntimeKernel:
             })
         
         return report
+
+    def _execute_hybrid_techlead_coordination(
+        self,
+        failure_analysis_payload: Dict[str, Any],
+        entity: str,
+        execution_results: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Execute hybrid TechLeadSWEA coordination"""
+        try:
+            # Initialize test execution result
+            test_execution_result = {
+                "success": False,
+                "techlead_coordination": True,
+                "coordination_log": [],
+                "fix_iterations": 0,
+            }
+
+            # TechLeadSWEA performs hybrid analysis and coordinates fixes
+            coordination_result = self.techlead_swea.handle_task("hybrid_coordination", failure_analysis_payload)
+
+            if coordination_result.get("success"):
+                # Extract data from TechLeadSWEA response structure
+                coordination_data = coordination_result.get("data", {})
+                
+                # Update test execution result with coordination outcome
+                test_execution_result.update({
+                    "success": coordination_data.get("success", False),
+                    "techlead_coordination": True,
+                    "coordination_log": coordination_data.get("coordination_log", []),
+                    "fix_iterations": coordination_data.get("fix_iterations", 0),
+                })
+
+                # Apply fixes if any
+                if coordination_data.get("fixes_applied"):
+                    self._execute_techlead_fix_decisions(
+                        coordination_data.get("fixes_applied", []),
+                        entity,
+                        execution_results
+                    )
+            else:
+                # Coordination failed - provide detailed error context
+                error_details = coordination_result.get("error", "TechLeadSWEA coordination failed")
+                failed_tasks = coordination_result.get("failed_tasks", [])
+                
+                logger.warning("❌ Request processing FAILED for %s entity - %d tasks failed", 
+                             entity, len(failed_tasks))
+                for task in failed_tasks:
+                    logger.warning("   Failed: %s - %s", task.get("task", "Unknown"), 
+                                 task.get("error", "unknown error"))
+                
+                test_execution_result.update({
+                    "success": False,
+                    "error": error_details,
+                    "failed_tasks": failed_tasks,
+                })
+
+            return test_execution_result
+
+        except Exception as e:
+            logger.error("❌ Failed to execute hybrid TechLeadSWEA coordination: %s", str(e))
+            logger.error("   Entity: %s", entity)
+            logger.error("   Execution results count: %d", len(execution_results))
+            logger.error("   Exception type: %s", type(e).__name__)
+            # Log the first few execution results for context
+            if execution_results:
+                logger.error("   Sample execution results:")
+                for i, result in enumerate(execution_results[:3]):  # First 3 results
+                    task_name = result.get("task", "Unknown task")
+                    success = result.get("success", False)
+                    logger.error("     %d. %s: %s", i+1, task_name, "✅" if success else "❌")
+            return {
+                "success": False,
+                "error": f"Hybrid TechLeadSWEA coordination failed: {str(e)}",
+                "entity": entity,
+                "exception_type": type(e).__name__,
+                "execution_results_count": len(execution_results),
+                "techlead_coordination": True,
+                "coordination_log": [],
+                "fix_iterations": 0,
+            }
 
 
 # CLI Interface

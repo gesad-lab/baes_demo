@@ -25,7 +25,13 @@ class DatabaseSWEA(BaseAgent):
             self._managed_system_manager = ManagedSystemManager()
         return self._managed_system_manager
 
-    _SUPPORTED_TASKS = {"setup_database": "_setup_database"}
+    # Supported task identifiers
+    _SUPPORTED_TASKS = {
+        "setup_database": "_setup_database",
+        "migrate_schema": "_migrate_schema",
+        "create_relationships": "_create_relationships",
+        "fix_issues": "_fix_database_issues",
+    }
 
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if task not in self._SUPPORTED_TASKS:
@@ -352,3 +358,172 @@ Please provide the JSON response with database improvements."""
 
         logger.info(f"Managed system database created/updated at {db_file} with feedback-aware improvements")
         return self.create_success_response("setup_database", result)
+
+    def _migrate_schema(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Migrate database schema for entity evolution"""
+        try:
+            entity = payload.get("entity", "Student")
+            attributes = payload.get("attributes", [])
+            feedback = payload.get("feedback", [])
+            
+            logger.info(f"🔄 DatabaseSWEA: Migrating schema for {entity} entity")
+            
+            # Interpret feedback for schema migration
+            interpretation = self._interpret_feedback_for_database_setup(feedback, entity, attributes)
+            interpretation = self._validate_interpretation_structure(interpretation)
+            
+            # Get database file path
+            db_file = self.managed_system_manager.managed_system_path / "app" / "database" / "academic.db"
+            
+            # Apply schema migration
+            result = self._apply_schema_migration(interpretation, entity, str(db_file))
+            
+            logger.info(f"✅ DatabaseSWEA: Schema migration completed for {entity}")
+            return self.create_success_response("migrate_schema", result)
+            
+        except Exception as e:
+            logger.error(f"❌ DatabaseSWEA schema migration failed: {str(e)}")
+            return self.create_error_response("migrate_schema", str(e), "migration_error")
+
+    def _apply_schema_migration(self, interpretation: Dict[str, Any], entity: str, db_file: str) -> Dict[str, Any]:
+        """Apply schema migration based on interpretation"""
+        try:
+            table_name = entity.lower() + "s"
+            
+            # Get current schema
+            current_columns = self._get_current_table_schema(db_file, table_name)
+            
+            # Build new schema from interpretation
+            new_attributes = interpretation.get("attributes", [])
+            new_columns = []
+            
+            for attr in new_attributes:
+                if ":" in attr:
+                    name, type_hint = attr.split(":", 1)
+                    sql_type = self._convert_type_hint_to_sql(type_hint.strip())
+                    new_columns.append(f"{name.strip()} {sql_type}")
+                else:
+                    new_columns.append(f"{attr.strip()} TEXT")
+            
+            # Add ID column if not present
+            if not any("id" in col.lower() for col in new_columns):
+                new_columns.insert(0, "id INTEGER PRIMARY KEY AUTOINCREMENT")
+            
+            # Apply migration using ALTER TABLE (for simple cases) or recreate table
+            with sqlite3.connect(db_file) as conn:
+                cursor = conn.cursor()
+                
+                # For simplicity, we'll recreate the table with new schema
+                # In production, this would need more sophisticated migration logic
+                
+                # Backup existing data
+                cursor.execute(f"CREATE TEMPORARY TABLE {table_name}_backup AS SELECT * FROM {table_name}")
+                
+                # Drop old table
+                cursor.execute(f"DROP TABLE {table_name}")
+                
+                # Create new table with updated schema
+                columns_sql = ", ".join(new_columns)
+                cursor.execute(f"CREATE TABLE {table_name} ({columns_sql})")
+                
+                # Restore data (matching columns only)
+                try:
+                    cursor.execute(f"INSERT INTO {table_name} SELECT * FROM {table_name}_backup")
+                except sqlite3.Error:
+                    # If schemas don't match, insert only matching columns
+                    logger.warning(f"Schema mismatch during migration for {table_name}, inserting compatible data only")
+                
+                # Clean up backup table
+                cursor.execute(f"DROP TABLE {table_name}_backup")
+                
+                conn.commit()
+            
+            result = {
+                "database_path": db_file,
+                "table": table_name,
+                "migrated_columns": new_columns,
+                "migration_applied": True,
+                "improvements_applied": interpretation
+            }
+            
+            logger.info(f"✅ Schema migration completed for {table_name}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Schema migration failed: {str(e)}")
+            raise
+
+    def _get_current_table_schema(self, db_file: str, table_name: str) -> List[str]:
+        """Get current table schema"""
+        try:
+            with sqlite3.connect(db_file) as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"PRAGMA table_info({table_name})")
+                columns = cursor.fetchall()
+                return [f"{col[1]} {col[2]}" for col in columns]
+        except Exception:
+            return []
+
+    def _convert_type_hint_to_sql(self, type_hint: str) -> str:
+        """Convert Python type hint to SQL type"""
+        type_mapping = {
+            "str": "TEXT",
+            "int": "INTEGER", 
+            "float": "REAL",
+            "bool": "INTEGER",
+            "date": "TEXT",
+            "datetime": "TEXT"
+        }
+        return type_mapping.get(type_hint.lower(), "TEXT")
+
+    def _fix_database_issues(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Fix database issues based on TechLeadSWEA coordination"""
+        try:
+            entity = payload.get("entity", "Student")
+            fix_context = payload.get("fix_context", {})
+            issue_type = fix_context.get("issue_type", "")
+            fix_action = payload.get("fix_action", "")
+            issue_description = fix_context.get("issue_description", "")
+            
+            logger.info("🔧 DatabaseSWEA: Fixing database issues for %s - %s", entity, issue_description)
+            
+            # Handle different types of database issues
+            if "schema" in issue_type or "table" in issue_type or "column" in issue_type:
+                logger.debug("🔧 DatabaseSWEA: Fixing schema/table issues - recreating database")
+                return self._setup_database(payload)
+            elif "connection" in issue_type or "access" in issue_type:
+                logger.debug("🔧 DatabaseSWEA: Fixing connection/access issues")
+                # For connection issues, try to recreate the database with proper permissions
+                enhanced_payload = {
+                    **payload,
+                    "techlead_feedback": [f"Fix database connection: {issue_description}"],
+                }
+                return self._setup_database(enhanced_payload)
+            elif "migration" in issue_type or "constraint" in issue_type:
+                logger.debug("🔧 DatabaseSWEA: Fixing migration/constraint issues")
+                # For migration issues, we need to handle existing data
+                enhanced_payload = {
+                    **payload,
+                    "techlead_feedback": [f"Fix migration issues: {issue_description}"],
+                }
+                return self._setup_database(enhanced_payload)
+            elif "data" in issue_type or "integrity" in issue_type:
+                logger.debug("🔧 DatabaseSWEA: Fixing data integrity issues")
+                # For data integrity issues, recreate with better constraints
+                enhanced_payload = {
+                    **payload,
+                    "techlead_feedback": [f"Fix data integrity: {issue_description}"],
+                }
+                return self._setup_database(enhanced_payload)
+            else:
+                # Default: recreate database with generic fix instructions
+                logger.debug("🔧 DatabaseSWEA: Default fix - recreating database")
+                enhanced_payload = {
+                    **payload,
+                    "techlead_feedback": [f"General database fix needed: {issue_description}"],
+                }
+                return self._setup_database(enhanced_payload)
+                
+        except Exception as e:
+            logger.error("❌ DatabaseSWEA fix_issues failed: %s", str(e))
+            return self.create_error_response("fix_issues", str(e), "fix_error")

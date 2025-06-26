@@ -48756,13 +48756,11 @@
           "entity": "Student",
           "domain": "academic",
           "attributes": [
-            "name: str",
-            "registration_number: str",
-            "course: str"
+            "age: int"
           ],
           "is_evolution": false,
           "request_type": "generation",
-          "business_context": "Create a student entity with basic fields",
+          "business_context": "Create a student management system",
           "semantic_coherence": true,
           "domain_knowledge_preserved": true,
           "swea_coordination": [
@@ -48772,11 +48770,9 @@
               "payload": {
                 "entity": "Student",
                 "attributes": [
-                  "name: str",
-                  "registration_number: str",
-                  "course: str"
+                  "age: int"
                 ],
-                "context": "Create a student entity with basic fields",
+                "context": "Create a student management system",
                 "is_evolution": false,
                 "business_requirements": {
                   "domain_focus": true,
@@ -48806,11 +48802,9 @@
               "payload": {
                 "entity": "Student",
                 "attributes": [
-                  "name: str",
-                  "registration_number: str",
-                  "course: str"
+                  "age: int"
                 ],
-                "context": "Create a student entity with basic fields",
+                "context": "Create a student management system",
                 "preserve_data": false,
                 "business_rules": true
               },
@@ -48833,11 +48827,9 @@
               "payload": {
                 "entity": "Student",
                 "attributes": [
-                  "name: str",
-                  "registration_number: str",
-                  "course: str"
+                  "age: int"
                 ],
-                "context": "Create a student entity with basic fields",
+                "context": "Create a student management system",
                 "domain_focus": true,
                 "semantic_coherence": true
               },
@@ -48860,11 +48852,9 @@
               "payload": {
                 "entity": "Student",
                 "attributes": [
-                  "name: str",
-                  "registration_number: str",
-                  "course: str"
+                  "age: int"
                 ],
-                "context": "Create a student entity with basic fields",
+                "context": "Create a student management system",
                 "crud_operations": true,
                 "business_vocabulary": true
               },
@@ -48887,11 +48877,9 @@
               "payload": {
                 "entity": "Student",
                 "attributes": [
-                  "name: str",
-                  "registration_number: str",
-                  "course: str"
+                  "age: int"
                 ],
-                "context": "Create a student entity with basic fields",
+                "context": "Create a student management system",
                 "business_vocabulary": true,
                 "user_friendly": true
               },
@@ -48914,11 +48902,9 @@
               "payload": {
                 "entity": "Student",
                 "attributes": [
-                  "name: str",
-                  "registration_number: str",
-                  "course: str"
+                  "age: int"
                 ],
-                "context": "Create a student entity with basic fields",
+                "context": "Create a student management system",
                 "test_types": [
                   "unit",
                   "integration",
@@ -48944,7 +48930,7 @@
               "task_type": "review_and_approve",
               "payload": {
                 "entity": "Student",
-                "context": "Create a student entity with basic fields",
+                "context": "Create a student management system",
                 "system_components": [
                   "database",
                   "backend",
@@ -48971,9 +48957,9 @@
         "context": "academic",
         "business_vocabulary": [],
         "domain_operations": [],
-        "timestamp": "20250626_130902"
+        "timestamp": "20250626_150355"
       },
-      "timestamp": "2025-06-26T13:09:02.288910"
+      "timestamp": "2025-06-26T15:03:55.331643"
     },
     "course": {
       "entity": "course",
@@ -49346,5 +49332,5 @@
       "timestamp": "2025-06-24T07:53:36.831276"
     }
   },
-  "last_saved": "2025-06-26T13:09:02.288932"
+  "last_saved": "2025-06-26T15:03:55.331667"
 }

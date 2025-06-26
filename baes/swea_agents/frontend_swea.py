@@ -23,7 +23,14 @@ class FrontendSWEA(BaseAgent):
             self._managed_system_manager = ManagedSystemManager()
         return self._managed_system_manager
 
-    _SUPPORTED_TASKS = {"generate_ui": "_generate_ui"}
+    # Supported task identifiers
+    _SUPPORTED_TASKS = {
+        "generate_ui": "_generate_ui",
+        "generate_forms": "_generate_forms",
+        "generate_dashboard": "_generate_dashboard",
+        "generate_streamlit_app": "_generate_streamlit_app",
+        "fix_issues": "_fix_frontend_issues",
+    }
 
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if task not in self._SUPPORTED_TASKS:
@@ -330,3 +337,55 @@ Please provide the JSON response with UI improvements."""
                 "error": f"UI code generation failed: {str(e)}",
                 "data": {}
             }
+
+    def _fix_frontend_issues(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Fix frontend issues based on TechLeadSWEA coordination"""
+        try:
+            entity = payload.get("entity", "Student")
+            fix_context = payload.get("fix_context", {})
+            issue_type = fix_context.get("issue_type", "")
+            fix_action = payload.get("fix_action", "")
+            issue_description = fix_context.get("issue_description", "")
+            
+            logger.info("🔧 FrontendSWEA: Fixing frontend issues for %s - %s", entity, issue_description)
+            
+            # Handle different types of frontend issues
+            if "ui" in issue_type or "interface" in issue_type or "streamlit" in issue_type:
+                logger.debug("🔧 FrontendSWEA: Regenerating UI due to interface issues")
+                return self._generate_ui(payload)
+            elif "form" in issue_type or "input" in issue_type:
+                logger.debug("🔧 FrontendSWEA: Fixing form/input issues")
+                # Add form-specific improvements to payload
+                enhanced_payload = {
+                    **payload,
+                    "techlead_feedback": [f"Fix form issues: {issue_description}"],
+                }
+                return self._generate_ui(enhanced_payload)
+            elif "display" in issue_type or "layout" in issue_type:
+                logger.debug("🔧 FrontendSWEA: Fixing display/layout issues")
+                # Add layout-specific improvements to payload
+                enhanced_payload = {
+                    **payload,
+                    "techlead_feedback": [f"Fix layout issues: {issue_description}"],
+                }
+                return self._generate_ui(enhanced_payload)
+            elif "component" in issue_type or "widget" in issue_type:
+                logger.debug("🔧 FrontendSWEA: Fixing component/widget issues")
+                # Add component-specific improvements to payload
+                enhanced_payload = {
+                    **payload,
+                    "techlead_feedback": [f"Fix component issues: {issue_description}"],
+                }
+                return self._generate_ui(enhanced_payload)
+            else:
+                # Default: regenerate entire UI with generic fix instructions
+                logger.debug("🔧 FrontendSWEA: Default fix - regenerating UI with generic improvements")
+                enhanced_payload = {
+                    **payload,
+                    "techlead_feedback": [f"General frontend fix needed: {issue_description}"],
+                }
+                return self._generate_ui(enhanced_payload)
+                
+        except Exception as e:
+            logger.error("❌ FrontendSWEA fix_issues failed: %s", str(e))
+            return self.create_error_response("fix_issues", str(e), "fix_error")

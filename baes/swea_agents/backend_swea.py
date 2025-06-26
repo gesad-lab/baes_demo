@@ -31,8 +31,11 @@ class BackendSWEA(BaseAgent):
     _SUPPORTED_TASKS = {
         "generate_model": "_generate_model",
         "generate_api": "_generate_api",
+        "generate_crud": "_generate_crud",
+        "generate_routes": "_generate_routes",
+        "generate_dependencies": "_generate_dependencies",
         "generate_requirements": "_generate_requirements",
-        "fix_dependencies": "_fix_dependencies",
+        "fix_issues": "_fix_backend_issues",
     }
 
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -363,46 +366,101 @@ Please provide the JSON response with backend improvements."""
         )
 
     def _generate_requirements(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate requirements.txt file with necessary dependencies for the managed system."""
-        # entity = payload.get("entity", "Student")  # Currently unused
-        fix_context = payload.get("fix_context", {})
+        """Generate requirements.txt file with all necessary dependencies."""
+        try:
+            entity = payload.get("entity", "Student")
+            feedback = payload.get("feedback", [])
+            fix_context = payload.get("fix_context", {})
 
-        # Analyze what dependencies are needed based on fix context or general requirements
-        required_deps = self._analyze_dependencies(payload, fix_context)
+            logger.info(f"🧠 BackendSWEA: Generating requirements.txt for {entity}")
 
-        # Generate requirements.txt content
-        requirements_content = self._build_requirements_content(required_deps)
+            # Extract dependencies from feedback or fix context
+            dependencies = self._analyze_dependencies(payload, fix_context)
 
-        # Write to managed system
-        file_path = self._write_requirements_to_managed_system(requirements_content)
+            # Add standard dependencies
+            if not dependencies:
+                dependencies = [
+                    "fastapi>=0.104.1",
+                    "uvicorn>=0.24.0",
+                    "pydantic>=2.5.0",
+                    "pydantic[email]>=2.5.0",
+                    "python-multipart>=0.0.6",
+                    "sqlalchemy>=2.0.23",
+                ]
 
-        return self.create_success_response(
-            "generate_requirements",
-            {
-                "file_path": file_path,
-                "dependencies": required_deps,
-                "requirements_content": requirements_content,
-                "managed_system": True,
-                "fix_applied": bool(fix_context),
-            },
-        )
+            # Build requirements content
+            content = self._build_requirements_content(dependencies)
 
-    def _fix_dependencies(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Fix dependency issues identified by TestSWEA."""
-        fix_context = payload.get("fix_context", {})
-        stderr = fix_context.get("test_stderr", "")
+            # Write to managed system
+            file_path = self._write_requirements_to_managed_system(content)
 
-        # Analyze the specific dependency error
-        missing_deps = self._extract_missing_dependencies(stderr)
+            return self.create_success_response(
+                "generate_requirements",
+                {
+                    "file_path": file_path,
+                    "dependencies": dependencies,
+                    "lines_generated": len(dependencies),
+                },
+            )
 
-        # Generate updated requirements
-        return self._generate_requirements(
-            {
-                **payload,
-                "additional_dependencies": missing_deps,
-                "fix_context": fix_context,
-            }
-        )
+        except Exception as e:
+            logger.error(f"❌ BackendSWEA requirements generation failed: {str(e)}")
+            return self.create_error_response("generate_requirements", str(e), "generation_error")
+
+    def _fix_backend_issues(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Fix backend issues based on TechLeadSWEA coordination"""
+        try:
+            entity = payload.get("entity", "Student")
+            fix_context = payload.get("fix_context", {})
+            issue_type = fix_context.get("issue_type", "")
+            fix_action = payload.get("fix_action", "")
+            issue_description = fix_context.get("issue_description", "")
+            
+            logger.info("🔧 BackendSWEA: Fixing backend issues for %s - %s", entity, issue_description)
+            
+            # Handle different types of backend issues
+            if "dependency" in issue_type or "import" in issue_type or "missing" in issue_type:
+                logger.debug("🔧 BackendSWEA: Handling dependency/import issues")
+                return self._generate_requirements(payload)
+            elif "model" in issue_type or "pydantic" in issue_type or "validation" in issue_type:
+                logger.debug("🔧 BackendSWEA: Regenerating model due to validation issues")
+                return self._generate_model(payload)
+            elif "api" in issue_type or "route" in issue_type or "endpoint" in issue_type:
+                logger.debug("🔧 BackendSWEA: Regenerating API due to route issues")
+                return self._generate_api(payload)
+            elif "syntax" in issue_type or "code" in issue_type:
+                logger.debug("🔧 BackendSWEA: Fixing code syntax issues")
+                # For syntax issues, regenerate both model and API
+                model_result = self._generate_model(payload)
+                if model_result.get("success"):
+                    api_result = self._generate_api(payload)
+                    return api_result
+                else:
+                    return model_result
+            else:
+                # Default: regenerate all backend components
+                logger.debug("🔧 BackendSWEA: Default fix - regenerating all backend components")
+                model_result = self._generate_model(payload)
+                if model_result.get("success"):
+                    api_result = self._generate_api(payload)
+                    if api_result.get("success"):
+                        return self.create_success_response(
+                            "fix_issues",
+                            {
+                                "fix_applied": True,
+                                "fix_type": "complete_backend_regeneration",
+                                "model_result": model_result.get("data", {}),
+                                "api_result": api_result.get("data", {}),
+                            }
+                        )
+                    else:
+                        return api_result
+                else:
+                    return model_result
+                    
+        except Exception as e:
+            logger.error("❌ BackendSWEA fix_issues failed: %s", str(e))
+            return self.create_error_response("fix_issues", str(e), "fix_error")
 
     def _analyze_dependencies(
         self, payload: Dict[str, Any], fix_context: Dict[str, Any]

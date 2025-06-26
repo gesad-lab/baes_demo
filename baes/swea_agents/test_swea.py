@@ -1,12 +1,14 @@
 import re
 import subprocess
 import sys
+import logging
 from typing import Any, Dict, List
 
 from ..agents.base_agent import BaseAgent
 from ..core.managed_system_manager import ManagedSystemManager
 from ..llm.openai_client import OpenAIClient
 
+logger = logging.getLogger(__name__)
 
 class TestSWEA(BaseAgent):
     """
@@ -42,6 +44,9 @@ class TestSWEA(BaseAgent):
         "generate_all_tests": "_generate_all_tests_with_collaboration",
         "generate_all_tests_with_collaboration": "_generate_all_tests_with_collaboration",
         "validate_and_fix": "_validate_and_fix_system",
+        "execute_creation_validation_tests": "_execute_tests",
+        "execute_evolution_validation_tests": "_execute_tests",
+        "fix_issues": "_fix_test_issues",
     }
 
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -506,6 +511,61 @@ class TestSWEA(BaseAgent):
             results["overall_success"] = False
 
         return self.create_success_response("generate_all_tests", results)
+
+    def _fix_test_issues(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Fix test issues based on TechLeadSWEA coordination"""
+        try:
+            entity = payload.get("entity", "Student")
+            fix_context = payload.get("fix_context", {})
+            issue_type = fix_context.get("issue_type", "")
+            issue_description = fix_context.get("issue_description", "")
+            
+            logger.info("🔧 TestSWEA: Fixing test issues for %s - %s", entity, issue_description)
+            
+            # Regenerate tests based on the issue type
+            if "test_generation" in issue_type or "missing_tests" in issue_type:
+                logger.debug("🔧 TestSWEA: Regenerating all tests due to test generation issues")
+                return self._generate_all_tests_with_collaboration(payload)
+            elif "test_execution" in issue_type or "execution_failure" in issue_type:
+                logger.debug("🔧 TestSWEA: Re-executing tests due to execution issues")
+                # First try to regenerate tests, then execute
+                generation_result = self._generate_all_tests_with_collaboration(payload)
+                if generation_result.get("success"):
+                    return self._execute_tests(payload)
+                else:
+                    return generation_result
+            elif "dependency" in issue_type:
+                logger.debug("🔧 TestSWEA: Handling dependency issues")
+                # For dependency issues, we need to ensure proper test environment
+                self._ensure_test_environment(entity)
+                return self._generate_all_tests_with_collaboration(payload)
+            else:
+                # Default: regenerate all tests
+                logger.debug("🔧 TestSWEA: Default fix - regenerating all tests")
+                return self._generate_all_tests_with_collaboration(payload)
+                
+        except Exception as e:
+            logger.error("❌ TestSWEA fix_issues failed: %s", str(e))
+            return self.create_error_response("fix_issues", str(e), "fix_error")
+
+    def _ensure_test_environment(self, entity: str):
+        """Ensure proper test environment setup"""
+        try:
+            managed_system_path = self.managed_system_manager.managed_system_path
+            
+            # Ensure tests directory exists
+            tests_dir = managed_system_path / "tests"
+            tests_dir.mkdir(exist_ok=True)
+            
+            # Create __init__.py if it doesn't exist
+            init_file = tests_dir / "__init__.py"
+            if not init_file.exists():
+                init_file.write_text("# Test package initialization\n")
+                
+            logger.debug("✅ TestSWEA: Test environment ensured for %s", entity)
+            
+        except Exception as e:
+            logger.warning("⚠️ TestSWEA: Failed to ensure test environment: %s", str(e))
 
     # ------------------------------------------------------------------
     # Internal helpers (keeping existing methods)

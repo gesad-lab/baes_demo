@@ -41,13 +41,13 @@ class TestEnhancedRuntimeKernel:
 
     def test_unknown_swea_agent_exception_raised(self, kernel):
         """Test that UnknownSWEAAgentError is raised when unknown SWEA agent is requested"""
-        # Mock a coordination plan with an unknown SWEA agent
+        # Mock a coordination plan with an unknown SWEA agent - FIX: Add entity to payload
         coordination_plan = [
             {
                 "swea_agent": "UnknownSWEA",
                 "task_type": "unknown_task",
                 "entity": "Student",
-                "payload": {},
+                "payload": {"entity": "Student", "attributes": ["name:str"]},
             }
         ]
 
@@ -116,19 +116,19 @@ class TestEnhancedRuntimeKernel:
 
     def test_valid_swea_agents_work_correctly(self, kernel):
         """Test that valid SWEA agents (BackendSWEA, FrontendSWEA) work correctly"""
-        # Mock coordination plan with valid SWEA agents
+        # Mock coordination plan with valid SWEA agents - FIX: Add entity to payload
         coordination_plan = [
             {
                 "swea_agent": "BackendSWEA",
                 "task_type": "generate_model",
                 "entity": "Student",
-                "payload": {},
+                "payload": {"entity": "Student", "attributes": ["name:str", "email:str"]},
             },
             {
                 "swea_agent": "FrontendSWEA",
                 "task_type": "generate_ui",
                 "entity": "Student",
-                "payload": {},
+                "payload": {"entity": "Student", "attributes": ["name:str", "email:str"]},
             },
         ]
 
@@ -173,7 +173,7 @@ class TestEnhancedRuntimeKernel:
                     "swea_agent": agent_name,
                     "task_type": "test_task",
                     "entity": "Student",
-                    "payload": {},
+                    "payload": {"entity": "Student", "attributes": ["name:str"]},
                 }
             ]
 
@@ -202,7 +202,7 @@ class TestEnhancedRuntimeKernel:
                 "swea_agent": "BackendSWEA",
                 "task_type": "generate_model",
                 "entity": "Student",
-                "payload": {},
+                "payload": {"entity": "Student", "attributes": ["name:str", "email:str"]},
             }
         ]
 
@@ -219,7 +219,7 @@ class TestEnhancedRuntimeKernel:
         # Verify failure is handled properly
         assert len(results) == 1
         assert results[0]["success"] is False
-        assert "SWEA task execution failed" in results[0]["error"]
+        assert "Task execution failed" in results[0]["error"]
 
     def test_multiple_unknown_agents_first_fails(self, kernel):
         """Test that execution stops at first unknown agent"""
@@ -228,19 +228,19 @@ class TestEnhancedRuntimeKernel:
                 "swea_agent": "BackendSWEA",  # Valid
                 "task_type": "generate_model",
                 "entity": "Student",
-                "payload": {},
+                "payload": {"entity": "Student", "attributes": ["name:str", "email:str"]},
             },
             {
                 "swea_agent": "UnknownSWEA1",  # Invalid - should fail here
                 "task_type": "unknown_task",
                 "entity": "Student",
-                "payload": {},
+                "payload": {"entity": "Student", "attributes": ["name:str"]},
             },
             {
                 "swea_agent": "UnknownSWEA2",  # Should never reach this
                 "task_type": "another_unknown_task",
                 "entity": "Student",
-                "payload": {},
+                "payload": {"entity": "Student", "attributes": ["name:str"]},
             },
         ]
 
