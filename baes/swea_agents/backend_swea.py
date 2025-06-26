@@ -4,6 +4,9 @@ from typing import Any, Dict, List
 from ..agents.base_agent import BaseAgent
 from ..core.managed_system_manager import ManagedSystemManager
 from ..llm.openai_client import OpenAIClient
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BackendSWEA(BaseAgent):
@@ -93,12 +96,50 @@ class BackendSWEA(BaseAgent):
         return file_path
 
     # -------------------- feedback interpretation methods ------------------------
+    def _validate_interpretation_structure(self, interpretation: Dict[str, Any]) -> Dict[str, Any]:
+        """Ensure interpretation has correct structure with proper data types (Phase 2 standardization)"""
+        validated = {
+            "attributes": [],
+            "additional_requirements": [],
+            "code_improvements": [],
+            "modifications": [],
+            "explanation": interpretation.get("explanation", "No explanation provided")
+        }
+        
+        # Normalize attributes to consistent string format
+        raw_attributes = interpretation.get("attributes", [])
+        logger.debug(f"BackendSWEA: Processing {len(raw_attributes)} attributes with types: {[type(attr) for attr in raw_attributes]}")
+        
+        for attr in raw_attributes:
+            if isinstance(attr, dict):
+                # Convert dict to "name:type" string format
+                name = attr.get("name", "field")
+                typ = attr.get("type", "str")
+                validated["attributes"].append(f"{name}:{typ}")
+                logger.debug(f"BackendSWEA: Converted dict attribute to string: {name}:{typ}")
+            elif isinstance(attr, str):
+                validated["attributes"].append(attr)
+            else:
+                # Fallback - convert to string
+                str_attr = str(attr)
+                validated["attributes"].append(str_attr)
+                logger.warning(f"BackendSWEA: Converted unexpected attribute type {type(attr)} to string: {str_attr}")
+        
+        # Ensure other fields are lists of strings
+        for field in ["additional_requirements", "code_improvements", "modifications"]:
+            raw_list = interpretation.get(field, [])
+            validated[field] = [str(item) for item in raw_list if item]
+        
+        logger.debug(f"BackendSWEA: Validated interpretation with {len(validated['attributes'])} normalized attributes")
+        return validated
+
     def _interpret_feedback_for_backend_generation(self, feedback: List[str], entity: str, code_type: str, original_attributes: List[str]) -> Dict[str, Any]:
         """
         Generic feedback interpretation using LLM to understand what backend code changes are needed.
         This approach can handle any type of feedback without hardcoded conditions.
         """
         if not feedback:
+            logger.debug(f"BackendSWEA: No feedback provided for {entity} {code_type}, using original attributes")
             return {
                 "attributes": original_attributes,
                 "additional_requirements": [],
@@ -107,6 +148,7 @@ class BackendSWEA(BaseAgent):
             }
 
         feedback_text = "\n".join(feedback)
+        logger.debug(f"BackendSWEA: Interpreting feedback for {entity} {code_type}: {feedback_text}")
         
         system_prompt = f"""You are a backend development expert helping to interpret feedback for improving {code_type} generation.
 
@@ -136,6 +178,8 @@ GUIDELINES:
 - Handle any type of feedback, even unexpected ones
 - If feedback is unclear, make reasonable backend development assumptions
 - Focus on code quality, validation, error handling, and API design
+- ALWAYS return valid JSON in the specified format
+- Ensure attributes are simple strings like "name:str" or "email:str"
 """
 
         user_prompt = f"""Based on the feedback provided, what backend code improvements should be made for the {entity} entity's {code_type}?
@@ -150,17 +194,22 @@ Please provide the JSON response with backend improvements."""
 
         try:
             response = self.llm_client.generate_response(user_prompt, system_prompt)
+            logger.debug(f"BackendSWEA: Raw LLM response for {code_type}: {response}")
             
             # Try to parse JSON response
             import json
             try:
                 interpretation = json.loads(response)
+                logger.debug(f"BackendSWEA: Parsed interpretation for {code_type}: {interpretation}")
                 return interpretation
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as json_error:
+                logger.warning(f"BackendSWEA could not parse LLM response as JSON: {json_error}")
+                logger.warning(f"BackendSWEA raw response: {response}")
                 # Fallback: extract improvements from response text
                 return self._extract_improvements_from_text(response, original_attributes)
                 
         except Exception as e:
+            logger.error(f"BackendSWEA feedback interpretation failed: {e}")
             # Fallback: return original attributes with error note
             return {
                 "attributes": original_attributes,
@@ -256,8 +305,11 @@ Please provide the JSON response with backend improvements."""
         if expected_output:
             all_feedback.append(f"Expected output: {expected_output}")
 
-        # Interpret feedback generically using LLM
+        # Interpret feedback generically using LLM (Phase 2 enhancement)
         interpretation = self._interpret_feedback_for_backend_generation(all_feedback, entity, "Pydantic Model", attributes)
+        
+        # Validate and normalize interpretation structure (Phase 2 standardization)
+        interpretation = self._validate_interpretation_structure(interpretation)
         
         # Apply the interpreted improvements
         code = self._apply_backend_improvements(interpretation, entity, "Pydantic Model", context)
@@ -291,8 +343,11 @@ Please provide the JSON response with backend improvements."""
         if expected_output:
             all_feedback.append(f"Expected output: {expected_output}")
 
-        # Interpret feedback generically using LLM
+        # Interpret feedback generically using LLM (Phase 2 enhancement)
         interpretation = self._interpret_feedback_for_backend_generation(all_feedback, entity, "FastAPI Routes", attributes)
+        
+        # Validate and normalize interpretation structure (Phase 2 standardization)
+        interpretation = self._validate_interpretation_structure(interpretation)
         
         # Apply the interpreted improvements
         code = self._apply_backend_improvements(interpretation, entity, "FastAPI Routes", context)

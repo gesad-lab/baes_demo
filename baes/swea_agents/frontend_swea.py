@@ -3,6 +3,9 @@ from typing import Any, Dict, List
 from ..agents.base_agent import BaseAgent
 from ..core.managed_system_manager import ManagedSystemManager
 from ..llm.openai_client import OpenAIClient
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class FrontendSWEA(BaseAgent):
@@ -69,12 +72,50 @@ No markdown, no explanations, just working Python code.
         return file_path
 
     # -------------------- feedback interpretation methods ------------------------
+    def _validate_interpretation_structure(self, interpretation: Dict[str, Any]) -> Dict[str, Any]:
+        """Ensure interpretation has correct structure with proper data types (Phase 2 standardization)"""
+        validated = {
+            "attributes": [],
+            "ui_improvements": [],
+            "layout_changes": [],
+            "modifications": [],
+            "explanation": interpretation.get("explanation", "No explanation provided")
+        }
+        
+        # Normalize attributes to consistent string format
+        raw_attributes = interpretation.get("attributes", [])
+        logger.debug(f"FrontendSWEA: Processing {len(raw_attributes)} attributes with types: {[type(attr) for attr in raw_attributes]}")
+        
+        for attr in raw_attributes:
+            if isinstance(attr, dict):
+                # Convert dict to "name:type" string format
+                name = attr.get("name", "field")
+                typ = attr.get("type", "str")
+                validated["attributes"].append(f"{name}:{typ}")
+                logger.debug(f"FrontendSWEA: Converted dict attribute to string: {name}:{typ}")
+            elif isinstance(attr, str):
+                validated["attributes"].append(attr)
+            else:
+                # Fallback - convert to string
+                str_attr = str(attr)
+                validated["attributes"].append(str_attr)
+                logger.warning(f"FrontendSWEA: Converted unexpected attribute type {type(attr)} to string: {str_attr}")
+        
+        # Ensure other fields are lists of strings
+        for field in ["ui_improvements", "layout_changes", "modifications"]:
+            raw_list = interpretation.get(field, [])
+            validated[field] = [str(item) for item in raw_list if item]
+        
+        logger.debug(f"FrontendSWEA: Validated interpretation with {len(validated['attributes'])} normalized attributes")
+        return validated
+
     def _interpret_feedback_for_ui_generation(self, feedback: List[str], entity: str, original_attributes: List[str]) -> Dict[str, Any]:
         """
         Generic feedback interpretation using LLM to understand what UI changes are needed.
         This approach can handle any type of feedback without hardcoded conditions.
         """
         if not feedback:
+            logger.debug(f"FrontendSWEA: No feedback provided for {entity} UI, using original attributes")
             return {
                 "attributes": original_attributes,
                 "ui_improvements": [],
@@ -83,6 +124,7 @@ No markdown, no explanations, just working Python code.
             }
 
         feedback_text = "\n".join(feedback)
+        logger.debug(f"FrontendSWEA: Interpreting feedback for {entity} UI: {feedback_text}")
         
         system_prompt = f"""You are a UI/UX expert helping to interpret feedback for improving Streamlit UI generation.
 
@@ -111,6 +153,8 @@ GUIDELINES:
 - Handle any type of feedback, even unexpected ones
 - If feedback is unclear, make reasonable UI/UX assumptions
 - Prioritize usability, clarity, and functionality
+- ALWAYS return valid JSON in the specified format
+- Ensure attributes are simple strings like "name:str" or "email:str"
 """
 
         user_prompt = f"""Based on the feedback provided, what UI improvements should be made for the {entity} entity's Streamlit interface?
@@ -125,17 +169,22 @@ Please provide the JSON response with UI improvements."""
 
         try:
             response = self.llm_client.generate_response(user_prompt, system_prompt)
+            logger.debug(f"FrontendSWEA: Raw LLM response: {response}")
             
             # Try to parse JSON response
             import json
             try:
                 interpretation = json.loads(response)
+                logger.debug(f"FrontendSWEA: Parsed interpretation: {interpretation}")
                 return interpretation
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as json_error:
+                logger.warning(f"FrontendSWEA could not parse LLM response as JSON: {json_error}")
+                logger.warning(f"FrontendSWEA raw response: {response}")
                 # Fallback: extract improvements from response text
                 return self._extract_ui_improvements_from_text(response, original_attributes)
                 
         except Exception as e:
+            logger.error(f"FrontendSWEA feedback interpretation failed: {e}")
             # Fallback: return original attributes with error note
             return {
                 "attributes": original_attributes,
@@ -231,8 +280,11 @@ Please provide the JSON response with UI improvements."""
         if expected_output:
             all_feedback.append(f"Expected output: {expected_output}")
 
-        # Interpret feedback generically using LLM
+        # Interpret feedback generically using LLM (Phase 2 enhancement)
         interpretation = self._interpret_feedback_for_ui_generation(all_feedback, entity, attributes)
+        
+        # Validate and normalize interpretation structure (Phase 2 standardization)
+        interpretation = self._validate_interpretation_structure(interpretation)
         
         # Apply the interpreted improvements
         code = self._apply_ui_improvements(interpretation, entity, context)
