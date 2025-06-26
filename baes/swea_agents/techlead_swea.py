@@ -119,15 +119,12 @@ class TechLeadSWEA(BaseAgent):
                 "created_at": self._get_timestamp(),
             }
 
-            # 📊 DECISION SUMMARY LOG
-            logger.info("📊 TechLeadSWEA COORDINATION DECISION SUMMARY:")
-            logger.info("   🎯 Entity: %s (%s)", entity, "evolution" if is_evolution else "creation")
-            logger.info("   📋 Attributes: %d defined (%s)", len(attributes), ", ".join(attributes[:3]) + ("..." if len(attributes) > 3 else ""))
-            logger.info("   🏗️ Technical Strategy: %s", technical_analysis.get("strategy", "standard_generation"))
-            logger.info("   🎯 Quality Gates: %d gates defined", len(quality_gates))
-            logger.info("   📝 Coordination Plan: %d SWEA tasks scheduled", len(enhanced_plan))
-            logger.info("   🔄 Governance: Centralized technical oversight enabled")
-            logger.info("   📊 Approval Workflow: Sequential with quality gate enforcement")
+            # Simple decision log
+            self._log_decision("coordination", entity, "APPROVED", 
+                             f"{len(enhanced_plan)} SWEA tasks scheduled",
+                             type="evolution" if is_evolution else "creation",
+                             attributes=len(attributes),
+                             quality_gates=len(quality_gates))
 
             return {
                 "success": True,
@@ -223,22 +220,16 @@ class TechLeadSWEA(BaseAgent):
                 "fixes_planned": len(fix_decisions)
             }
 
-            # 📊 DECISION SUMMARY LOG
-            logger.info("📊 TechLeadSWEA TEST FIX COORDINATION SUMMARY:")
-            logger.info("   🎯 Entity: %s", entity)
-            logger.info("   🔍 Test Failures: %d failures analyzed", len(test_failures))
-            logger.info("   🔧 Fix Decisions: %d fixes planned", len(fix_decisions))
+            # Simple decision log
             swea_distribution = {}
             for decision in fix_decisions:
-                swea = decision["swea_agent"]
+                swea = decision["swea_agent"] 
                 swea_distribution[swea] = swea_distribution.get(swea, 0) + 1
-            for swea, count in swea_distribution.items():
-                logger.info("   📝 %s: %d fixes assigned", swea, count)
-            logger.info("   ⚖️ Priority Distribution: %s", 
-                       {p: len([d for d in fix_decisions if d["priority"] == p]) for p in ["high", "medium", "low"]})
-
-            logger.info("✅ TechLeadSWEA coordinated %d fix decisions for %s", 
-                       len(fix_decisions), entity)
+            
+            self._log_decision("test_fix_coordination", entity, "COORDINATED", 
+                             f"{len(fix_decisions)} fixes planned",
+                             failures_analyzed=len(test_failures),
+                             swea_assignments=", ".join(f"{s}:{c}" for s, c in swea_distribution.items()))
 
             response = self.create_success_response("coordinate_test_fixes", coordination_result)
             response["technical_governance"] = True  # Add expected field for legacy tests
@@ -315,21 +306,12 @@ class TechLeadSWEA(BaseAgent):
             }
             self.review_history.append(review_record)
 
-            # 📊 DECISION SUMMARY LOG
-            logger.info("📊 TechLeadSWEA REVIEW DECISION SUMMARY:")
-            logger.info("   🎯 Component: %s.%s for %s", swea_agent, task_type, entity)
-            logger.info("   🔄 Retry Context: Attempt %d", retry_count)
-            logger.info("   📊 Quality Score: %.2f/1.0", quality_score)
-            logger.info("   ✅ Quality Standards: %s", "PASS" if quality_assessment.get("meets_standards", False) else "FAIL")
-            logger.info("   ⚖️ Technical Compliance: %s", "PASS" if compliance_check.get("compliant", False) else "FAIL")
-            logger.info("   🎯 Business Alignment: %s", "PASS" if business_alignment.get("aligned", False) else "FAIL")
-            logger.info("   📋 Overall Decision: %s", "APPROVED" if overall_approval else "REJECTED")
-            if technical_feedback:
-                logger.info("   🔧 Technical Feedback: %d issues identified", len(technical_feedback))
-                for feedback in technical_feedback[:3]:  # Show first 3 issues
-                    logger.info("      • %s", feedback)
-            else:
-                logger.info("   ✅ Technical Feedback: No issues found")
+            # Simple decision log
+            self._log_decision("review", entity, "APPROVED" if overall_approval else "REJECTED",
+                             f"quality score {quality_score:.2f}",
+                             component=f"{swea_agent}.{task_type}",
+                             retry_attempt=retry_count,
+                             issues_found=len(technical_feedback) if technical_feedback else 0)
 
             feedback = []
             if not quality_assessment.get("meets_standards", False):
@@ -398,16 +380,12 @@ class TechLeadSWEA(BaseAgent):
                 }
             )
 
-            # 📊 DECISION SUMMARY LOG
-            logger.info("📊 TechLeadSWEA CONFLICT RESOLUTION DECISION SUMMARY:")
-            logger.info("   🎯 Entity: %s", entity)
-            logger.info("   ⚔️ Conflict Type: %s", conflict_type)
-            logger.info("   🤖 Involved SWEAs: %s", ", ".join(involved_sweas))
-            logger.info("   🎯 Resolution Strategy: %s", resolution_strategy)
-            logger.info("   ⚖️ Priority Assignments: %s", resolution_plan["priority_assignments"])
-            logger.info("   🔧 Technical Constraints: %d defined", len(resolution_plan["technical_constraints"]))
-            logger.info("   ⏱️ Timeline: %s", resolution_plan["resolution_timeline"])
-            logger.info("   📋 Decision: CONFLICT RESOLVED with technical authority")
+            # Simple decision log
+            self._log_decision("conflict_resolution", entity, "RESOLVED", 
+                             f"{resolution_strategy} strategy",
+                             conflict_type=conflict_type,
+                             involved_sweas=", ".join(involved_sweas),
+                             constraints=len(resolution_plan["technical_constraints"]))
 
             return {
                 "success": True,
@@ -470,16 +448,12 @@ class TechLeadSWEA(BaseAgent):
 
             self.architecture_decisions[entity] = architecture_decision
 
-            # 📊 DECISION SUMMARY LOG
-            logger.info("📊 TechLeadSWEA ARCHITECTURE DECISION SUMMARY:")
-            logger.info("   🎯 Entity: %s", entity)
-            logger.info("   🏗️ Architecture Patterns: %s", ", ".join(architecture_patterns))
-            logger.info("   💻 Technology Stack: %s", tech_stack.get("primary_tech", "standard"))
-            logger.info("   ⚡ Performance Level: %s", performance_specs.get("target_level", "standard"))
-            logger.info("   🔒 Security Level: %s", security_specs.get("security_level", "standard"))
-            logger.info("   📋 Business Requirements: %d analyzed", len(business_requirements))
-            logger.info("   🎯 Domain Focus: %s", "enabled" if business_requirements.get("domain_focus") else "standard")
-            logger.info("   📋 Decision: ARCHITECTURE APPROVED with technical specifications")
+            # Simple decision log
+            self._log_decision("architecture", entity, "APPROVED", 
+                             f"{tech_stack.get('primary_tech', 'standard')} stack",
+                             patterns=", ".join(architecture_patterns),
+                             performance=performance_specs.get("target_level", "standard"),
+                             security=security_specs.get("security_level", "standard"))
 
             return {
                 "architecture_patterns": architecture_patterns,
@@ -559,15 +533,12 @@ class TechLeadSWEA(BaseAgent):
                 "fix_context": {"error_details": error_details, "issue_type": "unknown"},
             }
 
-        # 📊 DECISION SUMMARY LOG
-        logger.info("📊 TechLeadSWEA TEST FAILURE ANALYSIS DECISION:")
-        logger.info("   🎯 Entity: %s", entity)
-        logger.info("   🔍 Issue Type: %s", decision["issue_type"])
-        logger.info("   🤖 Responsible SWEA: %s", decision["responsible_swea"])
-        logger.info("   🔧 Recommended Action: %s", decision["recommended_action"])
-        logger.info("   ⚖️ Priority: %s", decision["priority"])
-        logger.info("   💡 Technical Rationale: %s", decision["technical_rationale"])
-        logger.info("   📋 Decision: FAILURE ANALYSIS COMPLETE with fix assignment")
+        # Simple decision log
+        self._log_decision("test_failure_analysis", entity, "ANALYZED", 
+                         decision["technical_rationale"],
+                         issue_type=decision["issue_type"],
+                         responsible_swea=decision["responsible_swea"],
+                         priority=decision["priority"])
 
         return decision
 
@@ -1222,26 +1193,13 @@ class TechLeadSWEA(BaseAgent):
             # Calculate system quality score
             quality_score = integration_score if overall_success else integration_score * 0.5
 
-            # 📊 DECISION SUMMARY LOG
-            logger.info("📊 TechLeadSWEA FINAL SYSTEM REVIEW DECISION SUMMARY:")
-            logger.info("   🎯 Entity: %s", entity)
-            logger.info("   📊 Components Reviewed: %d", len(execution_results))
-            logger.info("   ✅ Successful Components: %d", len([r for r in execution_results if r.get("success", False)]))
-            logger.info("   ❌ Failed Components: %d", len([r for r in execution_results if not r.get("success", False)]))
-            logger.info("   📊 System Quality Score: %.2f/1.0", quality_score)
-            logger.info("   🔗 Integration Score: %.2f/1.0", integration_score)
-            logger.info("   📋 Overall Success: %s", "PASS" if overall_success else "FAIL")
-            logger.info("   🚀 Deployment Ready: %s", "YES" if deployment_ready else "NO")
-            logger.info("   📝 Recommendations: %d provided", len(final_recommendations))
-            
-            # Log component breakdown
-            for review in component_reviews:
-                status = review["status"]
-                component = review["component"]
-                if status == "approved":
-                    logger.info("   ✅ %s: APPROVED (score: %.2f)", component, review.get("quality_score", 0.8))
-                else:
-                    logger.info("   ❌ %s: REJECTED (%d issues)", component, len(review.get("issues", [])))
+            # Simple decision log
+            successful_components = len([r for r in execution_results if r.get("success", False)])
+            self._log_decision("final_review", entity, "PASS" if overall_success else "FAIL",
+                             f"quality score {quality_score:.2f}",
+                             components_reviewed=len(execution_results),
+                             successful_components=successful_components,
+                             deployment_ready="YES" if deployment_ready else "NO")
 
             return {
                 "success": True,
@@ -1319,15 +1277,12 @@ class TechLeadSWEA(BaseAgent):
                 # System generation was successful with STRICT validation (ALL tests passed)
                 logger.info("✅ TechLeadSWEA: System generation successful for %s - ALL TESTS PASSED", entity)
                 
-                # 📊 DECISION SUMMARY LOG - SUCCESS PATH
-                logger.info("📊 TechLeadSWEA HYBRID COORDINATION DECISION SUMMARY:")
-                logger.info("   🎯 Entity: %s", entity)
-                logger.info("   📋 Execution Type: %s", execution_type)
-                logger.info("   ✅ Generation Status: SUCCESSFUL")
-                logger.info("   🎯 Validation Level: STRICT (100% test success required)")
-                logger.info("   📊 Generated Artifacts: %d components", len(generated_artifacts))
-                logger.info("   🔧 Fix Iterations: 0 (no fixes needed)")
-                logger.info("   📋 Final Decision: SYSTEM APPROVED - All quality gates passed")
+                # Simple decision log - success path
+                self._log_decision("hybrid_coordination", entity, "APPROVED", 
+                                 "strict validation passed",
+                                 execution_type=execution_type,
+                                 artifacts=len(generated_artifacts),
+                                 fix_iterations=0)
                 
                 return self.create_success_response("hybrid_coordination", {
                     "success": True,
@@ -1368,16 +1323,13 @@ class TechLeadSWEA(BaseAgent):
             fix_decisions = self._create_fix_decisions(error_analysis, quality_analysis, llm_analysis, entity)
             coordination_log.append(f"🎯 Created {len(fix_decisions)} fix decisions")
             
-            # 📊 DECISION SUMMARY LOG - ANALYSIS PHASE
-            logger.info("📊 TechLeadSWEA HYBRID COORDINATION DECISION SUMMARY:")
-            logger.info("   🎯 Entity: %s", entity)
-            logger.info("   📋 Execution Type: %s", execution_type)
-            logger.info("   ❌ Generation Status: FAILED (requires fixes)")
-            logger.info("   🔍 Error Analysis: %s (confidence: %.2f)", error_analysis['category'], error_analysis['confidence'])
-            logger.info("   📊 Quality Issues: %d found in %d artifacts", quality_analysis['issues_found'], len(generated_artifacts))
-            logger.info("   🧠 LLM Analysis: %s → %s", llm_analysis['root_cause'], llm_analysis['primary_swea'])
-            logger.info("   🔧 Fix Decisions: %d fixes planned", len(fix_decisions))
-            logger.info("   ⚖️ Max Iterations: %d", max_retries)
+            # Simple decision log - analysis phase
+            self._log_decision("hybrid_coordination", entity, "ANALYZING", 
+                             f"{len(fix_decisions)} fixes planned",
+                             execution_type=execution_type,
+                             error_category=error_analysis['category'],
+                             quality_issues=quality_analysis['issues_found'],
+                             primary_swea=llm_analysis['primary_swea'])
             
             # Phase 5: Iterative Fix Process (simplified for PoC)
             while fix_iterations < max_retries and not final_success:
@@ -2076,3 +2028,23 @@ What's the root cause and how should it be fixed?"""
             "ensure_backward_compatibility",
             "follow_coding_standards",
         ]
+
+    def _log_decision(self, decision_type: str, entity: str, decision: str, rationale: str, **kwargs):
+        """
+        Centralized decision logging for all TechLeadSWEA decisions.
+        Provides simple, concise summaries without code duplication.
+        
+        Args:
+            decision_type: Type of decision (Architecture, Coordination, Conflict, etc.)
+            entity: Entity being processed
+            decision: The decision made (APPROVED, REJECTED, RESOLVED, etc.)
+            rationale: Brief explanation of why this decision was made
+            **kwargs: Additional context-specific information
+        """
+        logger.info("🧠 TechLeadSWEA %s: %s → %s (%s)", 
+                   decision_type.upper(), entity, decision, rationale)
+        
+        # Log additional context if provided
+        for key, value in kwargs.items():
+            if value is not None:
+                logger.info("   📋 %s: %s", key.replace('_', ' ').title(), value)

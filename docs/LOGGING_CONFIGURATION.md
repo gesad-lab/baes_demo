@@ -16,103 +16,102 @@ BAE_DEBUG=0|1|true|false|on|off|yes|no
 ### **Default Behavior (BAE_DEBUG=0 or not set)**
 - ✅ **System logs**: Normal BAE operation messages shown
 - ✅ **Warning/Error logs**: Important issues displayed  
-- ✅ **TechLeadSWEA Decision Logs**: Comprehensive decision summaries shown
+- ✅ **TechLeadSWEA Decision Logs**: Concise decision summaries shown
 - ❌ **HTTP request logs**: Suppressed (too verbose for normal use)
 
 **Example normal output:**
 ```bash
 🧠 BAE System - Conversational Interface
 INFO:baes.domain_entities.academic.student_bae:StudentBAE initialized
-INFO:baes.core.enhanced_runtime_kernel:🧠 Enhanced Runtime Kernel initialized
-📊 TechLeadSWEA ARCHITECTURE DECISION SUMMARY:
-   🎯 Entity: Student
-   🏗️ Architecture Patterns: domain_driven_design, restful_api, mvc_pattern
-   💻 Technology Stack: python_fastapi_streamlit
-   📋 Decision: ARCHITECTURE APPROVED with technical specifications
+INFO:baes.core.enhanced_runtime_kernel:Processing student entity generation
+🧠 TechLeadSWEA COORDINATION: StudentEntity → APPROVED (4 SWEA tasks scheduled)
+   📋 Type: creation
+   📋 Attributes: 5
+   📋 Quality Gates: 3
 ```
 
 ### **Debug Mode (BAE_DEBUG=1)**
-- ✅ **All system logs**: Everything shown including debug level
-- ✅ **HTTP request logs**: Full HTTP request/response details
-- ✅ **Enhanced debugging**: More verbose output for troubleshooting
+- ✅ **All system logs**: Complete operation visibility
+- ✅ **HTTP request logs**: Full OpenAI API request/response logging
+- ✅ **Enhanced decision logs**: Detailed TechLeadSWEA decision context
 
 **Example debug output:**
 ```bash
 🐛 Debug mode enabled - HTTP request logs will be shown
 INFO:httpx:HTTP Request: POST https://api.openai.com/v1/chat/completions "HTTP/1.1 200 OK"
-DEBUG:httpx:load_ssl_context verify=True cert=None trust_env=True http2=False
-📊 TechLeadSWEA HYBRID COORDINATION DECISION SUMMARY:
-   🎯 Entity: Student
-   🔧 Execution Type: creation_validation
-   📋 Decision: COORDINATION APPROVED with enhanced oversight
+🧠 TechLeadSWEA ARCHITECTURE: StudentEntity → APPROVED (python_fastapi stack)
+   📋 Patterns: mvc, rest
+   📋 Performance: high
+   📋 Security: standard
 ```
 
 ---
 
-## 📊 **TechLeadSWEA Decision Logging**
+## 🧠 **TechLeadSWEA Decision Logging**
 
-### **Overview**
-All TechLeadSWEA decisions are automatically logged with comprehensive summaries for full traceability and governance visibility.
+### **Centralized Decision Logging**
+All TechLeadSWEA decisions use a centralized `_log_decision()` method that provides:
+- **Consistent format**: `🧠 TechLeadSWEA [TYPE]: [Entity] → [Decision] ([Rationale])`
+- **Context details**: Key decision factors shown as sub-items
+- **DRY principle**: No code duplication across decision types
+- **Concise output**: Brief but informative summaries
 
 ### **Decision Types Logged**
 
-#### **🏗️ Architecture Decisions**
+#### **1. 🏗️ Architecture Decisions**
 ```
-📊 TechLeadSWEA ARCHITECTURE DECISION SUMMARY:
-   🎯 Entity: [EntityName]
-   🏗️ Architecture Patterns: [patterns]
-   💻 Technology Stack: [stack]
-   ⚡ Performance Level: [level]
-   🔒 Security Level: [level]
-   📋 Business Requirements: [count] analyzed
-   🎯 Domain Focus: [enabled/standard]
-   📋 Decision: ARCHITECTURE APPROVED with technical specifications
+🧠 TechLeadSWEA ARCHITECTURE: ProjectEntity → APPROVED (python_fastapi stack)
+   📋 Patterns: mvc, rest
+   📋 Performance: high
+   📋 Security: standard
 ```
 
-#### **🤖 System Coordination Decisions**
+#### **2. 🤖 System Coordination**
 ```
-📊 TechLeadSWEA COORDINATION DECISION SUMMARY:
-   🎯 Entity: [EntityName]
-   🔧 Execution Type: [type]
-   🤖 SWEA Assignments: [assignments]
-   ⚖️ Quality Gates: [count] defined
-   🎯 Business Focus: [enabled/disabled]
-   📋 Decision: COORDINATION APPROVED with [oversight_level] oversight
+🧠 TechLeadSWEA COORDINATION: ProjectEntity → APPROVED (5 SWEA tasks scheduled)
+   📋 Type: creation
+   📋 Attributes: 4
+   📋 Quality Gates: 3
 ```
 
-#### **⚔️ Conflict Resolution Decisions**
+#### **3. 📋 Review Decisions**
 ```
-📊 TechLeadSWEA CONFLICT RESOLUTION DECISION SUMMARY:
-   🎯 Entity: [EntityName]
-   ⚔️ Conflict Type: [type]
-   🤖 Involved SWEAs: [list]
-   🎯 Resolution Strategy: [strategy]
-   ⚖️ Priority Assignments: [assignments]
-   🔧 Technical Constraints: [count] defined
-   📋 Decision: CONFLICT RESOLVED with technical authority
+🧠 TechLeadSWEA REVIEW: ProjectEntity → REJECTED (quality score 0.65)
+   📋 Component: BackendSWEA.generate_model
+   📋 Retry Attempt: 1
+   📋 Issues Found: 3
 ```
 
-#### **🔍 Test Failure Analysis Decisions**
+#### **4. ⚔️ Conflict Resolution**
 ```
-📊 TechLeadSWEA TEST FAILURE ANALYSIS DECISION:
-   🎯 Entity: [EntityName]
-   🔍 Issue Type: [type]
-   🤖 Responsible SWEA: [assignment]
-   🔧 Recommended Action: [action]
-   ⚖️ Priority: [high/medium/low]
-   💡 Technical Rationale: [rationale]
-   📋 Decision: FAILURE ANALYSIS COMPLETE with fix assignment
+🧠 TechLeadSWEA CONFLICT_RESOLUTION: ProjectEntity → RESOLVED (priority_based strategy)
+   📋 Conflict Type: resource_conflict
+   📋 Involved Sweas: BackendSWEA, TestSWEA
+   📋 Constraints: 2
 ```
 
-#### **📋 Final Review Decisions**
+#### **5. 🔍 Test Failure Analysis**
 ```
-📊 TechLeadSWEA FINAL SYSTEM REVIEW SUMMARY:
-   🎯 Entity: [EntityName]
-   📊 Overall Quality Score: [score]
-   🧪 Test Results: [passed/failed]
-   🔍 Code Quality: [level]
-   🎯 Business Alignment: [score]
-   📋 Decision: SYSTEM [APPROVED/REJECTED] for [reason]
+🧠 TechLeadSWEA TEST_FAILURE_ANALYSIS: ProjectEntity → ANALYZED (dependency issue)
+   📋 Issue Type: dependency_management
+   📋 Responsible Swea: BackendSWEA
+   📋 Priority: high
+```
+
+#### **6. 🎯 Final System Review**
+```
+🧠 TechLeadSWEA FINAL_REVIEW: ProjectEntity → PASS (quality score 0.85)
+   📋 Components Reviewed: 4
+   📋 Successful Components: 4
+   📋 Deployment Ready: YES
+```
+
+#### **7. 🧠 Hybrid Coordination**
+```
+🧠 TechLeadSWEA HYBRID_COORDINATION: ProjectEntity → APPROVED (strict validation passed)
+   📋 Execution Type: creation_validation
+   📋 Artifacts: 4
+   📋 Fix Iterations: 0
 ```
 
 ---
@@ -121,22 +120,79 @@ All TechLeadSWEA decisions are automatically logged with comprehensive summaries
 
 ### **Normal Operation (Clean Output)**
 ```bash
-# Run BAE with clean, professional output
 python bae_chat.py
+# Shows only essential decisions and system messages
 ```
 
-### **Debug Mode (Full Visibility)**
+### **Debug Mode (Verbose Output)**
 ```bash
-# Run BAE with full debugging and HTTP logs
 BAE_DEBUG=1 python bae_chat.py
+# Shows HTTP requests, detailed context, and full decision traces
 ```
 
-### **Environment File Setup**
+### **Testing with Decision Logs**
 ```bash
-# In your .env file
-BAE_DEBUG=0  # Normal mode (default)
-# BAE_DEBUG=1  # Debug mode
+python -m pytest tests/integration/test_techlead_governance.py -s
+# See TechLeadSWEA decisions during test execution
 ```
+
+---
+
+## 🔧 **Implementation Benefits**
+
+### **DRY Principle Applied**
+- ✅ **Single method**: `_log_decision()` handles all decision logging
+- ✅ **No duplication**: Eliminated 200+ lines of repetitive logging code
+- ✅ **Consistent format**: All decisions follow the same pattern
+- ✅ **Easy maintenance**: Changes apply to all decision types
+
+### **Improved User Experience**
+- ✅ **Concise summaries**: Key information without noise
+- ✅ **Structured format**: Easy to scan and understand
+- ✅ **Context-aware**: Shows relevant details for each decision type
+- ✅ **Debug flexibility**: Full details available when needed
+
+### **Better Code Quality**
+- ✅ **Maintainable**: Single point of change for logging format
+- ✅ **Testable**: Easy to verify decision logging behavior
+- ✅ **Extensible**: Simple to add new decision types
+- ✅ **Clean**: Reduced code complexity and duplication
+
+---
+
+## 🚨 **Troubleshooting**
+
+### **No Decision Logs Showing**
+```bash
+# Check if logging level is set correctly
+export BAE_DEBUG=1
+python your_script.py
+```
+
+### **Too Verbose Output**
+```bash
+# Disable debug mode for cleaner output
+unset BAE_DEBUG
+# or
+export BAE_DEBUG=0
+python your_script.py
+```
+
+### **Missing Context in Decisions**
+Enable debug mode to see full decision context and HTTP request details.
+
+---
+
+## 📋 **Summary**
+
+The BAE logging system now provides:
+- **Clean default output** with essential decision summaries
+- **Full debug capability** when needed for troubleshooting
+- **Centralized decision logging** following DRY principles
+- **Consistent format** across all TechLeadSWEA decisions
+- **Context-aware details** for different decision types
+
+This approach eliminates code duplication while providing clear visibility into TechLeadSWEA decision-making processes.
 
 ---
 
