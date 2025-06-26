@@ -581,74 +581,145 @@ class EnhancedRuntimeKernel:
                     logger.info("🔧 Executing %s (attempt %d/%d)", task_name, retry_count + 1, max_retries + 1)
                     result = agent.handle_task(task_type, payload)
                     
-                    # Immediate TechLeadSWEA review after task completion
-                    logger.info("👁️  TechLeadSWEA reviewing %s...", task_name)
-                    review_payload = {
-                        "entity": payload.get("entity", coordinating_bae.entity_name if hasattr(coordinating_bae, 'entity_name') else "Unknown"),
-                        "swea_agent": swea_agent,
-                        "task_type": task_type,
-                        "result": result,
-                        "quality_gates": {},  # Could be enhanced with specific quality gates per task
-                        "final_review": False,
-                        "retry_count": retry_count
-                    }
+                    # Check if this is a final review task
+                    is_final_review = (
+                        swea_agent.lower() in ["techlead", "techleadswea", "techlead_swea"] 
+                        and task_type == "review_and_approve" 
+                        and payload.get("final_review", False)
+                    )
                     
-                    review_result = self.techlead_swea.handle_task("review_and_approve", review_payload)
-                    
-                    if review_result.get("success") and review_result.get("data", {}).get("overall_approval", False):
-                        # Task approved by TechLeadSWEA
-                        logger.info("✅ %s APPROVED by TechLeadSWEA", task_name)
-                        results.append({
-                            "task": task_name,
-                            "success": True,
-                            "result": result,
-                            "techlead_approved": True,
-                            "quality_score": review_result.get("data", {}).get("quality_score", 0.0),
-                            "retry_count": retry_count
-                        })
-                        task_success = True
+                    if is_final_review:
+                        # For final review, pass all accumulated execution results
+                        logger.info("👁️  TechLeadSWEA conducting final system review...")
+                        review_payload = {
+                            "entity": payload.get("entity", coordinating_bae.entity_name if hasattr(coordinating_bae, 'entity_name') else "Unknown"),
+                            "execution_results": results,  # Pass all previous task results
+                            "context": payload.get("context", ""),
+                            "final_review": True
+                        }
                         
-                    else:
-                        # Task rejected by TechLeadSWEA
-                        technical_feedback = review_result.get("data", {}).get("technical_feedback", [])
-                        feedback_history.extend(technical_feedback)
+                        review_result = self.techlead_swea.handle_task("review_and_approve", review_payload)
                         
-                        logger.warning("❌ %s REJECTED by TechLeadSWEA (attempt %d/%d)", 
-                                     task_name, retry_count + 1, max_retries + 1)
-                        
-                        if technical_feedback:
-                            logger.warning("📝 TechLeadSWEA feedback:")
-                            for feedback in technical_feedback:
-                                logger.warning("   • %s", feedback)
-                        
-                        # Check if we should retry
-                        if retry_count < max_retries:
-                            retry_count += 1
-                            logger.info("🔄 Retrying %s with TechLeadSWEA feedback...", task_name)
-                            
-                            # Enhance payload with feedback for retry
-                            if technical_feedback:
-                                payload["techlead_feedback"] = technical_feedback
-                                payload["retry_attempt"] = retry_count
-                        else:
-                            # Max retries reached
-                            logger.error("🛑 %s FAILED after %d attempts - stopping coordination plan", 
-                                       task_name, max_retries + 1)
+                        if review_result.get("success") and review_result.get("data", {}).get("overall_approval", False):
+                            # Final review approved
+                            logger.info("✅ %s APPROVED by TechLeadSWEA - System ready for deployment", task_name)
                             results.append({
                                 "task": task_name,
-                                "success": False,
-                                "error": f"Task rejected by TechLeadSWEA after {max_retries + 1} attempts",
-                                "techlead_rejected": True,
-                                "feedback_history": feedback_history,
+                                "success": True,
+                                "result": result,
+                                "techlead_approved": True,
+                                "final_review": True,
+                                "deployment_ready": review_result.get("data", {}).get("deployment_ready", False),
+                                "system_quality_score": review_result.get("data", {}).get("system_quality_score", 0.0),
                                 "retry_count": retry_count
                             })
+                            task_success = True
+                        else:
+                            # Final review rejected
+                            technical_feedback = review_result.get("data", {}).get("technical_feedback", [])
+                            feedback_history.extend(technical_feedback)
                             
-                            # Fail early - stop executing remaining tasks
-                            raise MaxRetriesReachedError(
-                                task_name, swea_agent, task_type, retry_count, max_retries,
-                                f"Task rejected by TechLeadSWEA after {max_retries + 1} attempts",
-                                feedback_history
-                            )
+                            logger.warning("❌ %s REJECTED by TechLeadSWEA - System not ready for deployment (attempt %d/%d)", 
+                                         task_name, retry_count + 1, max_retries + 1)
+                            
+                            if technical_feedback:
+                                logger.warning("📝 TechLeadSWEA feedback:")
+                                for feedback in technical_feedback:
+                                    logger.warning("   • %s", feedback)
+                            
+                            # Check if we should retry final review
+                            if retry_count < max_retries:
+                                retry_count += 1
+                                logger.info("🔄 Retrying %s with TechLeadSWEA feedback...", task_name)
+                            else:
+                                # Max retries reached for final review
+                                logger.error("🛑 %s FAILED after %d attempts - stopping coordination plan", 
+                                           task_name, max_retries + 1)
+                                results.append({
+                                    "task": task_name,
+                                    "success": False,
+                                    "error": f"Final system review rejected by TechLeadSWEA after {max_retries + 1} attempts",
+                                    "techlead_rejected": True,
+                                    "final_review": True,
+                                    "feedback_history": feedback_history,
+                                    "retry_count": retry_count
+                                })
+                                
+                                # Fail early - stop execution
+                                raise MaxRetriesReachedError(
+                                    task_name, swea_agent, task_type, retry_count, max_retries,
+                                    f"Final system review rejected by TechLeadSWEA after {max_retries + 1} attempts",
+                                    feedback_history
+                                )
+                    else:
+                        # Regular individual task review
+                        logger.info("👁️  TechLeadSWEA reviewing %s...", task_name)
+                        review_payload = {
+                            "entity": payload.get("entity", coordinating_bae.entity_name if hasattr(coordinating_bae, 'entity_name') else "Unknown"),
+                            "swea_agent": swea_agent,
+                            "task_type": task_type,
+                            "result": result,
+                            "quality_gates": {},  # Could be enhanced with specific quality gates per task
+                            "final_review": False,
+                            "retry_count": retry_count
+                        }
+                        
+                        review_result = self.techlead_swea.handle_task("review_and_approve", review_payload)
+                        
+                        if review_result.get("success") and review_result.get("data", {}).get("overall_approval", False):
+                            # Task approved by TechLeadSWEA
+                            logger.info("✅ %s APPROVED by TechLeadSWEA", task_name)
+                            results.append({
+                                "task": task_name,
+                                "success": True,
+                                "result": result,
+                                "techlead_approved": True,
+                                "quality_score": review_result.get("data", {}).get("quality_score", 0.0),
+                                "retry_count": retry_count
+                            })
+                            task_success = True
+                            
+                        else:
+                            # Task rejected by TechLeadSWEA
+                            technical_feedback = review_result.get("data", {}).get("technical_feedback", [])
+                            feedback_history.extend(technical_feedback)
+                            
+                            logger.warning("❌ %s REJECTED by TechLeadSWEA (attempt %d/%d)", 
+                                         task_name, retry_count + 1, max_retries + 1)
+                            
+                            if technical_feedback:
+                                logger.warning("📝 TechLeadSWEA feedback:")
+                                for feedback in technical_feedback:
+                                    logger.warning("   • %s", feedback)
+                            
+                            # Check if we should retry
+                            if retry_count < max_retries:
+                                retry_count += 1
+                                logger.info("🔄 Retrying %s with TechLeadSWEA feedback...", task_name)
+                                
+                                # Enhance payload with feedback for retry
+                                if technical_feedback:
+                                    payload["techlead_feedback"] = technical_feedback
+                                    payload["retry_attempt"] = retry_count
+                            else:
+                                # Max retries reached
+                                logger.error("🛑 %s FAILED after %d attempts - stopping coordination plan", 
+                                           task_name, max_retries + 1)
+                                results.append({
+                                    "task": task_name,
+                                    "success": False,
+                                    "error": f"Task rejected by TechLeadSWEA after {max_retries + 1} attempts",
+                                    "techlead_rejected": True,
+                                    "feedback_history": feedback_history,
+                                    "retry_count": retry_count
+                                })
+                                
+                                # Fail early - stop executing remaining tasks
+                                raise MaxRetriesReachedError(
+                                    task_name, swea_agent, task_type, retry_count, max_retries,
+                                    f"Task rejected by TechLeadSWEA after {max_retries + 1} attempts",
+                                    feedback_history
+                                )
                     
                 except Exception as e:
                     last_error = str(e)
