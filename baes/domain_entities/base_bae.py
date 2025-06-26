@@ -373,19 +373,75 @@ class BaseBae(BaseAgent):
                 },
             ]
 
+            # Store the interpretation for domain knowledge preservation
             interpretation["swea_coordination"] = coordination_plan
-            interpretation["technical_governance"] = "TechLeadSWEA"
-            interpretation["coordination_strategy"] = "centralized_technical_governance"
+
+            # Validate coordination plan before returning
+            validation_errors = self._validate_coordination_plan(coordination_plan)
+            if validation_errors:
+                logger.error(f"❌ {self.entity_name}BAE: Coordination plan validation failed: {validation_errors}")
+                return {
+                    "error": f"Coordination plan validation failed: {validation_errors}",
+                    "entity": self.entity_name,
+                    "validation_errors": validation_errors
+                }
+
+            # Preserve domain knowledge for reusability
+            self._update_domain_knowledge(payload.get("request", ""), extracted_attributes)
+
+            logger.info(
+                f"✅ {self.entity_name}BAE: Interpreted request with {len(extracted_attributes)} attributes and {len(coordination_plan)} SWEA tasks"
+            )
 
             return interpretation
 
         except Exception as e:
-            logger.error("❌ Failed to interpret business request: %s", str(e))
+            logger.error(f"❌ {self.entity_name}BAE: Error interpreting business request: {str(e)}")
             return {
-                "error": f"Business request interpretation failed: {str(e)}",
+                "error": f"Failed to interpret business request: {str(e)}",
                 "entity": self.entity_name,
-                "success": False,
+                "details": str(e),
             }
+
+    def _validate_coordination_plan(self, coordination_plan: List[Dict[str, Any]]) -> List[str]:
+        """
+        Validate that coordination plan has all mandatory attributes.
+        Returns list of validation errors, empty if valid.
+        """
+        errors = []
+        
+        if not coordination_plan:
+            errors.append("Coordination plan is empty")
+            return errors
+        
+        for i, task in enumerate(coordination_plan):
+            task_prefix = f"Task {i+1}"
+            
+            # Check mandatory attributes
+            if not task.get("swea_agent"):
+                errors.append(f"{task_prefix}: Missing 'swea_agent'")
+            elif not task.get("swea_agent").strip():
+                errors.append(f"{task_prefix}: 'swea_agent' cannot be empty")
+            
+            if not task.get("task_type"):
+                errors.append(f"{task_prefix}: Missing 'task_type'")
+            elif not task.get("task_type").strip():
+                errors.append(f"{task_prefix}: 'task_type' cannot be empty")
+            
+            if "payload" not in task:
+                errors.append(f"{task_prefix}: Missing 'payload'")
+            elif not isinstance(task.get("payload"), dict):
+                errors.append(f"{task_prefix}: 'payload' must be a dictionary")
+            else:
+                # Validate payload content for entity-related tasks
+                payload = task.get("payload", {})
+                task_type = task.get("task_type", "")
+                
+                if task_type in ["generate_model", "generate_api", "generate_ui", "setup_database", "migrate_schema"]:
+                    if not payload.get("entity") and not payload.get("entity_name"):
+                        errors.append(f"{task_prefix}: Entity-related task '{task_type}' missing entity information in payload")
+        
+        return errors
 
     def _handle_evolution_request(
         self, business_request: str, context: str, current_schema: Dict[str, Any]

@@ -286,7 +286,7 @@ Please provide the JSON response with UI improvements."""
         # Validate and normalize interpretation structure (Phase 2 standardization)
         interpretation = self._validate_interpretation_structure(interpretation)
         
-        # Apply the interpreted improvements
+        # Apply the interpreted improvements with quality context
         code = self._apply_ui_improvements(interpretation, entity, context)
 
         file_path = self._write_to_managed_system(entity, code)
@@ -295,6 +295,38 @@ Please provide the JSON response with UI improvements."""
                 "file_path": file_path, 
                 "code": code, 
                 "managed_system": True,
-                "improvements_applied": interpretation
+                "improvements_applied": interpretation,
+                "quality_mode": "standard",
             }
         )
+
+    def _generate_ui_code(self, entity: str, attributes: List[str], context: str) -> Dict[str, Any]:
+        """Generate Streamlit UI code for entity management"""
+        try:
+            # Parse attributes
+            parsed_attributes = self._parse_attributes(attributes)
+            
+            # Generate the UI code
+            entity_lower = entity.lower()
+            entity_plural = entity_lower + "s"
+            
+            # Create comprehensive Streamlit UI
+            code = self._create_streamlit_ui_code(entity, entity_lower, entity_plural, parsed_attributes, context)
+            
+            return {
+                "success": True,
+                "data": {
+                    "code": code,
+                    "ui_components": self._extract_ui_components(code),
+                    "entity": entity,
+                    "attributes": parsed_attributes
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ FrontendSWEA: Error in UI code generation: {str(e)}")
+            return {
+                "success": False,
+                "error": f"UI code generation failed: {str(e)}",
+                "data": {}
+            }

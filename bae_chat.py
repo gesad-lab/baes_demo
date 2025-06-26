@@ -896,7 +896,18 @@ class BAEConversationalCLI:
         """Suggest error recovery actions"""
         print("\n🔧 Suggested Recovery Actions:")
 
-        if "MAX_RETRIES_REACHED" in error:
+        if "VALIDATION_ERROR" in error:
+            print("  • A critical validation error occurred during agent communication")
+            print("  • This indicates missing mandatory information in the system coordination")
+            print("  • This is typically a system configuration issue, not a user error")
+            print("  • The generation process was immediately interrupted to prevent system instability")
+            print("  • Please try again with a simpler request first:")
+            print("    - 'add student' (basic entity creation)")
+            print("    - 'add course' (known working entity)")
+            print("  • If the problem persists, this indicates a system bug that needs investigation")
+            print("  • Check the logs for specific validation details")
+
+        elif "MAX_RETRIES_REACHED" in error:
             print("  • The system reached maximum retry attempts for a task")
             print("  • Check your OpenAI API key and internet connection")
             print("  • Try simplifying your request (e.g., 'add student' instead of complex descriptions)")
@@ -911,6 +922,13 @@ class BAEConversationalCLI:
         elif "UNKNOWN_SWEA_AGENT" in error:
             print("  • This is a system configuration issue")
             print("  • Try restarting with 'restart servers'")
+
+        elif "COORDINATION_EXECUTION_ERROR" in error:
+            print("  • An unexpected error occurred during system generation")
+            print("  • This could be due to OpenAI API issues or system configuration problems")
+            print("  • Try again with a simpler request first")
+            print("  • Check your OpenAI API key and internet connection")
+            print("  • If the problem persists, check the logs for detailed error information")
 
         elif "OpenAI" in error or "API" in error:
             print("  • Check your OpenAI API key configuration")

@@ -48966,16 +48966,14 @@
                 "quality_gates_compliance"
               ]
             }
-          ],
-          "technical_governance": "TechLeadSWEA",
-          "coordination_strategy": "centralized_technical_governance"
+          ]
         },
         "context": "academic",
         "business_vocabulary": [],
         "domain_operations": [],
-        "timestamp": "20250626_102348"
+        "timestamp": "20250626_130902"
       },
-      "timestamp": "2025-06-26T10:23:48.597943"
+      "timestamp": "2025-06-26T13:09:02.288910"
     },
     "course": {
       "entity": "course",
@@ -49348,5 +49346,5 @@
       "timestamp": "2025-06-24T07:53:36.831276"
     }
   },
-  "last_saved": "2025-06-26T10:23:48.597963"
+  "last_saved": "2025-06-26T13:09:02.288932"
 }
