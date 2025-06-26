@@ -92,47 +92,219 @@ class BackendSWEA(BaseAgent):
 
         return file_path
 
+    # -------------------- feedback interpretation methods ------------------------
+    def _interpret_feedback_for_backend_generation(self, feedback: List[str], entity: str, code_type: str, original_attributes: List[str]) -> Dict[str, Any]:
+        """
+        Generic feedback interpretation using LLM to understand what backend code changes are needed.
+        This approach can handle any type of feedback without hardcoded conditions.
+        """
+        if not feedback:
+            return {
+                "attributes": original_attributes,
+                "additional_requirements": [],
+                "code_improvements": [],
+                "modifications": []
+            }
+
+        feedback_text = "\n".join(feedback)
+        
+        system_prompt = f"""You are a backend development expert helping to interpret feedback for improving {code_type} generation.
+
+CONTEXT:
+- Entity: {entity}
+- Code Type: {code_type}
+- Original attributes: {original_attributes}
+- Feedback received: {feedback_text}
+
+TASK:
+Interpret the feedback and provide specific backend code improvements in JSON format.
+
+RESPONSE FORMAT (JSON only):
+{{
+    "attributes": ["list", "of", "final", "attributes", "with", "types"],
+    "additional_requirements": ["any", "new", "requirements", "identified"],
+    "code_improvements": ["specific", "code", "improvements", "to", "make"],
+    "modifications": ["changes", "to", "implement"],
+    "explanation": "brief explanation of changes made based on feedback"
+}}
+
+GUIDELINES:
+- Preserve existing attributes unless feedback specifically requests changes
+- Add new attributes if feedback suggests missing fields
+- Include proper data types (str, int, float, date, bool)
+- Consider FastAPI/Pydantic best practices
+- Handle any type of feedback, even unexpected ones
+- If feedback is unclear, make reasonable backend development assumptions
+- Focus on code quality, validation, error handling, and API design
+"""
+
+        user_prompt = f"""Based on the feedback provided, what backend code improvements should be made for the {entity} entity's {code_type}?
+
+Feedback to interpret:
+{feedback_text}
+
+Current attributes:
+{original_attributes}
+
+Please provide the JSON response with backend improvements."""
+
+        try:
+            response = self.llm_client.generate_response(user_prompt, system_prompt)
+            
+            # Try to parse JSON response
+            import json
+            try:
+                interpretation = json.loads(response)
+                return interpretation
+            except json.JSONDecodeError:
+                # Fallback: extract improvements from response text
+                return self._extract_improvements_from_text(response, original_attributes)
+                
+        except Exception as e:
+            # Fallback: return original attributes with error note
+            return {
+                "attributes": original_attributes,
+                "additional_requirements": [],
+                "code_improvements": [],
+                "modifications": [f"Could not interpret feedback: {str(e)}"],
+                "explanation": "Using original attributes due to feedback interpretation error"
+            }
+
+    def _extract_improvements_from_text(self, response_text: str, original_attributes: List[str]) -> Dict[str, Any]:
+        """Fallback method to extract improvements from LLM text response when JSON parsing fails"""
+        # Simple text parsing fallback
+        attributes = original_attributes.copy()
+        improvements = []
+        modifications = []
+        
+        # Look for common patterns in the response
+        lines = response_text.lower().split('\n')
+        for line in lines:
+            if 'add' in line and ('field' in line or 'attribute' in line or 'validation' in line):
+                improvements.append(f"Suggested addition from text: {line.strip()}")
+            elif 'improve' in line or 'enhance' in line:
+                improvements.append(f"Suggested improvement from text: {line.strip()}")
+            elif 'error' in line and 'handling' in line:
+                improvements.append(f"Error handling improvement: {line.strip()}")
+        
+        return {
+            "attributes": attributes,
+            "additional_requirements": [],
+            "code_improvements": improvements,
+            "modifications": modifications,
+            "explanation": "Extracted information from text response (JSON parsing failed)"
+        }
+
+    def _apply_backend_improvements(self, interpretation: Dict[str, Any], entity: str, code_type: str, context: str) -> str:
+        """Apply the interpreted improvements to the backend code generation"""
+        try:
+            attributes = interpretation.get("attributes", [])
+            additional_requirements = interpretation.get("additional_requirements", [])
+            code_improvements = interpretation.get("code_improvements", [])
+            
+            # Build enhanced prompt with feedback-driven improvements
+            base_prompt = self._build_prompt(entity, attributes, code_type, context)
+            
+            # Add improvement instructions to the prompt
+            improvement_instructions = ""
+            if code_improvements:
+                improvement_instructions = f"\n\nIMPROVEMENTS TO IMPLEMENT:\n" + "\n".join(f"- {imp}" for imp in code_improvements)
+            
+            if additional_requirements:
+                improvement_instructions += f"\n\nADDITIONAL REQUIREMENTS:\n" + "\n".join(f"- {req}" for req in additional_requirements)
+            
+            enhanced_prompt = base_prompt + improvement_instructions
+            
+            # Generate improved code
+            code = self.llm_client.generate_code_with_domain_focus(
+                enhanced_prompt,
+                code_type=code_type,
+                entity_context={
+                    "entity": entity,
+                    "attributes": attributes,
+                    "improvements_applied": interpretation,
+                },
+            )
+            
+            return code
+            
+        except Exception as e:
+            # Fallback to basic generation
+            return self.llm_client.generate_code_with_domain_focus(
+                self._build_prompt(entity, interpretation.get("attributes", []), code_type, context),
+                code_type=code_type,
+                entity_context={"entity": entity, "attributes": interpretation.get("attributes", [])},
+            )
+
     # -------------------- task implementations ------------------------
     def _generate_model(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         entity = payload.get("entity", "Student")
         attributes = payload.get("attributes", [])
         context = payload.get("context", "academic")
+        
+        # Extract feedback information from payload
+        techlead_feedback = payload.get("techlead_feedback", [])
+        previous_errors = payload.get("previous_errors", [])
+        expected_output = payload.get("expected_output", "")
+        
+        # Combine all feedback sources
+        all_feedback = []
+        if techlead_feedback:
+            all_feedback.extend(techlead_feedback if isinstance(techlead_feedback, list) else [techlead_feedback])
+        if previous_errors:
+            all_feedback.extend(previous_errors if isinstance(previous_errors, list) else [previous_errors])
+        if expected_output:
+            all_feedback.append(f"Expected output: {expected_output}")
 
-        prompt = self._build_prompt(entity, attributes, "Pydantic Model", context)
-        code = self.llm_client.generate_code_with_domain_focus(
-            prompt,
-            code_type="Pydantic Model",
-            entity_context={
-                "entity": entity,
-                "attributes": attributes,
-                "business_rules": payload.get("business_rules", []),
-            },
-        )
+        # Interpret feedback generically using LLM
+        interpretation = self._interpret_feedback_for_backend_generation(all_feedback, entity, "Pydantic Model", attributes)
+        
+        # Apply the interpreted improvements
+        code = self._apply_backend_improvements(interpretation, entity, "Pydantic Model", context)
 
         file_path = self._write_to_managed_system(entity, "model", code)
         return self.create_success_response(
-            "generate_model", {"file_path": file_path, "code": code, "managed_system": True}
+            "generate_model", {
+                "file_path": file_path, 
+                "code": code, 
+                "managed_system": True,
+                "improvements_applied": interpretation
+            }
         )
 
     def _generate_api(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         entity = payload.get("entity", "Student")
         attributes = payload.get("attributes", [])
         context = payload.get("context", "academic")
+        
+        # Extract feedback information from payload
+        techlead_feedback = payload.get("techlead_feedback", [])
+        previous_errors = payload.get("previous_errors", [])
+        expected_output = payload.get("expected_output", "")
+        
+        # Combine all feedback sources
+        all_feedback = []
+        if techlead_feedback:
+            all_feedback.extend(techlead_feedback if isinstance(techlead_feedback, list) else [techlead_feedback])
+        if previous_errors:
+            all_feedback.extend(previous_errors if isinstance(previous_errors, list) else [previous_errors])
+        if expected_output:
+            all_feedback.append(f"Expected output: {expected_output}")
 
-        prompt = self._build_prompt(entity, attributes, "FastAPI Routes", context)
-        code = self.llm_client.generate_code_with_domain_focus(
-            prompt,
-            code_type="FastAPI Routes",
-            entity_context={
-                "entity": entity,
-                "attributes": attributes,
-                "business_rules": payload.get("business_rules", []),
-            },
-        )
+        # Interpret feedback generically using LLM
+        interpretation = self._interpret_feedback_for_backend_generation(all_feedback, entity, "FastAPI Routes", attributes)
+        
+        # Apply the interpreted improvements
+        code = self._apply_backend_improvements(interpretation, entity, "FastAPI Routes", context)
 
         file_path = self._write_to_managed_system(entity, "routes", code)
         return self.create_success_response(
-            "generate_api", {"file_path": file_path, "code": code, "managed_system": True}
+            "generate_api", {
+                "file_path": file_path, 
+                "code": code, 
+                "managed_system": True,
+                "improvements_applied": interpretation
+            }
         )
 
     def _generate_requirements(self, payload: Dict[str, Any]) -> Dict[str, Any]:

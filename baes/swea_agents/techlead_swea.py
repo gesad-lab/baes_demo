@@ -851,10 +851,31 @@ class TechLeadSWEA(BaseAgent):
                     issues.append("Generated code doesn't appear to be valid Streamlit UI")
 
         elif "Database" in swea_agent:
-            # DatabaseSWEA should have database setup confirmation
-            if not data.get("database_setup") and not data.get("success"):
-                meets_standards = False
-                issues.append("Missing database setup confirmation")
+            # DatabaseSWEA validation - appropriate for database operations
+            if "setup_database" in task_type:
+                # Check for database path or creation confirmation
+                database_path = data.get("database_path")
+                tables_created = data.get("tables_created", [])
+                
+                if not database_path and not tables_created:
+                    meets_standards = False
+                    issues.append("Missing database creation confirmation")
+                else:
+                    # Validate database setup details
+                    if database_path and not database_path.endswith('.db'):
+                        meets_standards = False
+                        issues.append("Invalid database file path format")
+                    
+                    if not tables_created or len(tables_created) == 0:
+                        meets_standards = False
+                        issues.append("No database tables were created")
+            
+            elif "migrate_schema" in task_type:
+                # Check for migration confirmation
+                migration_applied = data.get("migration_applied", False)
+                if not migration_applied:
+                    meets_standards = False
+                    issues.append("Schema migration was not applied successfully")
 
         return {
             "meets_standards": meets_standards,
@@ -900,31 +921,55 @@ class TechLeadSWEA(BaseAgent):
             # Check if result contains expected business vocabulary
             result_content = str(result).lower()
             entity_lower = entity.lower()
-
-            # Business vocabulary alignment checks
-            has_entity_reference = entity_lower in result_content
-            follows_naming_convention = entity_lower in result_content and (
-                "model" in result_content or "class" in result_content
-            )
-
-            # Domain-specific vocabulary preservation
-            business_terms = ["create", "read", "update", "delete", "list"]
-            has_business_terms = any(term in result_content for term in business_terms)
-
-            # Semantic coherence check
-            semantic_coherence = has_entity_reference and has_business_terms
+            
+            # Get the task type to determine appropriate validation
+            task_type = result.get("task", "")
+            swea_agent = ""
+            if "database" in task_type.lower():
+                swea_agent = "Database"
+            elif "backend" in task_type.lower() or "model" in task_type.lower() or "api" in task_type.lower():
+                swea_agent = "Backend"
+            elif "frontend" in task_type.lower() or "ui" in task_type.lower():
+                swea_agent = "Frontend"
 
             misalignments = []
-            if not has_entity_reference:
-                misalignments.append(f"Missing {entity} entity reference")
-            if not follows_naming_convention:
-                misalignments.append("Naming convention not followed")
-            if not has_business_terms:
-                misalignments.append("Missing business vocabulary terms")
+            
+            if "Database" in swea_agent:
+                # DatabaseSWEA business alignment - focus on data persistence and structure
+                has_entity_reference = entity_lower in result_content
+                has_database_terms = any(term in result_content for term in ["table", "database", "schema", "column"])
+                
+                if not has_entity_reference:
+                    misalignments.append(f"Missing {entity} entity reference in database setup")
+                if not has_database_terms:
+                    misalignments.append("Missing database-specific vocabulary")
+                
+                semantic_coherence = has_entity_reference and has_database_terms
+                
+            else:
+                # Code-generating SWEAs (Backend/Frontend) - original validation logic
+                has_entity_reference = entity_lower in result_content
+                follows_naming_convention = entity_lower in result_content and (
+                    "model" in result_content or "class" in result_content
+                )
+
+                # Domain-specific vocabulary preservation
+                business_terms = ["create", "read", "update", "delete", "list"]
+                has_business_terms = any(term in result_content for term in business_terms)
+
+                # Semantic coherence check
+                semantic_coherence = has_entity_reference and has_business_terms
+
+                if not has_entity_reference:
+                    misalignments.append(f"Missing {entity} entity reference")
+                if not follows_naming_convention:
+                    misalignments.append("Naming convention not followed")
+                if not has_business_terms:
+                    misalignments.append("Missing business vocabulary terms")
 
             return {
                 "aligned": len(misalignments) == 0,
-                "alignment_score": 1.0 - (len(misalignments) / 3.0),
+                "alignment_score": 1.0 - (len(misalignments) / max(1, len(misalignments))),
                 "misalignments": misalignments,
                 "semantic_coherence": semantic_coherence,
             }

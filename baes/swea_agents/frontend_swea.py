@@ -68,23 +68,181 @@ No markdown, no explanations, just working Python code.
 
         return file_path
 
+    # -------------------- feedback interpretation methods ------------------------
+    def _interpret_feedback_for_ui_generation(self, feedback: List[str], entity: str, original_attributes: List[str]) -> Dict[str, Any]:
+        """
+        Generic feedback interpretation using LLM to understand what UI changes are needed.
+        This approach can handle any type of feedback without hardcoded conditions.
+        """
+        if not feedback:
+            return {
+                "attributes": original_attributes,
+                "ui_improvements": [],
+                "layout_changes": [],
+                "modifications": []
+            }
+
+        feedback_text = "\n".join(feedback)
+        
+        system_prompt = f"""You are a UI/UX expert helping to interpret feedback for improving Streamlit UI generation.
+
+CONTEXT:
+- Entity: {entity}
+- Original attributes: {original_attributes}
+- Feedback received: {feedback_text}
+
+TASK:
+Interpret the feedback and provide specific UI improvements in JSON format.
+
+RESPONSE FORMAT (JSON only):
+{{
+    "attributes": ["list", "of", "final", "attributes", "with", "types"],
+    "ui_improvements": ["specific", "UI", "improvements", "to", "make"],
+    "layout_changes": ["layout", "or", "design", "modifications"],
+    "modifications": ["changes", "to", "implement"],
+    "explanation": "brief explanation of changes made based on feedback"
+}}
+
+GUIDELINES:
+- Preserve existing attributes unless feedback specifically requests changes
+- Add new attributes if feedback suggests missing fields
+- Focus on user experience, accessibility, and visual design
+- Consider Streamlit best practices and components
+- Handle any type of feedback, even unexpected ones
+- If feedback is unclear, make reasonable UI/UX assumptions
+- Prioritize usability, clarity, and functionality
+"""
+
+        user_prompt = f"""Based on the feedback provided, what UI improvements should be made for the {entity} entity's Streamlit interface?
+
+Feedback to interpret:
+{feedback_text}
+
+Current attributes:
+{original_attributes}
+
+Please provide the JSON response with UI improvements."""
+
+        try:
+            response = self.llm_client.generate_response(user_prompt, system_prompt)
+            
+            # Try to parse JSON response
+            import json
+            try:
+                interpretation = json.loads(response)
+                return interpretation
+            except json.JSONDecodeError:
+                # Fallback: extract improvements from response text
+                return self._extract_ui_improvements_from_text(response, original_attributes)
+                
+        except Exception as e:
+            # Fallback: return original attributes with error note
+            return {
+                "attributes": original_attributes,
+                "ui_improvements": [],
+                "layout_changes": [],
+                "modifications": [f"Could not interpret feedback: {str(e)}"],
+                "explanation": "Using original attributes due to feedback interpretation error"
+            }
+
+    def _extract_ui_improvements_from_text(self, response_text: str, original_attributes: List[str]) -> Dict[str, Any]:
+        """Fallback method to extract UI improvements from LLM text response when JSON parsing fails"""
+        # Simple text parsing fallback
+        attributes = original_attributes.copy()
+        ui_improvements = []
+        layout_changes = []
+        modifications = []
+        
+        # Look for common patterns in the response
+        lines = response_text.lower().split('\n')
+        for line in lines:
+            if 'add' in line and ('field' in line or 'form' in line or 'button' in line):
+                ui_improvements.append(f"Suggested UI addition from text: {line.strip()}")
+            elif 'improve' in line or 'enhance' in line:
+                ui_improvements.append(f"Suggested UI improvement from text: {line.strip()}")
+            elif 'layout' in line or 'design' in line:
+                layout_changes.append(f"Layout change from text: {line.strip()}")
+        
+        return {
+            "attributes": attributes,
+            "ui_improvements": ui_improvements,
+            "layout_changes": layout_changes,
+            "modifications": modifications,
+            "explanation": "Extracted information from text response (JSON parsing failed)"
+        }
+
+    def _apply_ui_improvements(self, interpretation: Dict[str, Any], entity: str, context: str) -> str:
+        """Apply the interpreted improvements to the UI code generation"""
+        try:
+            attributes = interpretation.get("attributes", [])
+            ui_improvements = interpretation.get("ui_improvements", [])
+            layout_changes = interpretation.get("layout_changes", [])
+            
+            # Build enhanced prompt with feedback-driven improvements
+            base_prompt = self._build_prompt(entity, attributes, context)
+            
+            # Add improvement instructions to the prompt
+            improvement_instructions = ""
+            if ui_improvements:
+                improvement_instructions = f"\n\nUI IMPROVEMENTS TO IMPLEMENT:\n" + "\n".join(f"- {imp}" for imp in ui_improvements)
+            
+            if layout_changes:
+                improvement_instructions += f"\n\nLAYOUT CHANGES:\n" + "\n".join(f"- {change}" for change in layout_changes)
+            
+            enhanced_prompt = base_prompt + improvement_instructions
+            
+            # Generate improved UI code
+            code = self.llm_client.generate_code_with_domain_focus(
+                enhanced_prompt,
+                code_type="Streamlit UI",
+                entity_context={
+                    "entity": entity,
+                    "attributes": attributes,
+                    "improvements_applied": interpretation,
+                },
+            )
+            
+            return code
+            
+        except Exception as e:
+            # Fallback to basic generation
+            return self.llm_client.generate_code_with_domain_focus(
+                self._build_prompt(entity, interpretation.get("attributes", []), context),
+                code_type="Streamlit UI",
+                entity_context={"entity": entity, "attributes": interpretation.get("attributes", [])},
+            )
+
     def _generate_ui(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         entity = payload.get("entity", "Student")
         attributes = payload.get("attributes", [])
         context = payload.get("context", "academic")
+        
+        # Extract feedback information from payload
+        techlead_feedback = payload.get("techlead_feedback", [])
+        previous_errors = payload.get("previous_errors", [])
+        expected_output = payload.get("expected_output", "")
+        
+        # Combine all feedback sources
+        all_feedback = []
+        if techlead_feedback:
+            all_feedback.extend(techlead_feedback if isinstance(techlead_feedback, list) else [techlead_feedback])
+        if previous_errors:
+            all_feedback.extend(previous_errors if isinstance(previous_errors, list) else [previous_errors])
+        if expected_output:
+            all_feedback.append(f"Expected output: {expected_output}")
 
-        prompt = self._build_prompt(entity, attributes, context)
-        code = self.llm_client.generate_code_with_domain_focus(
-            prompt,
-            code_type="Streamlit UI",
-            entity_context={
-                "entity": entity,
-                "attributes": attributes,
-                "business_rules": payload.get("business_rules", []),
-            },
-        )
+        # Interpret feedback generically using LLM
+        interpretation = self._interpret_feedback_for_ui_generation(all_feedback, entity, attributes)
+        
+        # Apply the interpreted improvements
+        code = self._apply_ui_improvements(interpretation, entity, context)
 
         file_path = self._write_to_managed_system(entity, code)
         return self.create_success_response(
-            "generate_ui", {"file_path": file_path, "code": code, "managed_system": True}
+            "generate_ui", {
+                "file_path": file_path, 
+                "code": code, 
+                "managed_system": True,
+                "improvements_applied": interpretation
+            }
         )
