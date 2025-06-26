@@ -41,6 +41,9 @@ class Config:
     DOMAIN_ENTITY_FOCUS = True
     SEMANTIC_COHERENCE_VALIDATION = True
     BUSINESS_VOCABULARY_PRESERVATION = True
+    
+    # BAE System Retry Configuration
+    BAE_MAX_RETRIES = int(os.getenv("BAE_MAX_RETRIES", "3"))
 
     # Managed System Configuration
     @classmethod

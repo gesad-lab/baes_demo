@@ -896,7 +896,15 @@ class BAEConversationalCLI:
         """Suggest error recovery actions"""
         print("\n🔧 Suggested Recovery Actions:")
 
-        if "ENTITY_NOT_SUPPORTED" in error:
+        if "MAX_RETRIES_REACHED" in error:
+            print("  • The system reached maximum retry attempts for a task")
+            print("  • Check your OpenAI API key and internet connection")
+            print("  • Try simplifying your request (e.g., 'add student' instead of complex descriptions)")
+            print("  • Wait a moment and try again - API might be temporarily overloaded")
+            print(f"  • Current max retries: {os.getenv('BAE_MAX_RETRIES', '3')} (configurable via BAE_MAX_RETRIES)")
+            print("  • Check system logs for specific error details")
+
+        elif "ENTITY_NOT_SUPPORTED" in error:
             print("  • Try: 'add student', 'add course', or 'add teacher'")
             print("  • Use supported entity keywords in your request")
 

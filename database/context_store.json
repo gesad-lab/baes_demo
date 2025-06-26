@@ -48757,11 +48757,12 @@
           "domain": "academic",
           "attributes": [
             "name: str",
-            "email: str"
+            "registration_number: str",
+            "course: str"
           ],
           "is_evolution": false,
           "request_type": "generation",
-          "business_context": "Create a simple student entity with name and email",
+          "business_context": "Create a student entity with basic fields",
           "semantic_coherence": true,
           "domain_knowledge_preserved": true,
           "swea_coordination": [
@@ -48772,9 +48773,10 @@
                 "entity": "Student",
                 "attributes": [
                   "name: str",
-                  "email: str"
+                  "registration_number: str",
+                  "course: str"
                 ],
-                "context": "Create a simple student entity with name and email",
+                "context": "Create a student entity with basic fields",
                 "is_evolution": false,
                 "business_requirements": {
                   "domain_focus": true,
@@ -48805,9 +48807,10 @@
                 "entity": "Student",
                 "attributes": [
                   "name: str",
-                  "email: str"
+                  "registration_number: str",
+                  "course: str"
                 ],
-                "context": "Create a simple student entity with name and email",
+                "context": "Create a student entity with basic fields",
                 "preserve_data": false,
                 "business_rules": true
               },
@@ -48831,9 +48834,10 @@
                 "entity": "Student",
                 "attributes": [
                   "name: str",
-                  "email: str"
+                  "registration_number: str",
+                  "course: str"
                 ],
-                "context": "Create a simple student entity with name and email",
+                "context": "Create a student entity with basic fields",
                 "domain_focus": true,
                 "semantic_coherence": true
               },
@@ -48857,9 +48861,10 @@
                 "entity": "Student",
                 "attributes": [
                   "name: str",
-                  "email: str"
+                  "registration_number: str",
+                  "course: str"
                 ],
-                "context": "Create a simple student entity with name and email",
+                "context": "Create a student entity with basic fields",
                 "crud_operations": true,
                 "business_vocabulary": true
               },
@@ -48883,9 +48888,10 @@
                 "entity": "Student",
                 "attributes": [
                   "name: str",
-                  "email: str"
+                  "registration_number: str",
+                  "course: str"
                 ],
-                "context": "Create a simple student entity with name and email",
+                "context": "Create a student entity with basic fields",
                 "business_vocabulary": true,
                 "user_friendly": true
               },
@@ -48909,9 +48915,10 @@
                 "entity": "Student",
                 "attributes": [
                   "name: str",
-                  "email: str"
+                  "registration_number: str",
+                  "course: str"
                 ],
-                "context": "Create a simple student entity with name and email",
+                "context": "Create a student entity with basic fields",
                 "test_types": [
                   "unit",
                   "integration",
@@ -48937,7 +48944,7 @@
               "task_type": "review_and_approve",
               "payload": {
                 "entity": "Student",
-                "context": "Create a simple student entity with name and email",
+                "context": "Create a student entity with basic fields",
                 "system_components": [
                   "database",
                   "backend",
@@ -48966,9 +48973,9 @@
         "context": "academic",
         "business_vocabulary": [],
         "domain_operations": [],
-        "timestamp": "20250624_103915"
+        "timestamp": "20250626_102348"
       },
-      "timestamp": "2025-06-24T10:39:15.984792"
+      "timestamp": "2025-06-26T10:23:48.597943"
     },
     "course": {
       "entity": "course",
@@ -49341,5 +49348,5 @@
       "timestamp": "2025-06-24T07:53:36.831276"
     }
   },
-  "last_saved": "2025-06-24T10:39:15.984809"
+  "last_saved": "2025-06-26T10:23:48.597963"
 }

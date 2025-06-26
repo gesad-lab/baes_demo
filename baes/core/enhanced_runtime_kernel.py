@@ -37,6 +37,24 @@ class UnknownSWEAAgentError(Exception):
         )
 
 
+class MaxRetriesReachedError(Exception):
+    """Raised when maximum number of retries is reached for a task, interrupting generation process"""
+
+    def __init__(self, task_name: str, swea_agent: str, task_type: str, retry_count: int, max_retries: int, last_error: str, feedback: List[str] = None):
+        self.task_name = task_name
+        self.swea_agent = swea_agent
+        self.task_type = task_type
+        self.retry_count = retry_count
+        self.max_retries = max_retries
+        self.last_error = last_error
+        self.feedback = feedback or []
+        
+        super().__init__(
+            f"Maximum retries ({max_retries}) reached for task '{task_name}' ({swea_agent}.{task_type}). "
+            f"Last error: {last_error}. Generation process interrupted."
+        )
+
+
 class EnhancedRuntimeKernel:
     """
     Enhanced Runtime Kernel for BAE Academic System supporting multiple domain entities.
@@ -182,6 +200,28 @@ class EnhancedRuntimeKernel:
                 execution_results = self._execute_coordination_plan(
                     coordination_plan, target_bae, context
                 )
+            except MaxRetriesReachedError as e:
+                logger.error("❌ Generation process interrupted: %s", str(e))
+                return {
+                    "success": False,
+                    "error": "MAX_RETRIES_REACHED",
+                    "message": f"Generation failed after {e.max_retries} retry attempts",
+                    "details": {
+                        "failed_task": e.task_name,
+                        "swea_agent": e.swea_agent,
+                        "task_type": e.task_type,
+                        "retry_count": e.retry_count,
+                        "max_retries": e.max_retries,
+                        "last_error": e.last_error,
+                        "feedback": e.feedback,
+                    },
+                    "entity": detected_entity,
+                    "help": (
+                        f"The task '{e.task_name}' failed after {e.max_retries} attempts. "
+                        f"Last error: {e.last_error}. Please review the requirements and try again."
+                    ),
+                    "generation_interrupted": True,
+                }
             except UnknownSWEAAgentError as e:
                 logger.error("❌ Coordination plan execution failed: %s", str(e))
                 return {
@@ -263,9 +303,27 @@ class EnhancedRuntimeKernel:
             self._reload_system_components()
             self._start_servers()
 
-        # Step 10: Return comprehensive result
+        # Step 10: Return comprehensive result with strict success criteria
+        # Calculate overall success - ALL tasks must succeed (strict criteria)
+        overall_success = True
+        failed_tasks = []
+        
+        if execution_results:
+            for task_result in execution_results:
+                if not task_result.get("success", False):
+                    overall_success = False
+                    failed_tasks.append({
+                        "task": task_result.get("task", "unknown"),
+                        "error": task_result.get("error", "unknown error"),
+                        "feedback": task_result.get("feedback", [])
+                    })
+        else:
+            # No execution results means failure
+            overall_success = False
+            failed_tasks.append({"task": "system_generation", "error": "No tasks were executed"})
+
         result = {
-            "success": True,
+            "success": overall_success,
             "entity": detected_entity,
             "confidence": confidence,
             "bae_used": target_bae.name,
@@ -274,9 +332,18 @@ class EnhancedRuntimeKernel:
             "language_detected": entity_classification.get("language_detected"),
             "action_intent": entity_classification.get("action_intent"),
             "domain_knowledge_preserved": True,
+            "failed_tasks": failed_tasks,
+            "total_tasks": len(execution_results) if execution_results else 0,
+            "successful_tasks": len([r for r in execution_results if r.get("success", False)]) if execution_results else 0,
         }
 
-        logger.debug("✅ Request processed successfully for %s entity", detected_entity)
+        if overall_success:
+            logger.debug("✅ Request processed successfully for %s entity - ALL tasks succeeded", detected_entity)
+        else:
+            logger.warning("❌ Request processing FAILED for %s entity - %d tasks failed", detected_entity, len(failed_tasks))
+            for failed_task in failed_tasks:
+                logger.warning("   Failed: %s - %s", failed_task["task"], failed_task["error"])
+        
         return result
 
     def _create_unsupported_entity_error(
@@ -361,7 +428,9 @@ class EnhancedRuntimeKernel:
             quality_gates = {}
             logger.warning("⚠️ TechLeadSWEA coordination failed, proceeding with original plan")
 
-        # Step 2: Execute enhanced coordination plan under TechLeadSWEA supervision
+        # Step 2: Execute enhanced coordination plan under TechLeadSWEA supervision with retry logic
+        max_retries = Config.BAE_MAX_RETRIES  # Maximum number of retries per task
+        
         for task in enhanced_plan:
             swea_agent_name = task.get("swea_agent", "")
             task_type = task.get("task_type", "")
@@ -416,86 +485,138 @@ class EnhancedRuntimeKernel:
                 )
                 continue
 
-            # Execute task with TechLeadSWEA oversight
-            try:
-                logger.debug(
-                    "🔧 Executing: %s.%s under TechLeadSWEA supervision", swea_agent_name, task_type
-                )
-                result = agent.handle_task(task_type, payload)
-
-                # TechLeadSWEA reviews the result for quality compliance
-                if result.get("success"):
-                    review_payload = {
-                        "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
-                        "swea_agent": swea_agent_name,
-                        "task_type": task_type,
-                        "result": result,
-                        "quality_gates": quality_gates,
-                    }
-
-                    review_result = self.techlead_swea.handle_task(
-                        "review_and_approve", review_payload
+            # Execute task with TechLeadSWEA oversight and retry logic
+            retry_count = 0
+            task_success = False
+            
+            while retry_count <= max_retries and not task_success:
+                try:
+                    retry_suffix = f" (retry {retry_count})" if retry_count > 0 else ""
+                    logger.debug(
+                        "🔧 Executing: %s.%s under TechLeadSWEA supervision%s", 
+                        swea_agent_name, task_type, retry_suffix
                     )
+                    
+                    # Add retry context to payload if this is a retry
+                    current_payload = payload.copy()
+                    if retry_count > 0:
+                        current_payload["retry_attempt"] = retry_count
+                        current_payload["is_retry"] = True
+                    
+                    result = agent.handle_task(task_type, current_payload)
 
-                    if review_result.get("success") and review_result.get("data", {}).get(
-                        "overall_approval", True
-                    ):
-                        results.append(
-                            {
-                                "task": f"{swea_agent_name}.{task_type}",
-                                "success": True,
-                                "result": result,
-                                "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
-                                "technical_review": "approved",
-                                "quality_score": review_result.get("data", {}).get(
-                                    "quality_score", 0
-                                ),
-                            }
-                        )
-                        logger.debug("✅ TechLeadSWEA approved: %s.%s", swea_agent_name, task_type)
-                    else:
-                        # TechLeadSWEA rejected - request fixes
-                        feedback = review_result.get("data", {}).get("technical_feedback", [])
-                        logger.warning(
-                            "⚠️ TechLeadSWEA rejected: %s.%s - %s",
-                            swea_agent_name,
-                            task_type,
-                            feedback,
-                        )
-
-                        results.append(
-                            {
-                                "task": f"{swea_agent_name}.{task_type}",
-                                "success": False,
-                                "result": result,
-                                "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
-                                "technical_review": "rejected",
-                                "feedback": feedback,
-                                "requires_revision": True,
-                            }
-                        )
-                else:
-                    results.append(
-                        {
-                            "task": f"{swea_agent_name}.{task_type}",
-                            "success": False,
-                            "error": result.get("error", "Task execution failed"),
+                    # TechLeadSWEA reviews the result for quality compliance
+                    if result.get("success"):
+                        review_payload = {
                             "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
-                            "technical_governance": True,
+                            "swea_agent": swea_agent_name,
+                            "task_type": task_type,
+                            "result": result,
+                            "quality_gates": quality_gates,
                         }
-                    )
 
-            except Exception as e:
-                logger.error("❌ Failed: %s.%s - %s", swea_agent_name, task_type, str(e))
-                results.append(
-                    {
-                        "task": f"{swea_agent_name}.{task_type}",
-                        "success": False,
-                        "error": str(e),
-                        "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
-                        "technical_governance": True,
-                    }
-                )
+                        review_result = self.techlead_swea.handle_task(
+                            "review_and_approve", review_payload
+                        )
+
+                        if review_result.get("success") and review_result.get("data", {}).get(
+                            "overall_approval", True
+                        ):
+                            # Task approved - success!
+                            results.append(
+                                {
+                                    "task": f"{swea_agent_name}.{task_type}",
+                                    "success": True,
+                                    "result": result,
+                                    "entity": getattr(coordinating_bae, "entity_name", "Unknown"),
+                                    "technical_review": "approved",
+                                    "quality_score": review_result.get("data", {}).get(
+                                        "quality_score", 0
+                                    ),
+                                    "retry_count": retry_count,
+                                }
+                            )
+                            logger.debug("✅ TechLeadSWEA approved: %s.%s%s", swea_agent_name, task_type, retry_suffix)
+                            task_success = True
+                        else:
+                            # TechLeadSWEA rejected - prepare for retry or final failure
+                            feedback = review_result.get("data", {}).get("technical_feedback", [])
+                            logger.warning(
+                                "⚠️ TechLeadSWEA rejected: %s.%s%s - %s",
+                                swea_agent_name,
+                                task_type,
+                                retry_suffix,
+                                feedback,
+                            )
+
+                            if retry_count < max_retries:
+                                # Prepare for retry with feedback
+                                logger.info("🔄 Preparing retry %d/%d for %s.%s with feedback", 
+                                          retry_count + 1, max_retries, swea_agent_name, task_type)
+                                
+                                # Add feedback to payload for next retry
+                                payload["techlead_feedback"] = feedback
+                                payload["expected_output"] = self._get_expected_output_for_task(
+                                    swea_agent_name, task_type, getattr(coordinating_bae, "entity_name", "Unknown")
+                                )
+                                payload["previous_errors"] = feedback
+                                retry_count += 1
+                            else:
+                                # Max retries reached - raise error to interrupt generation process
+                                logger.error("❌ Max retries reached for %s.%s - execution failed", 
+                                           swea_agent_name, task_type)
+                                
+                                raise MaxRetriesReachedError(
+                                    task_name=f"{swea_agent_name}.{task_type}",
+                                    swea_agent=swea_agent_name,
+                                    task_type=task_type,
+                                    retry_count=retry_count,
+                                    max_retries=max_retries,
+                                    last_error="TechLeadSWEA quality review failed",
+                                    feedback=[]
+                                )
+                    else:
+                        # SWEA task execution failed
+                        error_msg = result.get("error", "Unknown execution error")
+                        logger.warning("⚠️ SWEA task execution failed: %s.%s%s - %s", 
+                                     swea_agent_name, task_type, retry_suffix, error_msg)
+                        
+                        if retry_count < max_retries:
+                            # Prepare for retry with error information
+                            payload["previous_execution_error"] = error_msg
+                            payload["retry_attempt"] = retry_count + 1
+                            retry_count += 1
+                        else:
+                            # Max retries reached - raise error to interrupt generation process
+                            logger.error("❌ Max retries reached for %s.%s - execution failed", 
+                                       swea_agent_name, task_type)
+                            
+                            raise MaxRetriesReachedError(
+                                task_name=f"{swea_agent_name}.{task_type}",
+                                swea_agent=swea_agent_name,
+                                task_type=task_type,
+                                retry_count=retry_count,
+                                max_retries=max_retries,
+                                last_error=error_msg,
+                                feedback=[]
+                            )
+
+                except Exception as e:
+                    logger.error("❌ Failed: %s.%s%s - %s", swea_agent_name, task_type, retry_suffix, str(e))
+                    if retry_count < max_retries:
+                        payload["previous_exception"] = str(e)
+                        retry_count += 1
+                    else:
+                        # Max retries reached - raise error to interrupt generation process
+                        raise MaxRetriesReachedError(
+                            task_name=f"{swea_agent_name}.{task_type}",
+                            swea_agent=swea_agent_name,
+                            task_type=task_type,
+                            retry_count=retry_count,
+                            max_retries=max_retries,
+                            last_error=str(e),
+                            feedback=[]
+                        )
 
         # Step 3: Final TechLeadSWEA system review and approval
         if results:
@@ -891,6 +1012,43 @@ class EnhancedRuntimeKernel:
     def _get_timestamp(self) -> str:
         """Get current timestamp"""
         return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    def _get_expected_output_for_task(self, swea_agent: str, task_type: str, entity: str) -> str:
+        """Get expected output description for a specific SWEA task to guide retry attempts"""
+        
+        if "Backend" in swea_agent:
+            if "generate_model" in task_type:
+                return f"""Expected Pydantic model output for {entity}:
+- Must include 'from pydantic import BaseModel' import
+- Must have 'class {entity}(BaseModel):' definition
+- Must include proper field definitions with type hints
+- Should include field validators if needed
+- Must be syntactically valid Python code"""
+                
+            elif "generate_api" in task_type:
+                return f"""Expected FastAPI routes output for {entity}:
+- Must include 'from fastapi import APIRouter' import
+- Must create router = APIRouter() instance
+- Must implement CRUD endpoints (POST, GET, PUT, DELETE)
+- Must include proper error handling
+- Must be syntactically valid Python code"""
+                
+        elif "Frontend" in swea_agent:
+            return f"""Expected Streamlit UI output for {entity}:
+- Must include 'import streamlit as st' import
+- Must use st.* functions for UI components
+- Must implement forms for data input
+- Must include data display functionality
+- Must be syntactically valid Python code"""
+            
+        elif "Database" in swea_agent:
+            return f"""Expected database setup output for {entity}:
+- Must create database tables successfully
+- Must return confirmation of database setup
+- Must handle database connection properly
+- Must implement proper error handling"""
+            
+        return f"Expected successful execution with proper output format for {swea_agent}.{task_type}"
 
 
 # CLI Interface

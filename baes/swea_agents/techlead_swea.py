@@ -810,24 +810,51 @@ class TechLeadSWEA(BaseAgent):
             meets_standards = False
             issues.append("Task execution failed")
 
-        # Agent-specific quality checks
+        # Agent-specific quality checks - Updated to match actual SWEA response format
+        data = result.get("data", {})
+        
         if "Backend" in swea_agent:
-            if "generate_model" in task_type and not result.get("data", {}).get("model_code"):
-                meets_standards = False
-                issues.append("Missing model code generation")
-            elif "generate_api" in task_type and not result.get("data", {}).get("api_code"):
-                meets_standards = False
-                issues.append("Missing API code generation")
+            if "generate_model" in task_type:
+                # BackendSWEA returns "code" not "model_code"
+                if not data.get("code"):
+                    meets_standards = False
+                    issues.append("Missing model code generation")
+                else:
+                    # Validate that it looks like a Pydantic model
+                    code = data.get("code", "")
+                    if "BaseModel" not in code or "class " not in code:
+                        meets_standards = False
+                        issues.append("Generated code doesn't appear to be a valid Pydantic model")
+                        
+            elif "generate_api" in task_type:
+                # BackendSWEA returns "code" not "api_code"
+                if not data.get("code"):
+                    meets_standards = False
+                    issues.append("Missing API code generation")
+                else:
+                    # Validate that it looks like FastAPI code
+                    code = data.get("code", "")
+                    if "APIRouter" not in code or "from fastapi import" not in code:
+                        meets_standards = False
+                        issues.append("Generated code doesn't appear to be valid FastAPI routes")
 
         elif "Frontend" in swea_agent:
-            if not result.get("data", {}).get("ui_code"):
+            # FrontendSWEA returns "code" not "ui_code"
+            if not data.get("code"):
                 meets_standards = False
                 issues.append("Missing UI code generation")
+            else:
+                # Validate that it looks like Streamlit code
+                code = data.get("code", "")
+                if "streamlit" not in code.lower() or "st." not in code:
+                    meets_standards = False
+                    issues.append("Generated code doesn't appear to be valid Streamlit UI")
 
         elif "Database" in swea_agent:
-            if not result.get("data", {}).get("database_setup"):
+            # DatabaseSWEA should have database setup confirmation
+            if not data.get("database_setup") and not data.get("success"):
                 meets_standards = False
-                issues.append("Missing database setup")
+                issues.append("Missing database setup confirmation")
 
         return {
             "meets_standards": meets_standards,
@@ -846,15 +873,17 @@ class TechLeadSWEA(BaseAgent):
         data = result.get("data", {})
 
         if "Backend" in swea_agent:
-            # Check for proper code structure
+            # Check for proper code structure - Updated to use actual SWEA response format
             if "generate_model" in task_type:
-                model_code = data.get("model_code", "")
+                # BackendSWEA returns "code" not "model_code"
+                model_code = data.get("code", "")
                 if "from pydantic import BaseModel" not in model_code:
                     compliant = False
                     violations.append("Missing Pydantic BaseModel import")
 
             elif "generate_api" in task_type:
-                api_code = data.get("api_code", "")
+                # BackendSWEA returns "code" not "api_code" 
+                api_code = data.get("code", "")
                 if "from fastapi import" not in api_code:
                     compliant = False
                     violations.append("Missing FastAPI imports")
