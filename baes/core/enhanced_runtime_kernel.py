@@ -1226,6 +1226,14 @@ def main():
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
+    
+    # Configure httpx logging to suppress HTTP request logs unless in debug mode
+    # httpx logs every HTTP request at INFO level, which is too verbose for normal operation
+    httpx_logger = logging.getLogger("httpx")
+    if os.getenv("BAE_DEBUG", "0").lower() in ("1", "true", "on", "yes"):
+        httpx_logger.setLevel(logging.DEBUG)
+    else:
+        httpx_logger.setLevel(logging.WARNING)  # Only show warnings and errors
 
     # Initialize kernel
     kernel = EnhancedRuntimeKernel()

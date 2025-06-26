@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import requests
+import logging
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -1022,6 +1023,15 @@ class BAEConversationalCLI:
 
 def main():
     """Main entry point"""
+    # Configure logging to suppress verbose httpx logs unless in debug mode
+    # httpx logs every HTTP request at INFO level, which is too verbose for normal operation
+    httpx_logger = logging.getLogger("httpx")
+    if os.getenv("BAE_DEBUG", "0").lower() in ("1", "true", "on", "yes"):
+        httpx_logger.setLevel(logging.DEBUG)
+        print("🐛 Debug mode enabled - HTTP request logs will be shown")
+    else:
+        httpx_logger.setLevel(logging.WARNING)  # Only show warnings and errors
+    
     cli = BAEConversationalCLI()
     cli.start_conversation()
 

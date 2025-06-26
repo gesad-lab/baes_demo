@@ -13,6 +13,14 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Suppress httpx logs unless in debug mode
+# httpx logs every HTTP request at INFO level, which is too verbose for normal operation
+httpx_logger = logging.getLogger("httpx")
+if os.getenv("BAE_DEBUG", "0").lower() in ("1", "true", "on", "yes"):
+    httpx_logger.setLevel(logging.DEBUG)
+else:
+    httpx_logger.setLevel(logging.WARNING)  # Only show warnings and errors
+
 
 class OpenAIClient:
     """
