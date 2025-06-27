@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 import openai
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

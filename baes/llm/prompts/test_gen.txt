@@ -43,3 +43,5 @@ For UI TESTS:
 - Test navigation and UI workflows
 
 CRITICAL: Generate ONLY complete Python code with proper imports, fixtures, and test classes - no markdown, no explanations.
+
+IMPORTANT: Only generate tests if all required dependencies (model, API, UI, database) are present and correct. If any dependency is missing or incomplete, do not generate a fallback or placeholder test. Instead, raise an error and stop the process.

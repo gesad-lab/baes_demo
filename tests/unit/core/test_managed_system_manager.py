@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 from baes.core.managed_system_manager import ManagedSystemManager
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 # Helper for test-specific managed system path

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from baes.core.managed_system_manager import ManagedSystemManager
 from config import Config
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 @pytest.mark.unit

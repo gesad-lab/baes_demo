@@ -1,10 +1,10 @@
+import logging
 import os
 from typing import Any, Dict, List
 
 from ..agents.base_agent import BaseAgent
 from ..core.managed_system_manager import ManagedSystemManager
 from ..llm.openai_client import OpenAIClient
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -106,13 +106,15 @@ class BackendSWEA(BaseAgent):
             "additional_requirements": [],
             "code_improvements": [],
             "modifications": [],
-            "explanation": interpretation.get("explanation", "No explanation provided")
+            "explanation": interpretation.get("explanation", "No explanation provided"),
         }
-        
+
         # Normalize attributes to consistent string format
         raw_attributes = interpretation.get("attributes", [])
-        logger.debug(f"BackendSWEA: Processing {len(raw_attributes)} attributes with types: {[type(attr) for attr in raw_attributes]}")
-        
+        logger.debug(
+            f"BackendSWEA: Processing {len(raw_attributes)} attributes with types: {[type(attr) for attr in raw_attributes]}"
+        )
+
         for attr in raw_attributes:
             if isinstance(attr, dict):
                 # Convert dict to "name:type" string format
@@ -126,33 +128,43 @@ class BackendSWEA(BaseAgent):
                 # Fallback - convert to string
                 str_attr = str(attr)
                 validated["attributes"].append(str_attr)
-                logger.warning(f"BackendSWEA: Converted unexpected attribute type {type(attr)} to string: {str_attr}")
-        
+                logger.warning(
+                    f"BackendSWEA: Converted unexpected attribute type {type(attr)} to string: {str_attr}"
+                )
+
         # Ensure other fields are lists of strings
         for field in ["additional_requirements", "code_improvements", "modifications"]:
             raw_list = interpretation.get(field, [])
             validated[field] = [str(item) for item in raw_list if item]
-        
-        logger.debug(f"BackendSWEA: Validated interpretation with {len(validated['attributes'])} normalized attributes")
+
+        logger.debug(
+            f"BackendSWEA: Validated interpretation with {len(validated['attributes'])} normalized attributes"
+        )
         return validated
 
-    def _interpret_feedback_for_backend_generation(self, feedback: List[str], entity: str, code_type: str, original_attributes: List[str]) -> Dict[str, Any]:
+    def _interpret_feedback_for_backend_generation(
+        self, feedback: List[str], entity: str, code_type: str, original_attributes: List[str]
+    ) -> Dict[str, Any]:
         """
         Generic feedback interpretation using LLM to understand what backend code changes are needed.
         This approach can handle any type of feedback without hardcoded conditions.
         """
         if not feedback:
-            logger.debug(f"BackendSWEA: No feedback provided for {entity} {code_type}, using original attributes")
+            logger.debug(
+                f"BackendSWEA: No feedback provided for {entity} {code_type}, using original attributes"
+            )
             return {
                 "attributes": original_attributes,
                 "additional_requirements": [],
                 "code_improvements": [],
-                "modifications": []
+                "modifications": [],
             }
 
         feedback_text = "\n".join(feedback)
-        logger.debug(f"BackendSWEA: Interpreting feedback for {entity} {code_type}: {feedback_text}")
-        
+        logger.debug(
+            f"BackendSWEA: Interpreting feedback for {entity} {code_type}: {feedback_text}"
+        )
+
         system_prompt = f"""You are a backend development expert helping to interpret feedback for improving {code_type} generation.
 
 CONTEXT:
@@ -198,75 +210,88 @@ Please provide the JSON response with backend improvements."""
         try:
             response = self.llm_client.generate_response(user_prompt, system_prompt)
             logger.debug(f"BackendSWEA: Raw LLM response for {code_type}: {response}")
-            
+
             # Try to parse JSON response
             import json
+
             try:
                 interpretation = json.loads(response)
-                logger.debug(f"BackendSWEA: Parsed interpretation for {code_type}: {interpretation}")
+                logger.debug(
+                    f"BackendSWEA: Parsed interpretation for {code_type}: {interpretation}"
+                )
                 return interpretation
             except json.JSONDecodeError as json_error:
                 logger.warning(f"BackendSWEA could not parse LLM response as JSON: {json_error}")
                 logger.warning(f"BackendSWEA raw response: {response}")
                 # Fallback: extract improvements from response text
                 return self._extract_improvements_from_text(response, original_attributes)
-                
+
         except Exception as e:
-            logger.error(f"BackendSWEA feedback interpretation failed: {e}")
+            logger.error(
+                f"BackendSWEA: Failed to interpret feedback for {entity} {code_type}: {str(e)}"
+            )
             # Fallback: return original attributes with error note
             return {
                 "attributes": original_attributes,
                 "additional_requirements": [],
                 "code_improvements": [],
                 "modifications": [f"Could not interpret feedback: {str(e)}"],
-                "explanation": "Using original attributes due to feedback interpretation error"
+                "explanation": "Using original attributes due to feedback interpretation error",
             }
 
-    def _extract_improvements_from_text(self, response_text: str, original_attributes: List[str]) -> Dict[str, Any]:
+    def _extract_improvements_from_text(
+        self, response_text: str, original_attributes: List[str]
+    ) -> Dict[str, Any]:
         """Fallback method to extract improvements from LLM text response when JSON parsing fails"""
         # Simple text parsing fallback
         attributes = original_attributes.copy()
         improvements = []
         modifications = []
-        
+
         # Look for common patterns in the response
-        lines = response_text.lower().split('\n')
+        lines = response_text.lower().split("\n")
         for line in lines:
-            if 'add' in line and ('field' in line or 'attribute' in line or 'validation' in line):
+            if "add" in line and ("field" in line or "attribute" in line or "validation" in line):
                 improvements.append(f"Suggested addition from text: {line.strip()}")
-            elif 'improve' in line or 'enhance' in line:
+            elif "improve" in line or "enhance" in line:
                 improvements.append(f"Suggested improvement from text: {line.strip()}")
-            elif 'error' in line and 'handling' in line:
+            elif "error" in line and "handling" in line:
                 improvements.append(f"Error handling improvement: {line.strip()}")
-        
+
         return {
             "attributes": attributes,
             "additional_requirements": [],
             "code_improvements": improvements,
             "modifications": modifications,
-            "explanation": "Extracted information from text response (JSON parsing failed)"
+            "explanation": "Extracted information from text response (JSON parsing failed)",
         }
 
-    def _apply_backend_improvements(self, interpretation: Dict[str, Any], entity: str, code_type: str, context: str) -> str:
+    def _apply_backend_improvements(
+        self, interpretation: Dict[str, Any], entity: str, code_type: str, context: str
+    ) -> str:
         """Apply the interpreted improvements to the backend code generation"""
         try:
             attributes = interpretation.get("attributes", [])
             additional_requirements = interpretation.get("additional_requirements", [])
             code_improvements = interpretation.get("code_improvements", [])
-            
+
             # Build enhanced prompt with feedback-driven improvements
             base_prompt = self._build_prompt(entity, attributes, code_type, context)
-            
+
             # Add improvement instructions to the prompt
             improvement_instructions = ""
             if code_improvements:
-                improvement_instructions = f"\n\nIMPROVEMENTS TO IMPLEMENT:\n" + "\n".join(f"- {imp}" for imp in code_improvements)
-            
+                improvement_instructions = "\n\nIMPROVEMENTS TO IMPLEMENT:\n" + "\n".join(
+                    f"- {imp}" for imp in code_improvements
+                )
+
             if additional_requirements:
-                improvement_instructions += f"\n\nADDITIONAL REQUIREMENTS:\n" + "\n".join(f"- {req}" for req in additional_requirements)
-            
+                improvement_instructions += "\n\nADDITIONAL REQUIREMENTS:\n" + "\n".join(
+                    f"- {req}" for req in additional_requirements
+                )
+
             enhanced_prompt = base_prompt + improvement_instructions
-            
+
             # Generate improved code
             code = self.llm_client.generate_code_with_domain_focus(
                 enhanced_prompt,
@@ -277,99 +302,94 @@ Please provide the JSON response with backend improvements."""
                     "improvements_applied": interpretation,
                 },
             )
-            
+
             return code
-            
-        except Exception as e:
-            # Fallback to basic generation
+
+        except Exception:  # Fallback to basic generation
             return self.llm_client.generate_code_with_domain_focus(
-                self._build_prompt(entity, interpretation.get("attributes", []), code_type, context),
+                self._build_prompt(
+                    entity, interpretation.get("attributes", []), code_type, context
+                ),
                 code_type=code_type,
-                entity_context={"entity": entity, "attributes": interpretation.get("attributes", [])},
+                entity_context={
+                    "entity": entity,
+                    "attributes": interpretation.get("attributes", []),
+                },
             )
 
     # -------------------- task implementations ------------------------
     def _generate_model(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        entity = payload.get("entity", "Student")
-        attributes = payload.get("attributes", [])
-        context = payload.get("context", "academic")
-        
-        # Extract feedback information from payload
-        techlead_feedback = payload.get("techlead_feedback", [])
-        previous_errors = payload.get("previous_errors", [])
-        expected_output = payload.get("expected_output", "")
-        
-        # Combine all feedback sources
-        all_feedback = []
-        if techlead_feedback:
-            all_feedback.extend(techlead_feedback if isinstance(techlead_feedback, list) else [techlead_feedback])
-        if previous_errors:
-            all_feedback.extend(previous_errors if isinstance(previous_errors, list) else [previous_errors])
-        if expected_output:
-            all_feedback.append(f"Expected output: {expected_output}")
-
-        # Interpret feedback generically using LLM (Phase 2 enhancement)
-        interpretation = self._interpret_feedback_for_backend_generation(all_feedback, entity, "Pydantic Model", attributes)
-        
-        # Validate and normalize interpretation structure (Phase 2 standardization)
-        interpretation = self._validate_interpretation_structure(interpretation)
-        
-        # Apply the interpreted improvements
-        code = self._apply_backend_improvements(interpretation, entity, "Pydantic Model", context)
-
-        file_path = self._write_to_managed_system(entity, "model", code)
-        return self.create_success_response(
-            "generate_model", {
-                "file_path": file_path, 
-                "code": code, 
-                "managed_system": True,
-                "improvements_applied": interpretation
-            }
+        """
+        DEPRECATED: Model generation is now handled by _generate_api().
+        This method is kept for backward compatibility but delegates to API generation.
+        """
+        logger.warning(
+            "⚠️  BackendSWEA: _generate_model() is deprecated. Use _generate_api() instead."
         )
+        return self._generate_api(payload)
 
     def _generate_api(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate complete FastAPI routes with embedded Pydantic models.
+        This replaces the separate model generation to ensure consistency.
+        """
         entity = payload.get("entity", "Student")
         attributes = payload.get("attributes", [])
         context = payload.get("context", "academic")
-        
+
         # Extract feedback information from payload
         techlead_feedback = payload.get("techlead_feedback", [])
         previous_errors = payload.get("previous_errors", [])
         expected_output = payload.get("expected_output", "")
-        
+
         # Combine all feedback sources
         all_feedback = []
         if techlead_feedback:
-            all_feedback.extend(techlead_feedback if isinstance(techlead_feedback, list) else [techlead_feedback])
+            all_feedback.extend(
+                techlead_feedback if isinstance(techlead_feedback, list) else [techlead_feedback]
+            )
         if previous_errors:
-            all_feedback.extend(previous_errors if isinstance(previous_errors, list) else [previous_errors])
+            all_feedback.extend(
+                previous_errors if isinstance(previous_errors, list) else [previous_errors]
+            )
         if expected_output:
             all_feedback.append(f"Expected output: {expected_output}")
 
         # Interpret feedback generically using LLM (Phase 2 enhancement)
-        interpretation = self._interpret_feedback_for_backend_generation(all_feedback, entity, "FastAPI Routes", attributes)
-        
+        interpretation = self._interpret_feedback_for_backend_generation(
+            all_feedback, entity, "Complete FastAPI Routes with Pydantic Models", attributes
+        )
+
         # Validate and normalize interpretation structure (Phase 2 standardization)
         interpretation = self._validate_interpretation_structure(interpretation)
-        
-        # Apply the interpreted improvements
-        code = self._apply_backend_improvements(interpretation, entity, "FastAPI Routes", context)
 
+        # Apply the interpreted improvements
+        code = self._apply_backend_improvements(
+            interpretation, entity, "Complete FastAPI Routes with Pydantic Models", context
+        )
+
+        # Write to routes file (this is the single source of truth)
         file_path = self._write_to_managed_system(entity, "routes", code)
+
+        logger.info(
+            f"✅ BackendSWEA: Generated complete API with models for {entity} at {file_path}"
+        )
+
         return self.create_success_response(
-            "generate_api", {
-                "file_path": file_path, 
-                "code": code, 
+            "generate_api",
+            {
+                "file_path": file_path,
+                "code": code,
                 "managed_system": True,
-                "improvements_applied": interpretation
-            }
+                "improvements_applied": interpretation,
+                "generation_type": "complete_api_with_models",
+            },
         )
 
     def _generate_requirements(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Generate requirements.txt file with all necessary dependencies."""
         try:
             entity = payload.get("entity", "Student")
-            feedback = payload.get("feedback", [])
             fix_context = payload.get("fix_context", {})
 
             logger.info(f"🧠 BackendSWEA: Generating requirements.txt for {entity}")
@@ -414,32 +434,41 @@ Please provide the JSON response with backend improvements."""
             fix_action = payload.get("fix_action", "")
             issue_type = payload.get("issue_type", "")
             techlead_decision = payload.get("techlead_decision", {})
-            
+
             # Extract detailed context from TechLeadSWEA decision
-            detailed_context = techlead_decision.get("detailed_context", {})
-            specific_issue = techlead_decision.get("specific_issue", "")
             reasoning = techlead_decision.get("reasoning", "")
-            
+
             logger.info("🔧 BackendSWEA: Fixing backend issues for %s", entity)
             logger.info("   🎯 Fix Action: %s", fix_action)
             logger.info("   📋 Issue Type: %s", issue_type)
             logger.info("   💡 Reasoning: %s", reasoning)
-            
+
             # Handle specific fix actions from TechLeadSWEA
             if fix_action in ["fix_imports", "update_dependencies", "fix_import_dependencies"]:
                 logger.debug("🔧 BackendSWEA: Handling import/dependency issues")
                 return self._generate_requirements(payload)
-                
-            elif fix_action in ["fix_model_validation", "update_pydantic_models", "fix_pydantic_validation"]:
+
+            elif fix_action in [
+                "fix_model_validation",
+                "update_pydantic_models",
+                "fix_pydantic_validation",
+            ]:
                 logger.debug("🔧 BackendSWEA: Regenerating model due to validation issues")
                 return self._generate_model(payload)
-                
-            elif fix_action in ["fix_api_validation", "update_error_handling", "fix_api_routing", "regenerate_api_endpoints"]:
+
+            elif fix_action in [
+                "fix_api_validation",
+                "update_error_handling",
+                "fix_api_routing",
+                "regenerate_api_endpoints",
+            ]:
                 logger.debug("🔧 BackendSWEA: Regenerating API due to routing/validation issues")
                 return self._generate_api(payload)
-                
+
             elif fix_action in ["fix_syntax_errors", "regenerate_code"]:
-                logger.debug("🔧 BackendSWEA: Fixing syntax errors - regenerating both model and API")
+                logger.debug(
+                    "🔧 BackendSWEA: Fixing syntax errors - regenerating both model and API"
+                )
                 # For syntax issues, regenerate both model and API
                 model_result = self._generate_model(payload)
                 if model_result.get("success"):
@@ -453,13 +482,13 @@ Please provide the JSON response with backend improvements."""
                                 "fix_action": fix_action,
                                 "model_result": model_result.get("data", {}),
                                 "api_result": api_result.get("data", {}),
-                            }
+                            },
                         )
                     else:
                         return api_result
                 else:
                     return model_result
-                    
+
             elif fix_action in ["regenerate_model_with_imports"]:
                 logger.debug("🔧 BackendSWEA: Regenerating model with proper imports")
                 # First generate requirements, then model
@@ -469,7 +498,7 @@ Please provide the JSON response with backend improvements."""
                     return model_result
                 else:
                     return req_result
-                    
+
             # Fallback: Handle by issue type (legacy support)
             elif "dependency" in issue_type or "import" in issue_type or "missing" in issue_type:
                 logger.debug("🔧 BackendSWEA: Handling dependency/import issues (legacy)")
@@ -504,13 +533,13 @@ Please provide the JSON response with backend improvements."""
                                 "fix_action": fix_action or "default_regeneration",
                                 "model_result": model_result.get("data", {}),
                                 "api_result": api_result.get("data", {}),
-                            }
+                            },
                         )
                     else:
                         return api_result
                 else:
                     return model_result
-                    
+
         except Exception as e:
             logger.error("❌ BackendSWEA fix_issues failed: %s", str(e))
             return self.create_error_response("fix_issues", str(e), "fix_error")

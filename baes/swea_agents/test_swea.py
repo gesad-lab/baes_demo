@@ -1,8 +1,8 @@
+import json
+import logging
 import re
 import subprocess
 import sys
-import logging
-import json
 import tempfile
 import time
 from pathlib import Path
@@ -13,6 +13,7 @@ from ..core.managed_system_manager import ManagedSystemManager
 from ..llm.openai_client import OpenAIClient
 
 logger = logging.getLogger(__name__)
+
 
 class TestSWEA(BaseAgent):
     """
@@ -58,7 +59,7 @@ class TestSWEA(BaseAgent):
         if task not in self._SUPPORTED_TASKS:
             return self.create_error_response(
                 task,
-                f"Unknown task. Supported tasks: {list(self._SUPPORTED_TASKS.keys())}",
+                "Unknown task. Supported tasks: " + str(list(self._SUPPORTED_TASKS.keys())),
                 "invalid_task",
             )
 
@@ -73,21 +74,50 @@ class TestSWEA(BaseAgent):
     # ------------------------------------------------------------------
 
     def _generate_all_tests_with_collaboration(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate all tests and collaborate with other SWEAs to fix issues autonomously."""
-        # entity = payload.get("entity", "Student")  # Currently unused
+        """Generate all test types for an entity, strictly requiring all dependencies. Raise error if any are missing."""
+        entity = payload.get("entity", "Student")
+        attributes = payload.get("attributes", [])
+        context = payload.get("context", "academic")
 
-        self.collaboration_history = []  # Reset collaboration history
+        # Validate all dependencies for all test types
+        for test_type in ["unit_tests", "integration_tests", "ui_tests"]:
+            validation = self._validate_test_dependencies(entity, test_type)
+            if not validation["dependencies_ready"]:
+                missing = validation["missing_dependencies"]
+                recommendations = validation["recommendations"]
+                error_msg = (
+                    "Cannot generate "
+                    + test_type
+                    + " for "
+                    + entity
+                    + ": missing dependencies: "
+                    + str(missing)
+                    + ". "
+                    "Recommendations: " + str(recommendations)
+                )
+                logger.error(error_msg)
+                from baes.utils.presentation_logger import get_presentation_logger
 
-        # Step 1: Generate all tests
-        base_result = self._generate_all_tests_basic(payload)
+                get_presentation_logger().error(error_msg)
+                return self.create_error_response(
+                    "generate_all_tests_with_collaboration", error_msg, "missing_dependencies"
+                )
 
-        # Step 2: Analyze failures and collaborate to fix issues
-        if not self._all_tests_passed(base_result):
-            collaboration_result = self._collaborate_to_fix_issues(payload, base_result)
-            if collaboration_result["success"]:
-                return collaboration_result
+        # If all dependencies are ready, generate all tests
+        test_types_generated = []
+        for test_type in ["unit_tests", "integration_tests", "ui_tests"]:
+            test_code = self._generate_robust_test_code(entity, test_type, attributes, context)
+            self._write_test_to_managed_system(entity, test_type, test_code)
+            test_types_generated.append(test_type)
 
-        return base_result
+        return self.create_success_response(
+            "generate_all_tests_with_collaboration",
+            {
+                "test_types_generated": test_types_generated,
+                "dependencies_validated": True,
+                "note": "All dependencies present. All tests generated successfully.",
+            },
+        )
 
     def _validate_and_fix_system(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Validate entire system and coordinate fixes with other SWEAs."""
@@ -131,7 +161,11 @@ class TestSWEA(BaseAgent):
                 break
 
             collaboration_log.append(
-                f"Iteration {iteration}: Found {len(failure_analysis['issues'])} issues"
+                "Iteration "
+                + str(iteration)
+                + ": Found "
+                + str(len(failure_analysis["issues"]))
+                + " issues"
             )
 
             # Request fixes from appropriate SWEAs
@@ -145,7 +179,9 @@ class TestSWEA(BaseAgent):
             test_results = self._execute_all_tests(payload)
 
             if self._all_tests_passed(test_results):
-                collaboration_log.append(f"✅ All tests passing after {iteration} iteration(s)")
+                collaboration_log.append(
+                    "✅ All tests passing after " + str(iteration) + " iteration(s)"
+                )
                 break
 
         # Store collaboration history
@@ -204,7 +240,8 @@ class TestSWEA(BaseAgent):
 
     def _categorize_test_failure(self, stderr: str, stdout: str) -> Dict[str, str]:
         """Categorize test failure and determine which SWEA should fix it."""
-        combined_output = f"{stderr} {stdout}".lower()
+        combined_output = stderr + " " + stdout
+        combined_output = combined_output.lower()
 
         # Dependency issues -> BackendSWEA should fix
         if any(
@@ -350,7 +387,9 @@ class TestSWEA(BaseAgent):
             task_type = fix_request["task_type"]
             issue_desc = fix_request["payload"]["fix_context"]["issue_description"]
 
-            collaboration_log.append(f"🔧 Requesting {swea_agent} to {task_type} - {issue_desc}")
+            collaboration_log.append(
+                "🔧 Requesting " + swea_agent + " to " + task_type + " - " + issue_desc
+            )
 
             # Note: In a real implementation, this would send the fix_request
             # back to the RuntimeKernel to execute the appropriate SWEA
@@ -396,7 +435,7 @@ class TestSWEA(BaseAgent):
 
             if not tests_dir.exists():
                 return self.create_error_response(
-                    "execute_all_tests", f"No tests directory found for {entity}", "no_tests_found"
+                    "execute_all_tests", "No tests directory found for " + entity, "no_tests_found"
                 )
 
             # ------------------------------------------------------------------
@@ -404,7 +443,9 @@ class TestSWEA(BaseAgent):
             # ------------------------------------------------------------------
             # Create a temporary file to hold the JSON report produced by
             # pytest-json-report. We can safely remove it after parsing.
-            report_file = Path(tempfile.gettempdir()) / f"pytest_report_{int(time.time())}.json"
+            report_file = (
+                Path(tempfile.gettempdir()) / "pytest_report_" + str(int(time.time())) + ".json"
+            )
 
             cmd = [
                 sys.executable,
@@ -416,12 +457,12 @@ class TestSWEA(BaseAgent):
                 "--no-header",
                 "-q",
                 "--json-report",
-                f"--json-report-file={report_file}",
+                "--json-report-file=" + str(report_file),
             ]
 
             start_time = time.time()
-            logger.info("🧪 Executing tests in: %s", tests_dir)
-            logger.debug("🧪 Test command: %s", " ".join(cmd))
+            logger.info("🧪 Executing tests in: " + str(tests_dir))
+            logger.debug("🧪 Test command: " + " ".join(cmd))
 
             result = subprocess.run(
                 cmd,
@@ -432,61 +473,53 @@ class TestSWEA(BaseAgent):
             )
 
             execution_time = time.time() - start_time
-            
+
             # ------------------------------------------------------------------
             # Parse JSON report for accurate counts - NO FALLBACK TO REGEX
             # ------------------------------------------------------------------
             tests_executed = tests_passed = tests_failed = 0
 
             if not report_file.exists():
-                error_msg = f"JSON report file not found: {report_file}. pytest-json-report may not be working correctly."
-                logger.error("❌ %s", error_msg)
-                return self.create_error_response(
-                    "execute_tests", 
-                    error_msg,
-                    "json_report_missing"
+                error_msg = (
+                    "JSON report file not found: "
+                    + str(report_file)
+                    + ". pytest-json-report may not be working correctly."
                 )
+                logger.error("❌ " + error_msg)
+                return self.create_error_response("execute_tests", error_msg, "json_report_missing")
 
             try:
                 with open(report_file, "r", encoding="utf-8") as jf:
                     report_data = json.load(jf)
-                
+
                 summary = report_data.get("summary", {})
                 if not summary:
-                    error_msg = f"JSON report has no 'summary' section: {report_data}"
-                    logger.error("❌ %s", error_msg)
+                    error_msg = "JSON report has no 'summary' section: " + str(report_data)
+                    logger.error("❌ " + error_msg)
                     return self.create_error_response(
-                        "execute_tests", 
-                        error_msg,
-                        "json_report_invalid"
+                        "execute_tests", error_msg, "json_report_invalid"
                     )
-                
+
                 tests_executed = summary.get("collected", 0)
                 tests_passed = summary.get("passed", 0)
                 # Treat `failed` + `errors` as failures
                 tests_failed = summary.get("failed", 0) + summary.get("errors", 0)
-                
+
                 logger.info("📊 JSON report parsed successfully:")
                 logger.info("   📋 Collected: %d", tests_executed)
                 logger.info("   ✅ Passed: %d", tests_passed)
                 logger.info("   ❌ Failed: %d", tests_failed)
-                
+
             except json.JSONDecodeError as e:
-                error_msg = f"Failed to parse JSON report: {str(e)}"
-                logger.error("❌ %s", error_msg)
+                error_msg = "Failed to parse JSON report: " + str(e)
+                logger.error("❌ " + error_msg)
                 return self.create_error_response(
-                    "execute_tests", 
-                    error_msg,
-                    "json_report_parse_error"
+                    "execute_tests", error_msg, "json_report_parse_error"
                 )
             except Exception as e:
-                error_msg = f"Unexpected error parsing JSON report: {str(e)}"
-                logger.error("❌ %s", error_msg)
-                return self.create_error_response(
-                    "execute_tests", 
-                    error_msg,
-                    "json_report_error"
-                )
+                error_msg = "Unexpected error parsing JSON report: " + str(e)
+                logger.error("❌ " + error_msg)
+                return self.create_error_response("execute_tests", error_msg, "json_report_error")
 
             # Log detailed test execution info
             logger.info("🧪 Test execution completed:")
@@ -530,15 +563,20 @@ class TestSWEA(BaseAgent):
 
             # Determine overall success
             success = result.returncode == 0 and tests_executed > 0
-            
+
             if success:
                 return self.create_success_response("execute_tests", response_data)
             else:
                 # Create error response without extra data parameter
                 error_response = self.create_error_response(
                     "execute_tests",
-                    f"Test execution failed: {tests_executed} tests executed, {tests_passed} passed, exit code {result.returncode}",
-                    "test_execution_failed"
+                    "Test execution failed: "
+                    + str(tests_executed)
+                    + " tests executed, "
+                    + str(tests_passed)
+                    + " passed, exit code "
+                    + str(result.returncode),
+                    "test_execution_failed",
                 )
                 # Add the response data manually
                 error_response["data"] = response_data
@@ -547,16 +585,12 @@ class TestSWEA(BaseAgent):
         except subprocess.TimeoutExpired:
             logger.error("❌ Test execution timed out after 120 seconds")
             return self.create_error_response(
-                "execute_tests", 
-                "Test execution timed out after 120 seconds",
-                "timeout_error"
+                "execute_tests", "Test execution timed out after 120 seconds", "timeout_error"
             )
         except Exception as e:
             logger.error("❌ Test execution failed with exception: %s", str(e))
             return self.create_error_response(
-                "execute_tests", 
-                f"Error executing all tests: {str(e)}", 
-                "execution_error"
+                "execute_tests", "Error executing all tests: " + str(e), "execution_error"
             )
 
     def _count_tests_executed(self, stdout: str) -> int:
@@ -590,7 +624,7 @@ class TestSWEA(BaseAgent):
         if test_execution:
             # This is an actual test execution result
             return test_execution.get("success", False)
-        
+
         # Check individual test executions (legacy support)
         test_executions = test_results.get("test_executions", [])
         for test_execution in test_executions:
@@ -648,36 +682,36 @@ class TestSWEA(BaseAgent):
             fix_action = payload.get("fix_action", "")
             issue_type = payload.get("issue_type", "")
             techlead_decision = payload.get("techlead_decision", {})
-            
+
             # Extract detailed context from TechLeadSWEA decision
-            detailed_context = techlead_decision.get("detailed_context", {})
-            specific_issue = techlead_decision.get("specific_issue", "")
             reasoning = techlead_decision.get("reasoning", "")
-            
+
             logger.info("🔧 TestSWEA: Fixing test issues for %s", entity)
             logger.info("   🎯 Fix Action: %s", fix_action)
             logger.info("   📋 Issue Type: %s", issue_type)
             logger.info("   💡 Reasoning: %s", reasoning)
-            
+
             # Handle specific fix actions from TechLeadSWEA
             if fix_action in ["fix_test_mocking", "update_test_configuration"]:
                 logger.debug("🔧 TestSWEA: Fixing test mocking configuration")
                 # Regenerate tests with improved mocking
                 return self._generate_all_tests_with_improved_mocking(payload)
-                
+
             elif fix_action in ["review_test_assertions", "fix_test_expectations"]:
                 logger.debug("🔧 TestSWEA: Reviewing and fixing test assertions")
                 # Regenerate tests with corrected assertions
                 return self._generate_all_tests_with_corrected_assertions(payload)
-                
+
             elif fix_action in ["analyze_test_failure", "fix_test_issues"]:
                 logger.debug("🔧 TestSWEA: Analyzing and fixing general test issues")
                 # Comprehensive test regeneration
                 return self._generate_all_tests_with_collaboration(payload)
-                
+
             # Fallback: Handle by issue type (legacy support)
             elif "test_generation" in issue_type or "missing_tests" in issue_type:
-                logger.debug("🔧 TestSWEA: Regenerating all tests due to test generation issues (legacy)")
+                logger.debug(
+                    "🔧 TestSWEA: Regenerating all tests due to test generation issues (legacy)"
+                )
                 return self._generate_all_tests_with_collaboration(payload)
             elif "test_execution" in issue_type or "execution_failure" in issue_type:
                 logger.debug("🔧 TestSWEA: Re-executing tests due to execution issues (legacy)")
@@ -696,7 +730,7 @@ class TestSWEA(BaseAgent):
                 # Default: regenerate all tests
                 logger.debug("🔧 TestSWEA: Default fix - regenerating all tests")
                 return self._generate_all_tests_with_collaboration(payload)
-                
+
         except Exception as e:
             logger.error("❌ TestSWEA fix_issues failed: %s", str(e))
             return self.create_error_response("fix_issues", str(e), "fix_error")
@@ -706,45 +740,47 @@ class TestSWEA(BaseAgent):
         try:
             entity = payload.get("entity", "Student")
             logger.info("🔧 TestSWEA: Regenerating tests with improved mocking for %s", entity)
-            
+
             # Add mocking context to payload
             enhanced_payload = payload.copy()
             enhanced_payload["mocking_strategy"] = "improved"
             enhanced_payload["mock_validation"] = True
-            
+
             # Generate tests with enhanced mocking
             result = self._generate_all_tests_with_collaboration(enhanced_payload)
-            
+
             if result.get("success"):
                 result["data"]["fix_applied"] = True
                 result["data"]["fix_type"] = "improved_mocking"
-                
+
             return result
-            
+
         except Exception as e:
             logger.error("❌ TestSWEA improved mocking failed: %s", str(e))
             return self.create_error_response("fix_issues", str(e), "improved_mocking_error")
 
-    def _generate_all_tests_with_corrected_assertions(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def _generate_all_tests_with_corrected_assertions(
+        self, payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Generate tests with corrected assertions to handle assertion failures"""
         try:
             entity = payload.get("entity", "Student")
             logger.info("🔧 TestSWEA: Regenerating tests with corrected assertions for %s", entity)
-            
+
             # Add assertion correction context to payload
             enhanced_payload = payload.copy()
             enhanced_payload["assertion_strategy"] = "corrected"
             enhanced_payload["validate_responses"] = True
-            
+
             # Generate tests with corrected assertions
             result = self._generate_all_tests_with_collaboration(enhanced_payload)
-            
+
             if result.get("success"):
                 result["data"]["fix_applied"] = True
                 result["data"]["fix_type"] = "corrected_assertions"
-                
+
             return result
-            
+
         except Exception as e:
             logger.error("❌ TestSWEA corrected assertions failed: %s", str(e))
             return self.create_error_response("fix_issues", str(e), "corrected_assertions_error")
@@ -753,18 +789,18 @@ class TestSWEA(BaseAgent):
         """Ensure proper test environment setup"""
         try:
             managed_system_path = self.managed_system_manager.managed_system_path
-            
+
             # Ensure tests directory exists
             tests_dir = managed_system_path / "tests"
             tests_dir.mkdir(exist_ok=True)
-            
+
             # Create __init__.py if it doesn't exist
             init_file = tests_dir / "__init__.py"
             if not init_file.exists():
                 init_file.write_text("# Test package initialization\n")
-                
+
             logger.debug("✅ TestSWEA: Test environment ensured for %s", entity)
-            
+
         except Exception as e:
             logger.warning("⚠️ TestSWEA: Failed to ensure test environment: %s", str(e))
 
@@ -779,19 +815,23 @@ class TestSWEA(BaseAgent):
         context: str,
         generated_code: str = "",
     ) -> str:
-        """Build prompt for test generation based on test type."""
-        base_prompt = f"""
+        """Build prompt for test generation based on test type with robust dependency validation."""
+
+        # Generic validation helper for any entity
+        validation_helpers = self._get_validation_helpers(entity, attributes)
+
+        base_prompt = """
 You are a TestSWEA (Test Software Engineering Autonomous Agent) responsible for generating comprehensive tests.
 
-Entity: {entity}
-Attributes: {attributes}
-Context: {context}
-Test Type: {test_type}
+Entity: %s
+Attributes: %s
+Context: %s
+Test Type: %s
 
 Generated Code to Test:
-{generated_code}
+%s
 
-Requirements:
+CRITICAL REQUIREMENTS:
 1. Use pytest framework with proper fixtures and mocking
 2. Mock external dependencies (OpenAI API, file operations, etc.)
 3. Include both positive and negative test cases
@@ -800,10 +840,60 @@ Requirements:
 6. Include setup and teardown as needed
 7. Generate complete, runnable test code
 8. Focus on testing business logic and domain coherence
+9. ALWAYS validate that imports will work before generating tests
+10. Use robust error handling and fallback mechanisms
 
-"""
+VALIDATION HELPERS:
+%s
+
+""" % (
+            entity,
+            attributes,
+            context,
+            test_type,
+            generated_code,
+            validation_helpers,
+        )
 
         if test_type == "unit_tests":
+            # Get the actual generated model code to extract correct class names
+            model_file = (
+                self.managed_system_manager.managed_system_path
+                / "app"
+                / "models"
+                / f"{entity.lower()}_model.py"
+            )
+            routes_file = (
+                self.managed_system_manager.managed_system_path
+                / "app"
+                / "routes"
+                / f"{entity.lower()}_routes.py"
+            )
+            actual_imports = ""
+
+            if model_file.exists():
+                model_content = model_file.read_text()
+                # Extract actual class names from the model file
+                if class_matches := re.findall(r"class\s+(\w+)\s*\(.*?\):", model_content):
+                    actual_imports = (
+                        f"# Actual classes found in model file: {', '.join(class_matches)}\n"
+                    )
+                    actual_imports += f"# Import using: from app.models.{entity.lower()}_model import {', '.join(class_matches)}"
+                else:
+                    actual_imports = "# No classes found in model file, use generic imports"
+            elif routes_file.exists():
+                routes_content = routes_file.read_text()
+                # Extract actual class names from the routes file
+                if class_matches := re.findall(r"class\s+(\w+)\s*\(.*?\):", routes_content):
+                    actual_imports = (
+                        f"# Actual classes found in routes file: {', '.join(class_matches)}\n"
+                    )
+                    actual_imports += f"# Import using: from app.routes.{entity.lower()}_routes import {', '.join(class_matches)}"
+                else:
+                    actual_imports = "# No classes found in routes file, use generic imports"
+            else:
+                actual_imports = "# Neither model nor routes file found"
+
             return (
                 base_prompt
                 + f"""
@@ -816,17 +906,68 @@ Generate comprehensive unit tests for the Pydantic model including:
 - Invalid data rejection tests
 
 CRITICAL IMPORT REQUIREMENTS:
-- Import the model using: 'from app.models.{entity.lower()}_model import {entity}'
+- {actual_imports}
 - Use 'import pytest' for pytest framework
 - Use 'from pydantic import ValidationError' for validation testing
 - DO NOT use placeholder imports like 'from your_module import {entity}'
 - ALL imports must be concrete and functional
+- If model file doesn't exist, create a minimal test that validates the expected structure
+
+ROBUST TEST GENERATION:
+- Check if model has actual fields before testing them
+- Use conditional testing based on available attributes
+- Include fallback tests for incomplete models
+- Test both valid and invalid data scenarios
 
 Return ONLY complete Python test code with imports and test classes.
 """
             )
 
         elif test_type == "integration_tests":
+            # Get the actual generated routes code to extract correct class names
+            routes_file = (
+                self.managed_system_manager.managed_system_path
+                / "app"
+                / "routes"
+                / f"{entity.lower()}_routes.py"
+            )
+            model_file = (
+                self.managed_system_manager.managed_system_path
+                / "app"
+                / "models"
+                / f"{entity.lower()}_model.py"
+            )
+            actual_imports = ""
+            api_prefix = "/api"  # Default API prefix
+
+            if routes_file.exists():
+                routes_content = routes_file.read_text()
+                # Extract actual class names from the routes file
+                if class_matches := re.findall(r"class\s+(\w+)\s*\(.*?\):", routes_content):
+                    actual_imports = (
+                        f"# Actual classes found in routes file: {', '.join(class_matches)}\n"
+                    )
+                    actual_imports += f"# Import using: from app.routes.{entity.lower()}_routes import {', '.join(class_matches)}"
+                else:
+                    actual_imports = "# No classes found in routes file, use generic imports"
+
+                # Extract API prefix from router definition
+                prefix_match = re.search(r'APIRouter\(prefix="([^"]+)"', routes_content)
+                if prefix_match:
+                    api_prefix = prefix_match.group(1)
+            elif model_file.exists():
+                model_content = model_file.read_text()
+                # Extract actual class names from the model file
+                if class_matches := re.findall(r"class\s+(\w+)\s*\(.*?\):", model_content):
+                    actual_imports = (
+                        f"# Actual classes found in model file: {', '.join(class_matches)}\n"
+                    )
+                    actual_imports += f"# Import using: from app.models.{entity.lower()}_model import {', '.join(class_matches)}"
+                else:
+                    actual_imports = "# No classes found in model file, use generic imports"
+            else:
+                actual_imports = "# Neither routes nor model file found"
+
             return (
                 base_prompt
                 + f"""
@@ -843,18 +984,54 @@ CRITICAL IMPORT REQUIREMENTS:
 - Use 'from app.main import app' to import the FastAPI app (NOT 'from main import app')
 - Use 'from fastapi.testclient import TestClient' for HTTP testing
 - Mock database dependencies properly using: 'app.routes.{entity.lower()}_routes.get_db_connection'
-- Import models as 'from app.routes.{entity.lower()}_routes import {entity}Create, {entity}Response'
+- {actual_imports}
 - Use the correct file naming convention: {{entity_lower}}_routes.py (models are in the routes file)
 - Note: BackendSWEA generates models inside the routes file, not separately
+
+CRITICAL API ENDPOINT REQUIREMENTS:
+- API prefix is: {api_prefix}
+- Use correct endpoint paths: {api_prefix}/{{entity_lower}}s/ (with trailing slash)
+- Example: POST {api_prefix}/{{entity_lower}}s/ for create, GET {api_prefix}/{{entity_lower}}s/ for list
+- Example: GET {api_prefix}/{{entity_lower}}s/{{id}} for get by id, PUT {api_prefix}/{{entity_lower}}s/{{id}} for update
+- Example: DELETE {api_prefix}/{{entity_lower}}s/{{id}} for delete
+- DO NOT use /{{entity_lower}}s/ without the {api_prefix} prefix
+
+ROBUST TEST GENERATION:
+- Check if routes file exists and has actual endpoints
+- Use conditional testing based on available endpoints
+- Mock database connections properly
+- Test both successful and error scenarios
+- Include fallback tests for incomplete implementations
 
 Return ONLY complete Python test code with imports, fixtures, and test classes.
 """
             )
 
         elif test_type == "ui_tests":
+            # Get the actual generated UI code to check for correct file structure
+            ui_file = (
+                self.managed_system_manager.managed_system_path
+                / "ui"
+                / "pages"
+                / f"{entity.lower()}_page.py"
+            )
+            actual_imports = ""
+            if ui_file.exists():
+                ui_content = ui_file.read_text()
+                # Check if the UI file has the expected structure
+                if "def main():" in ui_content:
+                    actual_imports = f"# UI file found: {ui_file}\n"
+                    actual_imports += (
+                        f"# Import using: from ui.pages.{entity.lower()}_page import main"
+                    )
+                else:
+                    actual_imports = "# UI file exists but no main() function found"
+            else:
+                actual_imports = "# UI file not found: {ui_file}"
+
             return (
                 base_prompt
-                + """
+                + f"""
 Generate comprehensive UI tests for the Streamlit interface including:
 - Form submission tests
 - Data display tests
@@ -865,7 +1042,7 @@ Generate comprehensive UI tests for the Streamlit interface including:
 - API integration tests (mocked)
 
 CRITICAL IMPORT REQUIREMENTS:
-- Import the main function using: 'import sys; from pathlib import Path; sys.path.append(str(Path(__file__).parent.parent.parent / "ui")); from app import main'
+- {actual_imports}
 - Use 'from config import Config' for API endpoint URLs
 - Use 'import streamlit as st' for Streamlit components
 - Use 'from unittest.mock import patch, MagicMock' for mocking
@@ -873,12 +1050,215 @@ CRITICAL IMPORT REQUIREMENTS:
 - DO NOT use placeholder imports like 'from your_module import main'
 - ALL imports must be concrete and functional
 
+ROBUST TEST GENERATION:
+- Check if UI components exist before testing them
+- Use conditional testing based on available UI elements
+- Mock API responses properly
+- Test both successful and error scenarios
+- Include fallback tests for incomplete UI implementations
+
 Return ONLY complete Python test code with imports and test classes using appropriate mocking.
 """
             )
 
         else:
             return base_prompt + "Generate appropriate test code based on the context provided."
+
+    def _get_validation_helpers(self, entity: str, attributes: List[str]) -> str:
+        """Generate validation helpers for robust test generation."""
+        return f"""
+VALIDATION HELPERS FOR {entity.upper()}:
+
+1. MODEL VALIDATION:
+   - Check if {entity} model has actual fields: {attributes}
+   - Validate field types and constraints
+   - Test business rules and validations
+
+2. API VALIDATION:
+   - Check if {entity.lower()}_routes.py exists and has endpoints
+   - Validate CRUD operations are implemented
+   - Test HTTP status codes and responses
+
+3. UI VALIDATION:
+   - Check if {entity.lower()}_page.py exists and has components
+   - Validate form fields match model attributes
+   - Test user interactions and API integration
+
+4. DATABASE VALIDATION:
+   - Check if {entity.lower()}s table exists
+   - Validate schema matches model attributes
+   - Test data persistence and retrieval
+
+5. ERROR HANDLING:
+   - Test invalid data scenarios
+   - Validate error messages and status codes
+   - Test edge cases and boundary conditions
+
+6. FALLBACK MECHANISMS:
+   - If model is incomplete, test expected structure
+   - If API is incomplete, test available endpoints
+   - If UI is incomplete, test available components
+"""
+
+    def _validate_test_dependencies(self, entity: str, test_type: str) -> Dict[str, Any]:
+        """Validate that all dependencies exist before generating tests."""
+        validation_result = {
+            "dependencies_ready": True,
+            "missing_dependencies": [],
+            "warnings": [],
+            "recommendations": [],
+        }
+
+        managed_system_path = self.managed_system_manager.managed_system_path
+
+        try:
+            if test_type == "unit_tests":
+                # Check if model file exists and has content
+                model_file = managed_system_path / "app" / "models" / f"{entity.lower()}_model.py"
+                if not model_file.exists():
+                    validation_result["dependencies_ready"] = False
+                    validation_result["missing_dependencies"].append(f"Model file: {model_file}")
+                    validation_result["recommendations"].append(
+                        "Generate model first using BackendSWEA"
+                    )
+                else:
+                    model_content = model_file.read_text()
+                    if not self._has_actual_model_fields(model_content, entity):
+                        validation_result["warnings"].append(
+                            f"Model {entity} has no actual fields defined"
+                        )
+                        validation_result["recommendations"].append(
+                            "Complete model generation before testing"
+                        )
+
+            elif test_type == "integration_tests":
+                # Check if routes file exists and has endpoints
+                routes_file = managed_system_path / "app" / "routes" / f"{entity.lower()}_routes.py"
+                if not routes_file.exists():
+                    validation_result["dependencies_ready"] = False
+                    validation_result["missing_dependencies"].append(f"Routes file: {routes_file}")
+                    validation_result["recommendations"].append(
+                        "Generate API routes first using BackendSWEA"
+                    )
+                else:
+                    routes_content = routes_file.read_text()
+                    if not self._has_actual_endpoints(routes_content):
+                        validation_result["warnings"].append(
+                            f"Routes file has no actual endpoints defined"
+                        )
+                        validation_result["recommendations"].append(
+                            "Complete API generation before testing"
+                        )
+
+            elif test_type == "ui_tests":
+                # Check if UI file exists and has components
+                ui_file = managed_system_path / "ui" / "pages" / f"{entity.lower()}_page.py"
+                if not ui_file.exists():
+                    # Fallback to app.py
+                    ui_file = managed_system_path / "ui" / "app.py"
+
+                if not ui_file.exists():
+                    validation_result["dependencies_ready"] = False
+                    validation_result["missing_dependencies"].append(f"UI file: {ui_file}")
+                    validation_result["recommendations"].append(
+                        "Generate UI first using FrontendSWEA"
+                    )
+                else:
+                    ui_content = ui_file.read_text()
+                    if not self._has_actual_ui_components(ui_content):
+                        validation_result["warnings"].append(
+                            f"UI file has no actual components defined"
+                        )
+                        validation_result["recommendations"].append(
+                            "Complete UI generation before testing"
+                        )
+
+        except Exception as e:
+            validation_result["dependencies_ready"] = False
+            validation_result["missing_dependencies"].append(f"Validation error: {str(e)}")
+
+        return validation_result
+
+    def _has_actual_model_fields(self, model_content: str, entity: str) -> bool:
+        """Check if model has actual fields defined (not just placeholders)."""
+        # Look for actual field definitions, not just comments
+        lines = model_content.split("\n")
+        has_fields = False
+
+        for line in lines:
+            line = line.strip()
+            # Skip comments and empty lines
+            if line.startswith("#") or not line:
+                continue
+            # Look for actual field definitions (name: type)
+            if ":" in line and not line.startswith("class") and not line.startswith("def"):
+                # Check if it's not just a placeholder comment
+                if not any(
+                    placeholder in line.lower()
+                    for placeholder in ["example:", "placeholder", "todo"]
+                ):
+                    has_fields = True
+                    break
+
+        return has_fields
+
+    def _has_actual_endpoints(self, routes_content: str) -> bool:
+        """Check if routes file has actual endpoints defined."""
+        # Look for actual route decorators
+        return "@router." in routes_content and "def " in routes_content
+
+    def _has_actual_ui_components(self, ui_content: str) -> bool:
+        """Check if UI file has actual Streamlit components defined."""
+        # Look for actual Streamlit components
+        return "st." in ui_content and ("def main" in ui_content or "def " in ui_content)
+
+    def _generate_robust_test_code(
+        self, entity: str, test_type: str, attributes: List[str], context: str
+    ) -> str:
+        """Generate robust test code that requires all dependencies to be present. If not, raise an error."""
+        # Validate dependencies first
+        validation = self._validate_test_dependencies(entity, test_type)
+
+        if not validation["dependencies_ready"]:
+            # Strict mode: raise error, do not generate fallback tests
+            missing = validation["missing_dependencies"]
+            recommendations = validation["recommendations"]
+            error_msg = (
+                f"Cannot generate {test_type} for {entity}: missing dependencies: {missing}. "
+                f"Recommendations: {recommendations}"
+            )
+            logger.error(error_msg)
+            from baes.utils.presentation_logger import get_presentation_logger
+
+            get_presentation_logger().error(error_msg)
+            raise RuntimeError(error_msg)
+
+        # Get the actual generated code
+        generated_code = self._get_generated_code(entity, test_type.replace("_tests", ""))
+
+        # Build the test prompt with validation context
+        prompt = self._build_test_prompt(entity, attributes, test_type, context, generated_code)
+
+        # Add validation warnings to the prompt
+        if validation["warnings"]:
+            prompt += f"\nVALIDATION WARNINGS:\n" + "\n".join(
+                f"- {w}" for w in validation["warnings"]
+            )
+            prompt += "\n\nGenerate tests that handle these warnings gracefully."
+
+        # Generate test code
+        test_code = self.llm_client.generate_code_with_domain_focus(
+            prompt,
+            code_type=f"{test_type.replace('_', ' ').title()}",
+            entity_context={
+                "entity": entity,
+                "attributes": attributes,
+                "test_type": test_type,
+                "validation_warnings": validation["warnings"],
+            },
+        )
+
+        return test_code
 
     def _write_test_to_managed_system(self, entity: str, test_type: str, test_code: str) -> str:
         """Write test code to the managed system tests directory."""
@@ -1013,31 +1393,26 @@ Return ONLY complete Python test code with imports and test classes using approp
 
     # -------------------- task implementations ------------------------
     def _generate_unit_tests(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate unit tests for Pydantic models."""
         entity = payload.get("entity", "Student")
         attributes = payload.get("attributes", [])
         context = payload.get("context", "academic")
+        validation = self._validate_test_dependencies(entity, "unit_tests")
+        if not validation["dependencies_ready"]:
+            missing = validation["missing_dependencies"]
+            recommendations = validation["recommendations"]
+            error_msg = (
+                f"Cannot generate unit_tests for {entity}: missing dependencies: {missing}. "
+                f"Recommendations: {recommendations}"
+            )
+            logger.error(error_msg)
+            from baes.utils.presentation_logger import get_presentation_logger
 
-        # Get the generated model code
-        model_code = self._get_generated_code(entity, "model")
-
-        prompt = self._build_test_prompt(entity, attributes, "unit_tests", context, model_code)
-        test_code = self.llm_client.generate_code_with_domain_focus(
-            prompt,
-            code_type="Unit Tests",
-            entity_context={
-                "entity": entity,
-                "attributes": attributes,
-                "test_type": "unit_tests",
-            },
-        )
-
+            get_presentation_logger().error(error_msg)
+            return self.create_error_response(
+                "generate_unit_tests", error_msg, "missing_dependencies"
+            )
+        test_code = self._generate_robust_test_code(entity, "unit_tests", attributes, context)
         test_file_path = self._write_test_to_managed_system(entity, "unit_tests", test_code)
-
-        # CRITICAL FIX: Don't execute individual tests during generation
-        # Tests will be executed as a batch after all artifacts are ready
-        # This prevents premature test execution when dependencies aren't ready
-        
         return self.create_success_response(
             "generate_unit_tests",
             {
@@ -1045,36 +1420,33 @@ Return ONLY complete Python test code with imports and test classes using approp
                 "test_code": test_code,
                 "test_generated": True,
                 "managed_system": True,
-                "note": "Test execution deferred until all system artifacts are ready"
+                "dependencies_validated": True,
             },
         )
 
     def _generate_integration_tests(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate integration tests for FastAPI routes."""
         entity = payload.get("entity", "Student")
         attributes = payload.get("attributes", [])
         context = payload.get("context", "academic")
+        validation = self._validate_test_dependencies(entity, "integration_tests")
+        if not validation["dependencies_ready"]:
+            missing = validation["missing_dependencies"]
+            recommendations = validation["recommendations"]
+            error_msg = (
+                f"Cannot generate integration_tests for {entity}: missing dependencies: {missing}. "
+                f"Recommendations: {recommendations}"
+            )
+            logger.error(error_msg)
+            from baes.utils.presentation_logger import get_presentation_logger
 
-        # Get the generated API code
-        api_code = self._get_generated_code(entity, "routes")
-
-        prompt = self._build_test_prompt(entity, attributes, "integration_tests", context, api_code)
-        test_code = self.llm_client.generate_code_with_domain_focus(
-            prompt,
-            code_type="Integration Tests",
-            entity_context={
-                "entity": entity,
-                "attributes": attributes,
-                "test_type": "integration_tests",
-            },
+            get_presentation_logger().error(error_msg)
+            return self.create_error_response(
+                "generate_integration_tests", error_msg, "missing_dependencies"
+            )
+        test_code = self._generate_robust_test_code(
+            entity, "integration_tests", attributes, context
         )
-
         test_file_path = self._write_test_to_managed_system(entity, "integration_tests", test_code)
-
-        # CRITICAL FIX: Don't execute individual tests during generation
-        # Tests will be executed as a batch after all artifacts are ready
-        # This prevents premature test execution when dependencies aren't ready
-        
         return self.create_success_response(
             "generate_integration_tests",
             {
@@ -1082,36 +1454,31 @@ Return ONLY complete Python test code with imports and test classes using approp
                 "test_code": test_code,
                 "test_generated": True,
                 "managed_system": True,
-                "note": "Test execution deferred until all system artifacts are ready"
+                "dependencies_validated": True,
             },
         )
 
     def _generate_ui_tests(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate UI tests for Streamlit interface."""
         entity = payload.get("entity", "Student")
         attributes = payload.get("attributes", [])
         context = payload.get("context", "academic")
+        validation = self._validate_test_dependencies(entity, "ui_tests")
+        if not validation["dependencies_ready"]:
+            missing = validation["missing_dependencies"]
+            recommendations = validation["recommendations"]
+            error_msg = (
+                f"Cannot generate ui_tests for {entity}: missing dependencies: {missing}. "
+                f"Recommendations: {recommendations}"
+            )
+            logger.error(error_msg)
+            from baes.utils.presentation_logger import get_presentation_logger
 
-        # Get the generated UI code
-        ui_code = self._get_generated_code(entity, "ui")
-
-        prompt = self._build_test_prompt(entity, attributes, "ui_tests", context, ui_code)
-        test_code = self.llm_client.generate_code_with_domain_focus(
-            prompt,
-            code_type="UI Tests",
-            entity_context={
-                "entity": entity,
-                "attributes": attributes,
-                "test_type": "ui_tests",
-            },
-        )
-
+            get_presentation_logger().error(error_msg)
+            return self.create_error_response(
+                "generate_ui_tests", error_msg, "missing_dependencies"
+            )
+        test_code = self._generate_robust_test_code(entity, "ui_tests", attributes, context)
         test_file_path = self._write_test_to_managed_system(entity, "ui_tests", test_code)
-
-        # CRITICAL FIX: Don't execute individual tests during generation
-        # Tests will be executed as a batch after all artifacts are ready
-        # This prevents premature test execution when dependencies aren't ready
-        
         return self.create_success_response(
             "generate_ui_tests",
             {
@@ -1119,7 +1486,7 @@ Return ONLY complete Python test code with imports and test classes using approp
                 "test_code": test_code,
                 "test_generated": True,
                 "managed_system": True,
-                "note": "Test execution deferred until all system artifacts are ready"
+                "dependencies_validated": True,
             },
         )
 
@@ -1137,18 +1504,18 @@ Return ONLY complete Python test code with imports and test classes using approp
             if not managed_system_path.exists():
                 logger.warning("❌ Managed system directory not found: %s", managed_system_path)
                 return self.create_error_response(
-                    "execute_tests", 
+                    "execute_tests",
                     f"Managed system not found at {managed_system_path}. System generation may have failed.",
-                    "no_managed_system"
+                    "no_managed_system",
                 )
 
             # Check if tests directory exists
             if not tests_dir.exists():
                 logger.warning("❌ Tests directory not found: %s", tests_dir)
                 return self.create_error_response(
-                    "execute_tests", 
+                    "execute_tests",
                     f"No tests directory found at {tests_dir}. Tests may not have been generated.",
-                    "no_tests_found"
+                    "no_tests_found",
                 )
 
             # Check if there are any test files (search recursively)
@@ -1158,7 +1525,7 @@ Return ONLY complete Python test code with imports and test classes using approp
                 return self.create_error_response(
                     "execute_tests",
                     f"No test files found in {tests_dir}. Test generation may have failed.",
-                    "no_test_files"
+                    "no_test_files",
                 )
 
             # ------------------------------------------------------------------
@@ -1194,7 +1561,7 @@ Return ONLY complete Python test code with imports and test classes using approp
             )
 
             execution_time = time.time() - start_time
-            
+
             # ------------------------------------------------------------------
             # Parse JSON report for accurate counts - NO FALLBACK TO REGEX
             # ------------------------------------------------------------------
@@ -1202,53 +1569,41 @@ Return ONLY complete Python test code with imports and test classes using approp
 
             if not report_file.exists():
                 error_msg = f"JSON report file not found: {report_file}. pytest-json-report may not be working correctly."
-                logger.error("❌ %s", error_msg)
-                return self.create_error_response(
-                    "execute_tests", 
-                    error_msg,
-                    "json_report_missing"
-                )
+                logger.error("❌ " + error_msg)
+                return self.create_error_response("execute_tests", error_msg, "json_report_missing")
 
             try:
                 with open(report_file, "r", encoding="utf-8") as jf:
                     report_data = json.load(jf)
-                
+
                 summary = report_data.get("summary", {})
                 if not summary:
                     error_msg = f"JSON report has no 'summary' section: {report_data}"
-                    logger.error("❌ %s", error_msg)
+                    logger.error("❌ " + error_msg)
                     return self.create_error_response(
-                        "execute_tests", 
-                        error_msg,
-                        "json_report_invalid"
+                        "execute_tests", error_msg, "json_report_invalid"
                     )
-                
+
                 tests_executed = summary.get("collected", 0)
                 tests_passed = summary.get("passed", 0)
                 # Treat `failed` + `errors` as failures
                 tests_failed = summary.get("failed", 0) + summary.get("errors", 0)
-                
+
                 logger.info("📊 JSON report parsed successfully:")
                 logger.info("   📋 Collected: %d", tests_executed)
                 logger.info("   ✅ Passed: %d", tests_passed)
                 logger.info("   ❌ Failed: %d", tests_failed)
-                
+
             except json.JSONDecodeError as e:
                 error_msg = f"Failed to parse JSON report: {str(e)}"
-                logger.error("❌ %s", error_msg)
+                logger.error("❌ " + error_msg)
                 return self.create_error_response(
-                    "execute_tests", 
-                    error_msg,
-                    "json_report_parse_error"
+                    "execute_tests", error_msg, "json_report_parse_error"
                 )
             except Exception as e:
                 error_msg = f"Unexpected error parsing JSON report: {str(e)}"
-                logger.error("❌ %s", error_msg)
-                return self.create_error_response(
-                    "execute_tests", 
-                    error_msg,
-                    "json_report_error"
-                )
+                logger.error("❌ " + error_msg)
+                return self.create_error_response("execute_tests", error_msg, "json_report_error")
 
             # Log detailed test execution info
             logger.info("🧪 Test execution completed:")
@@ -1303,15 +1658,20 @@ Return ONLY complete Python test code with imports and test classes using approp
 
             # Determine overall success
             success = result.returncode == 0 and tests_executed > 0
-            
+
             if success:
                 return self.create_success_response("execute_tests", response_data)
             else:
                 # Create error response without extra data parameter
                 error_response = self.create_error_response(
                     "execute_tests",
-                    f"Test execution failed: {tests_executed} tests executed, {tests_passed} passed, exit code {result.returncode}",
-                    "test_execution_failed"
+                    "Test execution failed: "
+                    + str(tests_executed)
+                    + " tests executed, "
+                    + str(tests_passed)
+                    + " passed, exit code "
+                    + str(result.returncode),
+                    "test_execution_failed",
                 )
                 # Add the response data manually
                 error_response["data"] = response_data
@@ -1320,16 +1680,12 @@ Return ONLY complete Python test code with imports and test classes using approp
         except subprocess.TimeoutExpired:
             logger.error("❌ Test execution timed out after 120 seconds")
             return self.create_error_response(
-                "execute_tests", 
-                "Test execution timed out after 120 seconds",
-                "timeout_error"
+                "execute_tests", "Test execution timed out after 120 seconds", "timeout_error"
             )
         except Exception as e:
             logger.error("❌ Test execution failed with exception: %s", str(e))
             return self.create_error_response(
-                "execute_tests", 
-                f"Error executing all tests: {str(e)}", 
-                "execution_error"
+                "execute_tests", "Error executing all tests: " + str(e), "execution_error"
             )
 
     def _generate_all_tests(self, payload: Dict[str, Any]) -> Dict[str, Any]:

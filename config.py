@@ -3,7 +3,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 class Config:
@@ -41,7 +41,7 @@ class Config:
     DOMAIN_ENTITY_FOCUS = True
     SEMANTIC_COHERENCE_VALIDATION = True
     BUSINESS_VOCABULARY_PRESERVATION = True
-    
+
     # BAE System Retry Configuration
     BAE_MAX_RETRIES = int(os.getenv("BAE_MAX_RETRIES", "3"))
 

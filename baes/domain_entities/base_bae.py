@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from abc import abstractmethod
 from datetime import datetime
 from typing import Any, Dict, List
@@ -10,6 +11,7 @@ from ..core.context_store import ContextStore
 from ..llm.openai_client import OpenAIClient
 
 logger = logging.getLogger(__name__)
+
 
 def is_debug_mode():
     """Check if debug mode is enabled"""
@@ -167,8 +169,6 @@ class BaseBae(BaseAgent):
 
     def _clean_json_response(self, response: str) -> str:
         """Clean LLM response to extract JSON from markdown code blocks"""
-        import re
-
         # Remove markdown code blocks
         if "```json" in response:
             # Extract content between ```json and ```
@@ -205,9 +205,8 @@ class BaseBae(BaseAgent):
                 "domain_knowledge_preserved": True,
             }
 
-            # Create comprehensive SWEA coordination plan with TechLeadSWEA governance
-            # TechLeadSWEA acts as the technical brain coordinating all other SWEAs
-            coordination_plan = [
+            # Create comprehensive coordination plan with TechLeadSWEA governance
+            interpretation["swea_coordination"] = [
                 {
                     "swea_agent": "TechLeadSWEA",
                     "task_type": "coordinate_system_generation",
@@ -223,24 +222,10 @@ class BaseBae(BaseAgent):
                             "technical_governance": True,
                         },
                     },
-                    "priority": 1,
-                    "governance_role": "technical_coordinator",
-                    "technical_requirements": {
-                        "code_quality": "high",
-                        "test_coverage": "comprehensive",
-                        "documentation": "business_vocabulary",
-                        "performance": "optimized",
-                    },
-                    "quality_criteria": [
-                        "semantic_coherence_validation",
-                        "domain_knowledge_preservation",
-                        "business_vocabulary_alignment",
-                        "technical_standards_compliance",
-                    ],
                 },
                 {
                     "swea_agent": "DatabaseSWEA",
-                    "task_type": "setup_database" if not is_evolution else "migrate_schema",
+                    "task_type": "setup_database",
                     "payload": {
                         "entity": self.entity_name,
                         "attributes": extracted_attributes,
@@ -248,64 +233,19 @@ class BaseBae(BaseAgent):
                         "preserve_data": is_evolution,
                         "business_rules": True,
                     },
-                    "priority": 2,
-                    "requires_approval": "TechLeadSWEA",
-                    "technical_requirements": {
-                        "data_integrity": "strict",
-                        "performance": "optimized",
-                        "business_constraints": "enforced",
-                    },
-                    "quality_criteria": [
-                        "schema_validation",
-                        "data_preservation",
-                        "referential_integrity",
-                    ],
                 },
                 {
                     "swea_agent": "BackendSWEA",
-                    "task_type": "generate_model",
-                    "payload": {
-                        "entity": self.entity_name,
-                        "attributes": extracted_attributes,
-                        "context": payload.get("request", ""),
-                        "domain_focus": True,
-                        "semantic_coherence": True,
-                    },
-                    "priority": 3,
-                    "requires_approval": "TechLeadSWEA",
-                    "technical_requirements": {
-                        "validation": "comprehensive",
-                        "serialization": "optimized",
-                        "business_rules": "embedded",
-                    },
-                    "quality_criteria": [
-                        "pydantic_compliance",
-                        "business_vocabulary_usage",
-                        "validation_completeness",
-                    ],
-                },
-                {
-                    "swea_agent": "BackendSWEA",
-                    "task_type": "generate_api",
+                    "task_type": "generate_api",  # Now generates complete API with models
                     "payload": {
                         "entity": self.entity_name,
                         "attributes": extracted_attributes,
                         "context": payload.get("request", ""),
                         "crud_operations": True,
                         "business_vocabulary": True,
+                        "domain_focus": True,
+                        "semantic_coherence": True,
                     },
-                    "priority": 4,
-                    "requires_approval": "TechLeadSWEA",
-                    "technical_requirements": {
-                        "rest_compliance": "strict",
-                        "error_handling": "comprehensive",
-                        "documentation": "openapi_complete",
-                    },
-                    "quality_criteria": [
-                        "api_design_standards",
-                        "error_handling_completeness",
-                        "business_operation_alignment",
-                    ],
                 },
                 {
                     "swea_agent": "FrontendSWEA",
@@ -314,21 +254,9 @@ class BaseBae(BaseAgent):
                         "entity": self.entity_name,
                         "attributes": extracted_attributes,
                         "context": payload.get("request", ""),
-                        "business_vocabulary": True,
-                        "user_friendly": True,
+                        "ui_framework": "streamlit",
+                        "features": ["crud_operations", "data_visualization", "user_friendly"],
                     },
-                    "priority": 5,
-                    "requires_approval": "TechLeadSWEA",
-                    "technical_requirements": {
-                        "usability": "high",
-                        "responsiveness": "mobile_ready",
-                        "accessibility": "wcag_compliant",
-                    },
-                    "quality_criteria": [
-                        "ui_usability",
-                        "business_workflow_alignment",
-                        "error_feedback_quality",
-                    ],
                 },
                 {
                     "swea_agent": "TestSWEA",
@@ -337,21 +265,9 @@ class BaseBae(BaseAgent):
                         "entity": self.entity_name,
                         "attributes": extracted_attributes,
                         "context": payload.get("request", ""),
-                        "test_types": ["unit", "integration", "api"],
-                        "coverage_target": "comprehensive",
+                        "test_types": ["unit_tests", "integration_tests", "ui_tests"],
+                        "collaboration_mode": True,
                     },
-                    "priority": 6,
-                    "requires_approval": "TechLeadSWEA",
-                    "technical_requirements": {
-                        "coverage": "90_percent_minimum",
-                        "test_quality": "production_ready",
-                        "automation": "full",
-                    },
-                    "quality_criteria": [
-                        "test_coverage_validation",
-                        "test_quality_assessment",
-                        "automation_completeness",
-                    ],
                 },
                 {
                     "swea_agent": "TechLeadSWEA",
@@ -362,32 +278,21 @@ class BaseBae(BaseAgent):
                         "system_components": ["database", "backend", "frontend", "tests"],
                         "final_review": True,
                     },
-                    "priority": 7,
-                    "governance_role": "final_approval",
-                    "technical_requirements": {
-                        "overall_quality": "production_ready",
-                        "integration": "seamless",
-                        "deployment_ready": True,
-                    },
-                    "quality_criteria": [
-                        "system_integration_validation",
-                        "deployment_readiness",
-                        "quality_gates_compliance",
-                    ],
                 },
             ]
 
-            # Store the interpretation for domain knowledge preservation
-            interpretation["swea_coordination"] = coordination_plan
-
             # Validate coordination plan before returning
-            validation_errors = self._validate_coordination_plan(coordination_plan)
+            validation_errors = self._validate_coordination_plan(
+                interpretation["swea_coordination"]
+            )
             if validation_errors:
-                logger.error(f"❌ {self.entity_name}BAE: Coordination plan validation failed: {validation_errors}")
+                logger.error(
+                    f"❌ {self.entity_name}BAE: Coordination plan validation failed: {validation_errors}"
+                )
                 return {
                     "error": f"Coordination plan validation failed: {validation_errors}",
                     "entity": self.entity_name,
-                    "validation_errors": validation_errors
+                    "validation_errors": validation_errors,
                 }
 
             # Preserve domain knowledge for reusability
@@ -395,7 +300,7 @@ class BaseBae(BaseAgent):
 
             if is_debug_mode():
                 logger.info(
-                    f"✅ {self.entity_name}BAE: Interpreted request with {len(extracted_attributes)} attributes and {len(coordination_plan)} SWEA tasks"
+                    f"✅ {self.entity_name}BAE: Interpreted request with {len(extracted_attributes)} attributes and {len(interpretation['swea_coordination'])} SWEA tasks"
                 )
 
             return interpretation
@@ -414,25 +319,25 @@ class BaseBae(BaseAgent):
         Returns list of validation errors, empty if valid.
         """
         errors = []
-        
+
         if not coordination_plan:
             errors.append("Coordination plan is empty")
             return errors
-        
+
         for i, task in enumerate(coordination_plan):
             task_prefix = f"Task {i+1}"
-            
+
             # Check mandatory attributes
             if not task.get("swea_agent"):
                 errors.append(f"{task_prefix}: Missing 'swea_agent'")
             elif not task.get("swea_agent").strip():
                 errors.append(f"{task_prefix}: 'swea_agent' cannot be empty")
-            
+
             if not task.get("task_type"):
                 errors.append(f"{task_prefix}: Missing 'task_type'")
             elif not task.get("task_type").strip():
                 errors.append(f"{task_prefix}: 'task_type' cannot be empty")
-            
+
             if "payload" not in task:
                 errors.append(f"{task_prefix}: Missing 'payload'")
             elif not isinstance(task.get("payload"), dict):
@@ -441,11 +346,19 @@ class BaseBae(BaseAgent):
                 # Validate payload content for entity-related tasks
                 payload = task.get("payload", {})
                 task_type = task.get("task_type", "")
-                
-                if task_type in ["generate_model", "generate_api", "generate_ui", "setup_database", "migrate_schema"]:
+
+                if task_type in [
+                    "generate_model",
+                    "generate_api",
+                    "generate_ui",
+                    "setup_database",
+                    "migrate_schema",
+                ]:
                     if not payload.get("entity") and not payload.get("entity_name"):
-                        errors.append(f"{task_prefix}: Entity-related task '{task_type}' missing entity information in payload")
-        
+                        errors.append(
+                            f"{task_prefix}: Entity-related task '{task_type}' missing entity information in payload"
+                        )
+
         return errors
 
     def _handle_evolution_request(
@@ -456,7 +369,11 @@ class BaseBae(BaseAgent):
         request_lower = business_request.lower()
 
         # Check for complex operations (multiple operations in one request)
-        has_add = any(
+        # This is a placeholder for future complex evolution handling
+        # For now, we'll handle simple additions, removals, and modifications
+
+        # Handle different types of evolution
+        if any(
             keyword in request_lower
             for keyword in [
                 "add",
@@ -464,51 +381,10 @@ class BaseBae(BaseAgent):
                 "extend",
                 "additional",
                 "new",
-                "needs",
-                "should have",
-                "should also have",
-                "with",
-                "entity to include",
+                "create",
+                "insert",
             ]
-        )
-        has_remove = any(
-            keyword in request_lower for keyword in ["remove", "delete", "drop", "exclude"]
-        )
-        has_modify = any(
-            keyword in request_lower
-            for keyword in [
-                "modify",
-                "change",
-                "update",
-                "alter",
-                "rename",
-                "convert",
-                "make optional",
-                "make required",
-                "make",
-            ]
-        )
-
-        # Handle complex operations
-        if (
-            (has_add and has_remove)
-            or (has_add and has_modify)
-            or (has_remove and has_modify)
-            or (has_add and has_remove and has_modify)
         ):
-            return self._handle_complex_evolution(business_request, context, current_attributes)
-
-        # Determine single evolution type
-        elif has_add:
-            return self._handle_addition_evolution(business_request, context, current_attributes)
-        elif has_remove:
-            return self._handle_removal_evolution(business_request, context, current_attributes)
-        elif has_modify:
-            return self._handle_modification_evolution(
-                business_request, context, current_attributes
-            )
-        else:
-            # Default to addition for backward compatibility
             return self._handle_addition_evolution(business_request, context, current_attributes)
 
     def _handle_addition_evolution(
@@ -730,25 +606,11 @@ class BaseBae(BaseAgent):
     def _is_evolution_request(self, request: str) -> bool:
         """Determine if this is an evolution request"""
         request_lower = request.lower()
-        
-        # Check if this is entity creation vs attribute evolution
-        entity_creation_patterns = [
-            f"add {self.entity_name.lower()}",
-            f"create {self.entity_name.lower()}",
-            f"generate {self.entity_name.lower()}",
-            f"build {self.entity_name.lower()}",
-            f"make {self.entity_name.lower()}",
-        ]
-        
-        # If it matches entity creation patterns, it's NOT evolution
-        for pattern in entity_creation_patterns:
-            if pattern in request_lower:
-                return False
-        
+
         # Check for attribute evolution keywords
         evolution_keywords = [
             "modify",
-            "update", 
+            "update",
             "change",
             "remove",
             "delete",
@@ -757,24 +619,23 @@ class BaseBae(BaseAgent):
             "alter",
             "rename",
         ]
-        
+
         # Check for attribute addition patterns (evolution)
         attribute_addition_patterns = [
             "add attribute",
             "add field",
-            "add property", 
+            "add property",
             "include attribute",
             "include field",
             "add email to",
             "add phone to",
             "add address to",
         ]
-        
+
         # Check for evolution patterns
-        has_evolution_keyword = any(keyword in request_lower for keyword in evolution_keywords)
-        has_attribute_addition = any(pattern in request_lower for pattern in attribute_addition_patterns)
-        
-        return has_evolution_keyword or has_attribute_addition
+        return any(keyword in request_lower for keyword in evolution_keywords) or any(
+            pattern in request_lower for pattern in attribute_addition_patterns
+        )
 
     def _get_default_attributes(self) -> List[str]:
         """Get default attributes for this entity type"""
@@ -912,11 +773,6 @@ class BaseBae(BaseAgent):
             {
                 "swea_agent": "FrontendSWEA",
                 "task_type": "generate_ui",
-                "payload": {"attributes": attributes, "is_evolution": True},
-            },
-            {
-                "swea_agent": "TestSWEA",
-                "task_type": "generate_all_tests",
                 "payload": {"attributes": attributes, "is_evolution": True},
             },
             {
