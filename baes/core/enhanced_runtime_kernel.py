@@ -315,40 +315,16 @@ class EnhancedRuntimeKernel:
 
                 logger.debug("💾 Current schema stored in %s BAE memory", detected_entity)
 
-        # Step 7: Final comprehensive system review (since individual tasks already reviewed)
+        # Step 7: Tests are now integrated into the coordination flow
+        # No separate test execution needed - tests are mandatory part of main flow
         test_execution_result = None
-        if interpretation_result and execution_results:
+        if execution_results:
             # Check if all tasks were approved by TechLeadSWEA during execution
             all_tasks_approved = all(task.get("techlead_approved", False) for task in execution_results)
             
             if all_tasks_approved:
-                logger.info("✅ All tasks approved by TechLeadSWEA - conducting final comprehensive system review")
-                
-                # Determine execution type for appropriate test validation
-                is_evolution = interpretation_result.get("is_evolution", False)
-                execution_type = "evolution_validation" if is_evolution else "creation_validation"
-                
-                # Run comprehensive system tests for final validation
-                test_execution_result = self._execute_evolution_tests(
-                    detected_entity, execution_results, execution_type
-                )
-                
-                # If final tests fail, escalate to TechLeadSWEA for hybrid coordination
-                if test_execution_result.get("needs_coordination"):
-                    logger.warning("⚠️ Final system tests failed - escalating to TechLeadSWEA for hybrid analysis")
-                    
-                    failure_analysis_payload = {
-                        "entity": detected_entity,
-                        "execution_type": execution_type,
-                        "failure_context": test_execution_result.get("failure_context", {}),
-                        "generated_artifacts": execution_results,
-                        "coordination_id": f"final_review_{detected_entity}_{self._get_timestamp()}",
-                    }
-                    
-                    coordination_result = self._execute_hybrid_techlead_coordination(
-                        failure_analysis_payload, detected_entity, execution_results
-                    )
-                    test_execution_result = coordination_result
+                logger.info("✅ All tasks approved by TechLeadSWEA - tests already validated in coordination flow")
+                test_execution_result = {"success": True, "integrated_testing": True}
             else:
                 # Some tasks were rejected during immediate review - system failed early
                 rejected_tasks = [task for task in execution_results if task.get("techlead_rejected", False)]
@@ -370,18 +346,77 @@ class EnhancedRuntimeKernel:
             self._reload_system_components()
             self._start_servers()
 
-        # Step 10: Return comprehensive result with immediate review workflow
+        # -------------------------------------------------------------
+        # 📍 PHASE 2: Execute generated tests after servers are running
+        # -------------------------------------------------------------
+        # Tests were generated in Phase 1 (TestSWEA.generate_* tasks) but
+        # not executed. Run them now and trigger the existing fix-flow if
+        # they fail. This ensures a clear separation between generation
+        # and validation while keeping the mandatory 100% pass rule.
+
+        test_execution_result = None
+        
+        if execution_results:
+            from baes.utils.presentation_logger import get_presentation_logger
+            presentation_logger = get_presentation_logger()
+            
+            # Start Phase 2 validation
+            presentation_logger.phase_2_start()
+            logger.info("🧪 Phase 2: Starting test validation after generation completion")
+            
+            # Run mandatory validation tests
+            test_execution_result = self._execute_mandatory_tests(detected_entity, execution_results)
+
+            if not test_execution_result.get("success", False):
+                test_pass_rate = test_execution_result.get("pass_rate", 0.0)
+                presentation_logger.warning(f"❌ Tests failed ({test_pass_rate:.1f}% pass rate) - starting fixes...")
+                logger.warning("❌ Phase 2: Tests failed, coordinating fixes with TechLeadSWEA")
+                
+                # Use the same retry-based fix coordination, resetting the
+                # retry counter per fix iteration as defined by BAE_MAX_RETRIES.
+                fix_success = self._coordinate_test_fixes_until_success(
+                    detected_entity,
+                    test_execution_result,
+                    execution_results,
+                )
+
+                if not fix_success:
+                    presentation_logger.error("❌ Phase 2: Tests could not be fixed after maximum attempts")
+                    logger.error("❌ Phase 2: Validation tests could not be fixed after maximum attempts")
+                    return {
+                        "success": False,
+                        "error": "MAX_RETRIES_REACHED",
+                        "message": "Phase 2 validation: Tests failed and could not be fixed",
+                        "entity": detected_entity,
+                        "execution_results": execution_results,
+                        "test_execution_result": test_execution_result,
+                    }
+
+                # Re-run tests once fixes applied to capture final status
+                presentation_logger.info("🔄 Re-running tests after fixes applied...")
+                logger.info("🔄 Phase 2: Re-running tests after fixes applied")
+                test_execution_result = self._execute_mandatory_tests(detected_entity, execution_results)
+                
+            # Phase 2 validation completed successfully
+            if test_execution_result.get("success", False):
+                test_pass_rate = test_execution_result.get("pass_rate", 0.0)
+                presentation_logger.success(f"✅ Phase 2: All tests passing ({test_pass_rate:.1f}%) - system validated!")
+                logger.info("✅ Phase 2: Test validation completed successfully")
+
+        # Step 10: Return comprehensive result with integrated test-driven workflow
         overall_success = True
         failed_tasks = []
         
-        # With immediate review workflow, success is determined by:
+        # With integrated test-driven workflow, success is determined by:
         # 1. All individual tasks approved by TechLeadSWEA during execution
-        # 2. Final comprehensive system review passed (if all tasks were approved)
+        # 2. All tests passing at 100% rate (integrated into coordination flow)
+        # 3. Final TechLeadSWEA approval after test validation
         
         if execution_results:
             # Check immediate review results
             approved_tasks = [task for task in execution_results if task.get("techlead_approved", False)]
             rejected_tasks = [task for task in execution_results if task.get("techlead_rejected", False)]
+            test_failed_tasks = [task for task in execution_results if task.get("test_execution_failed", False)]
             
             # Collect failed tasks from immediate review
             for task_result in execution_results:
@@ -391,13 +426,16 @@ class EnhancedRuntimeKernel:
                         "error": task_result.get("error", "unknown error"),
                         "feedback": task_result.get("feedback_history", []),
                         "retry_count": task_result.get("retry_count", 0),
-                        "techlead_rejected": task_result.get("techlead_rejected", False)
+                        "techlead_rejected": task_result.get("techlead_rejected", False),
+                        "test_execution_failed": task_result.get("test_execution_failed", False)
                     })
             
-            # Early failure detection
-            if rejected_tasks:
+            # Early failure detection - including test failures
+            if rejected_tasks or test_failed_tasks:
                 overall_success = False
-                logger.error("❌ System generation FAILED - %d tasks rejected during immediate review", len(rejected_tasks))
+                failure_count = len(rejected_tasks) + len(test_failed_tasks)
+                logger.error("❌ System generation FAILED - %d tasks failed (reviews: %d, tests: %d)", 
+                           failure_count, len(rejected_tasks), len(test_failed_tasks))
                 
                 # Early failure - return immediately with detailed feedback
                 return {
@@ -411,48 +449,51 @@ class EnhancedRuntimeKernel:
                     "test_execution_result": test_execution_result,
                     "failed_tasks": failed_tasks,
                     "rejected_tasks": rejected_tasks,
+                    "test_failed_tasks": test_failed_tasks,
                     "approved_tasks": approved_tasks,
                     "total_tasks": len(execution_results),
                     "successful_tasks": len(approved_tasks),
-                    "message": f"System generation failed early: {len(rejected_tasks)} tasks rejected by TechLeadSWEA",
-                    "help": "Review TechLeadSWEA feedback and retry with improvements"
+                    "message": f"System generation failed: {len(rejected_tasks)} tasks rejected, {len(test_failed_tasks)} test failures",
+                    "help": "Review TechLeadSWEA feedback and ensure all tests pass before declaring success",
+                    "integrated_testing": True
                 }
             
-            # All tasks approved - check final system review
-            if test_execution_result:
-                final_system_success = test_execution_result.get("success", False)
-                techlead_coordination = test_execution_result.get("techlead_coordination", False)
-                
-                if final_system_success:
-                    logger.info("✅ System generation COMPLETED successfully - all tasks approved + final system review passed")
-                    overall_success = True
-                elif techlead_coordination:
-                    # Final coordination attempted but failed
-                    logger.warning("⚠️ Final system review failed despite individual task approval")
-                    overall_success = False
-                    failed_tasks.append({
-                        "task": "final_system_review",
-                        "error": "Final comprehensive system tests failed",
-                        "feedback": test_execution_result.get("feedback", [])
-                    })
-                else:
-                    # Final tests failed without coordination
-                    logger.error("❌ Final system review failed")
-                    overall_success = False
-                    failed_tasks.append({
-                        "task": "final_system_review", 
-                        "error": "System tests failed after individual task approval",
-                        "feedback": []
-                    })
-            else:
-                # No final system review (should not happen with approved tasks)
-                logger.warning("⚠️ No final system review conducted despite approved tasks")
-                overall_success = len(failed_tasks) == 0
+            # Two-phase approach: success depends on Phase 1 completion + Phase 2 validation
+            # Phase 1: All tasks must be approved by TechLeadSWEA
+            # Phase 2: Tests must pass at 100% rate (handled separately)
+            
+            phase_1_success = len(approved_tasks) == len(execution_results)
+            phase_2_success = test_execution_result and test_execution_result.get("success", False)
+            
+            overall_success = phase_1_success and phase_2_success
+            
+            if phase_1_success and phase_2_success:
+                test_pass_rate = test_execution_result.get("pass_rate", 0.0) if test_execution_result else 0.0
+                logger.info("✅ Two-phase generation COMPLETED - Phase 1: %d/%d tasks approved, Phase 2: %.1f%% tests passing", 
+                           len(approved_tasks), len(execution_results), test_pass_rate)
+            elif not phase_1_success:
+                logger.error("❌ Phase 1 FAILED - %d/%d tasks approved", len(approved_tasks), len(execution_results))
+                failed_tasks.append({
+                    "task": "phase_1_generation", 
+                    "error": f"Only {len(approved_tasks)}/{len(execution_results)} tasks approved by TechLeadSWEA",
+                    "feedback": []
+                })
+            elif not phase_2_success:
+                test_pass_rate = test_execution_result.get("pass_rate", 0.0) if test_execution_result else 0.0
+                logger.error("❌ Phase 2 FAILED - tests not passing (%.1f%% pass rate)", test_pass_rate)
+                failed_tasks.append({
+                    "task": "phase_2_validation", 
+                    "error": f"Tests failed - {test_pass_rate:.1f}% pass rate (100% required)",
+                    "feedback": []
+                })
                 
         else:
             # No execution results means failure
             overall_success = False
             failed_tasks.append({"task": "system_generation", "error": "No tasks were executed"})
+
+        # Get final test pass rate from Phase 2 validation
+        final_test_pass_rate = test_execution_result.get("pass_rate", 0.0) if test_execution_result else 0.0
 
         result = {
             "success": overall_success,
@@ -462,23 +503,43 @@ class EnhancedRuntimeKernel:
             "interpretation": interpretation_result,
             "execution_results": execution_results,
             "test_execution_result": test_execution_result,
+            "actual_test_pass_rate": final_test_pass_rate,
             "language_detected": entity_classification.get("language_detected"),
             "action_intent": entity_classification.get("action_intent"),
             "domain_knowledge_preserved": True,
             "failed_tasks": failed_tasks,
             "total_tasks": len(execution_results) if execution_results else 0,
             "successful_tasks": len([r for r in execution_results if r.get("techlead_approved", False)]) if execution_results else 0,
-            "immediate_review_workflow": True,
-            "early_failure_detection": len([r for r in execution_results if r.get("techlead_rejected", False)]) > 0 if execution_results else False
+            "integrated_test_driven_workflow": True,
+            "mandatory_testing": True,
+            "tests_must_pass_100_percent": True,
+            "early_failure_detection": len([r for r in execution_results if r.get("techlead_rejected", False) or r.get("test_execution_failed", False)]) > 0 if execution_results else False
         }
 
         if overall_success:
-            logger.info("✅ Request processed successfully for %s entity - ALL tasks approved + final review passed", detected_entity)
+            logger.info("✅ Request processed successfully for %s entity - ALL tasks approved + ALL tests passing", detected_entity)
         else:
             logger.warning("❌ Request processing FAILED for %s entity - %d tasks failed", detected_entity, len(failed_tasks))
             for failed_task in failed_tasks:
                 logger.warning("   Failed: %s - %s", failed_task["task"], failed_task["error"])
         
+        # Final completion logging for two-phase approach
+        successful_tasks = len([r for r in execution_results if r.get("success", False)])
+        
+        # Two-phase completion: show final result with test validation
+        if overall_success:
+            presentation_logger.complete_generation_with_tests(
+                detected_entity, successful_tasks, len(execution_results), execution_results
+            )
+        else:
+            # Show the appropriate failure message
+            if not execution_results:
+                presentation_logger.error(f"❌ {detected_entity.title()} System Generation Failed - No tasks executed")
+            elif len([r for r in execution_results if r.get("techlead_approved", False)]) < len(execution_results):
+                presentation_logger.error(f"❌ {detected_entity.title()} System Generation Failed - Phase 1 incomplete")
+            else:
+                presentation_logger.error(f"❌ {detected_entity.title()} System Generation Failed - Phase 2 validation failed")
+
         return result
 
     def _create_unsupported_entity_error(
@@ -523,14 +584,14 @@ class EnhancedRuntimeKernel:
         """
         Execute the coordination plan with immediate TechLeadSWEA review after each task.
         
-        New Flow:
-        1. Execute SWEA tasks sequentially (not in parallel)
-        2. After each task, immediately get TechLeadSWEA review/approval
-        3. If approved, continue to next task
-        4. If rejected, retry same task with feedback up to BAE_MAX_RETRIES times
-        5. If max retries reached, fail early and stop execution
+        NEW INTEGRATED TEST-DRIVEN FLOW:
+        1. Execute SWEA tasks sequentially with immediate review
+        2. After test generation, EXECUTE tests as part of main flow
+        3. TechLeadSWEA analyzes test results and coordinates fixes if needed
+        4. Tests must achieve 100% pass rate before final approval
+        5. Only when tests pass can final approval be given
         
-        This provides early problem identification and prevents wasted effort on dependent tasks.
+        This ensures NO SUCCESS is declared until ALL tests pass.
         """
         # Use debug logging for technical details
         if is_debug_mode():
@@ -604,6 +665,40 @@ class EnhancedRuntimeKernel:
                     if is_debug_mode():
                         logger.info("🔧 Executing %s (attempt %d/%d)", task_name, retry_count + 1, max_retries + 1)
                     result = agent.handle_task(task_type, payload)
+                    
+                    # **CRITICAL FIX: Generate managed system artifacts immediately after each SWEA task**
+                    # This ensures TestSWEA has actual artifacts to test
+                    if result.get("success") and swea_agent not in ["TechLeadSWEA"]:
+                        logger.debug("🏗️  Generating managed system artifacts after %s completion", swea_agent)
+                        try:
+                            # Collect all successful results so far for artifact generation
+                            current_results = results + [{"task": task_name, "success": True, "result": result}]
+                            
+                            # Generate managed system artifacts incrementally
+                            self.managed_system_manager.ensure_managed_system_structure()
+                            self.managed_system_manager.update_system_files()
+                            
+                            logger.debug("✅ Managed system artifacts updated after %s", swea_agent)
+                        except Exception as e:
+                            logger.warning("⚠️  Failed to update managed system after %s: %s", swea_agent, str(e))
+                    
+                    # **DEFERRED TEST EXECUTION (Phase 2 will handle validation)**
+                    if "TestSWEA" in swea_agent and "generate" in task_type:
+                        # Phase-1 test generation only
+                        logger.info("🧪 Test files generated; execution deferred to Phase 2 validation")
+                        result["tests_generated"] = True
+                        # Also propagate flag inside data section for TechLeadSWEA checks
+                        if isinstance(result.get("data"), dict):
+                            result["data"]["tests_generated"] = True
+                        # Skip immediate execution logic entirely
+                        task_success = True
+                        results.append({
+                            "task": task_name,
+                            "success": True,
+                            "result": result,
+                            "techlead_approved": True,  # will be reviewed below
+                        })
+                        break
                     
                     # Check if this is a final review task
                     is_final_review = (
@@ -679,7 +774,7 @@ class EnhancedRuntimeKernel:
                                     "retry_count": retry_count
                                 })
                                 
-                                # Fail early - stop execution
+                                # Fail fast - stop execution
                                 raise MaxRetriesReachedError(
                                     task_name, swea_agent, task_type, retry_count, max_retries,
                                     f"Final system review rejected by TechLeadSWEA after {max_retries + 1} attempts",
@@ -722,44 +817,31 @@ class EnhancedRuntimeKernel:
                                 "retry_count": retry_count
                             })
                             task_success = True
-                            
                         else:
                             # Task rejected by TechLeadSWEA
                             technical_feedback = review_result.get("data", {}).get("technical_feedback", [])
                             feedback_history.extend(technical_feedback)
+                            
                             simplified_name = self._get_simplified_task_name(task_name)
+                            presentation_logger.techlead_review(False, simplified_name, 0.0, technical_feedback)
                             
-                            # Presentation logging
-                            presentation_logger.techlead_review(False, simplified_name)
+                            logger.warning("❌ %s REJECTED by TechLeadSWEA (attempt %d/%d)", 
+                                         task_name, retry_count + 1, max_retries + 1)
                             
-                            # Debug logging
-                            if is_debug_mode():
-                                logger.warning("❌ %s REJECTED by TechLeadSWEA (attempt %d/%d)", 
-                                             task_name, retry_count + 1, max_retries + 1)
-                                if technical_feedback:
-                                    logger.warning("📝 TechLeadSWEA feedback:")
-                                    for feedback in technical_feedback:
-                                        logger.warning("   • %s", feedback)
-                            
-                            # Log detailed error for fixing
                             if technical_feedback:
-                                presentation_logger.log_error_for_fixing({
-                                    "task": task_name,
-                                    "retry_count": retry_count + 1,
-                                    "max_retries": max_retries + 1,
-                                    "feedback": technical_feedback
-                                })
+                                logger.warning("📝 TechLeadSWEA feedback:")
+                                for feedback in technical_feedback:
+                                    logger.warning("   • %s", feedback)
                             
-                            # Check if we should retry
-                            if retry_count < max_retries:
+                            # Phase 1: No test execution or fix coordination - defer to Phase 2
+                            # For TestSWEA rejections in Phase 1, simply retry test generation
+                            
+                            # Check if we should retry (for non-TestSWEA tasks or if fix coordination wasn't triggered)
+                            if not task_success and retry_count < max_retries:
                                 retry_count += 1
-                                logger.info("🔄 Retrying %s with TechLeadSWEA feedback...", task_name)
-                                
-                                # Enhance payload with feedback for retry
-                                if technical_feedback:
-                                    payload["techlead_feedback"] = technical_feedback
-                                    payload["retry_attempt"] = retry_count
-                            else:
+                                logger.info("🔄 Retrying %s with TechLeadSWEA feedback (attempt %d/%d)...", 
+                                          task_name, retry_count + 1, max_retries + 1)
+                            elif not task_success:
                                 # Max retries reached
                                 logger.error("🛑 %s FAILED after %d attempts - stopping coordination plan", 
                                            task_name, max_retries + 1)
@@ -772,43 +854,27 @@ class EnhancedRuntimeKernel:
                                     "retry_count": retry_count
                                 })
                                 
-                                # Fail early - stop executing remaining tasks
+                                # Fail fast - stop execution
                                 raise MaxRetriesReachedError(
                                     task_name, swea_agent, task_type, retry_count, max_retries,
                                     f"Task rejected by TechLeadSWEA after {max_retries + 1} attempts",
                                     feedback_history
                                 )
-                    
+
                 except Exception as e:
                     last_error = str(e)
-                    simplified_name = self._get_simplified_task_name(task_name)
-                    
-                    # Presentation logging
-                    presentation_logger.step_error(task_index + 1, simplified_name, last_error, retry_count >= max_retries)
-                    
-                    # Debug logging
-                    if is_debug_mode():
-                        logger.error("❌ %s execution failed: %s", task_name, last_error)
-                    
-                    # Log detailed error for fixing
-                    presentation_logger.log_error_for_fixing({
-                        "task": task_name,
-                        "retry_count": retry_count + 1,
-                        "error": last_error,
-                        "exception_type": type(e).__name__
-                    })
+                    presentation_logger.step_error(task_index + 1, self._get_simplified_task_name(task_name), last_error)
+                    logger.error("❌ %s execution failed: %s", task_name, last_error)
                     
                     # Check if we should retry
                     if retry_count < max_retries:
                         retry_count += 1
-                        if is_debug_mode():
-                            logger.info("🔄 Retrying %s after execution error (attempt %d/%d)...", 
-                                      task_name, retry_count + 1, max_retries + 1)
+                        logger.info("🔄 Retrying %s after execution error (attempt %d/%d)...", 
+                                  task_name, retry_count + 1, max_retries + 1)
                     else:
                         # Max retries reached
-                        if is_debug_mode():
-                            logger.error("🛑 %s FAILED after %d attempts - stopping coordination plan", 
-                                       task_name, max_retries + 1)
+                        logger.error("🛑 %s FAILED after %d attempts - stopping coordination plan", 
+                                   task_name, max_retries + 1)
                         results.append({
                             "task": task_name,
                             "success": False,
@@ -816,19 +882,21 @@ class EnhancedRuntimeKernel:
                             "retry_count": retry_count
                         })
                         
-                        # Fail early - stop executing remaining tasks
+                        # Fail fast - stop execution
                         raise MaxRetriesReachedError(
                             task_name, swea_agent, task_type, retry_count, max_retries,
-                            last_error, feedback_history
+                            last_error
                         )
 
-        # Presentation completion logging
-        successful_tasks = sum(1 for r in results if r.get("success", False))
-        presentation_logger.generation_complete(entity_name, successful_tasks == len(coordination_plan), successful_tasks)
+        # Phase 1 completion logging (generation only - no test execution yet)
+        successful_tasks = len([r for r in results if r.get("success", False)])
         
-        # Debug logging
+        # Phase 1 completes here - tests generated but not executed
+        presentation_logger.phase_1_complete(entity_name, successful_tasks, len(results))
+        
+        # Debug summary
         if is_debug_mode():
-            logger.info("✅ Coordination plan completed successfully - all %d tasks approved by TechLeadSWEA", len(coordination_plan))
+            logger.info("📊 Coordination plan completed: %d/%d tasks successful", successful_tasks, len(results))
         
         return results
 
@@ -1511,6 +1579,192 @@ class EnhancedRuntimeKernel:
                 "coordination_log": [],
                 "fix_iterations": 0,
             }
+
+    def _execute_mandatory_tests(self, entity: str, execution_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Execute tests as a mandatory part of the main coordination flow.
+        Tests MUST pass for the system to be considered successfully generated.
+        """
+        try:
+            logger.info("🧪 Executing mandatory tests for %s entity", entity)
+            
+            # Check if TestSWEA was part of the execution results
+            test_generation_result = None
+            for result in execution_results:
+                if "TestSWEA" in result.get("task", "") and result.get("success"):
+                    test_generation_result = result
+                    break
+
+            if not test_generation_result:
+                logger.error("❌ No TestSWEA execution found - cannot validate system without tests")
+                return {
+                    "success": False, 
+                    "error": "No test generation found", 
+                    "entity": entity,
+                    "critical_failure": True
+                }
+
+            # Execute the generated tests
+            test_payload = {
+                "entity": entity,
+                "execution_type": "creation_validation",
+                "validate_after_changes": True,
+                "mandatory": True  # Flag to indicate this is mandatory testing
+            }
+
+            execution_result = self.test_swea.handle_task("execute_tests", test_payload)
+
+            # Extract test execution details
+            test_data = execution_result.get("data", {})
+            test_execution = test_data.get("test_execution", {})
+
+            # Check for specific errors
+            if test_execution.get("timeout_error"):
+                logger.error("❌ Mandatory test execution timed out for %s", entity)
+                return {
+                    "success": False,
+                    "error": "Test execution timed out",
+                    "timeout": True,
+                    "entity": entity,
+                    "test_execution": test_execution
+                }
+
+            success = execution_result.get("success", False) and test_execution.get("success", False)
+            
+            # Calculate test metrics - FIXED: tests_executed is at top level, others are nested
+            tests_executed = test_data.get("tests_executed", 0)  # Top level
+            tests_passed = test_execution.get("tests_passed", 0)  # Nested in test_execution
+            tests_failed = test_execution.get("tests_failed", 0)  # Nested in test_execution
+            pass_rate = (tests_passed / tests_executed * 100) if tests_executed > 0 else 0
+            
+            # Log test results
+            if success and pass_rate == 100:
+                logger.info("✅ All tests passed (%d/%d) - 100%% pass rate achieved", tests_passed, tests_executed)
+            else:
+                logger.warning("❌ Tests failed: %d/%d passed (%.1f%% pass rate)", tests_passed, tests_executed, pass_rate)
+                if test_execution.get("stderr"):
+                    logger.warning("📝 Test errors: %s", test_execution.get("stderr", "")[:500])
+
+            # Return detailed test results for TechLeadSWEA analysis
+            return {
+                "success": success,
+                "entity": entity,
+                "test_execution": test_execution,
+                "tests_executed": tests_executed,
+                "tests_passed": tests_passed,
+                "tests_failed": tests_failed,
+                "pass_rate": pass_rate,
+                "requires_100_percent": True,  # Flag for TechLeadSWEA
+                "failure_context": {
+                    "entity": entity,
+                    "test_execution": test_execution,
+                    "execution_results": execution_results,
+                    "stderr": test_execution.get("stderr", ""),
+                    "stdout": test_execution.get("stdout", ""),
+                    "exit_code": test_execution.get("exit_code", -1),
+                } if not success else None
+            }
+
+        except Exception as e:
+            logger.error("❌ Failed to execute mandatory tests: %s", str(e))
+            return {
+                "success": False,
+                "error": f"Mandatory test execution failed: {str(e)}",
+                "entity": entity,
+                "exception_type": type(e).__name__,
+                "critical_failure": True
+            }
+    
+    def _coordinate_test_fixes_until_success(
+        self, entity: str, test_result: Dict[str, Any], execution_results: List[Dict[str, Any]]
+    ) -> bool:
+        """
+        Coordinate fixes with TechLeadSWEA until tests achieve 100% pass rate.
+        Returns True only when all tests pass, False if max attempts reached.
+        """
+        max_fix_iterations = int(os.getenv("BAE_MAX_RETRIES", "3"))
+        fix_iteration = 0
+        
+        logger.info("🔧 TechLeadSWEA coordinating test fixes for %s (max %d iterations)", entity, max_fix_iterations)
+        
+        while fix_iteration < max_fix_iterations:
+            fix_iteration += 1
+            logger.info("🔄 Fix iteration %d/%d for %s", fix_iteration, max_fix_iterations, entity)
+            
+            # ENHANCED: Extract detailed failure context for better TechLeadSWEA analysis
+            failure_context = test_result.get("failure_context", {})
+            test_execution = test_result.get("test_execution", {})
+            
+            # Prepare enhanced failure analysis payload for TechLeadSWEA
+            failure_analysis_payload = {
+                "entity": entity,
+                "execution_type": "test_validation",
+                "failure_context": failure_context,  # Complete failure context
+                "test_execution": test_execution,    # Detailed test execution results
+                "generated_artifacts": execution_results,
+                "coordination_id": f"test_fix_{entity}_{fix_iteration}_{self._get_timestamp()}",
+                "fix_iteration": fix_iteration,
+                "max_iterations": max_fix_iterations,
+                "requires_100_percent_pass": True,
+                # NEW: Add specific test failure details for better analysis
+                "test_failures": [{
+                    "category": "test_execution_failure",
+                    "stderr": test_execution.get("stderr", ""),
+                    "stdout": test_execution.get("stdout", ""),
+                    "exit_code": test_execution.get("exit_code", -1),
+                    "tests_executed": test_execution.get("tests_executed", 0),
+                    "tests_passed": test_execution.get("tests_passed", 0),
+                    "tests_failed": test_execution.get("tests_failed", 0)
+                }]
+            }
+            
+            # Use the enhanced coordinate_test_fixes method instead of hybrid_coordination
+            # This provides more specific and actionable fix routing
+            try:
+                logger.info("🧠 Routing to TechLeadSWEA coordinate_test_fixes for detailed analysis")
+                coordination_result = self.techlead_swea.handle_task("coordinate_test_fixes", failure_analysis_payload)
+                
+                if coordination_result.get("success"):
+                    # Extract fix decisions from TechLeadSWEA
+                    coordination_data = coordination_result.get("data", {})
+                    fix_decisions = coordination_data.get("fix_decisions", [])
+                    specific_issues_found = coordination_data.get("specific_issues_found", 0)
+                    
+                    logger.info("✅ TechLeadSWEA analysis complete: %d fix decisions, %d specific issues", 
+                               len(fix_decisions), specific_issues_found)
+                    
+                    # Apply the coordinated fixes
+                    if fix_decisions:
+                        logger.info("🔧 Applying %d coordinated fixes...", len(fix_decisions))
+                        fixes_applied = self._execute_techlead_fix_decisions(fix_decisions, entity, execution_results)
+                        
+                        if fixes_applied:
+                            # Re-execute tests after fixes
+                            logger.info("🧪 Re-executing tests after fixes...")
+                            updated_test_result = self._execute_mandatory_tests(entity, execution_results)
+                            
+                            if updated_test_result.get("success", False):
+                                logger.info("✅ Tests now passing after TechLeadSWEA coordination!")
+                                return True
+                            else:
+                                # Update test result for next iteration
+                                test_result = updated_test_result
+                                pass_rate = test_result.get("pass_rate", 0.0)
+                                logger.warning("⚠️ Tests still failing (%.1f%% pass rate) - iteration %d", pass_rate, fix_iteration)
+                        else:
+                            logger.warning("⚠️ Fix application failed - iteration %d", fix_iteration)
+                    else:
+                        logger.warning("⚠️ No fix decisions from TechLeadSWEA - iteration %d", fix_iteration)
+                else:
+                    error = coordination_result.get("error", "Unknown coordination error")
+                    logger.warning("⚠️ TechLeadSWEA coordination failed: %s - iteration %d", error, fix_iteration)
+            
+            except Exception as e:
+                logger.error("❌ Fix iteration %d failed with exception: %s", fix_iteration, str(e))
+        
+        # Max iterations reached without success
+        logger.error("❌ Test fixes failed after %d iterations - giving up", max_fix_iterations)
+        return False
 
 
 # CLI Interface

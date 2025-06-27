@@ -2,6 +2,10 @@ import re
 import subprocess
 import sys
 import logging
+import json
+import tempfile
+import time
+from pathlib import Path
 from typing import Any, Dict, List
 
 from ..agents.base_agent import BaseAgent
@@ -395,7 +399,13 @@ class TestSWEA(BaseAgent):
                     "execute_all_tests", f"No tests directory found for {entity}", "no_tests_found"
                 )
 
-            # Run all tests
+            # ------------------------------------------------------------------
+            # Build pytest command with JSON reporting for reliable test counts
+            # ------------------------------------------------------------------
+            # Create a temporary file to hold the JSON report produced by
+            # pytest-json-report. We can safely remove it after parsing.
+            report_file = Path(tempfile.gettempdir()) / f"pytest_report_{int(time.time())}.json"
+
             cmd = [
                 sys.executable,
                 "-m",
@@ -405,7 +415,13 @@ class TestSWEA(BaseAgent):
                 "--tb=short",
                 "--no-header",
                 "-q",
+                "--json-report",
+                f"--json-report-file={report_file}",
             ]
+
+            start_time = time.time()
+            logger.info("🧪 Executing tests in: %s", tests_dir)
+            logger.debug("🧪 Test command: %s", " ".join(cmd))
 
             result = subprocess.run(
                 cmd,
@@ -415,43 +431,147 @@ class TestSWEA(BaseAgent):
                 timeout=120,  # 2 minute timeout for all tests
             )
 
-            return self.create_success_response(
-                "execute_all_tests",
-                {
-                    "success": result.returncode == 0,
+            execution_time = time.time() - start_time
+            
+            # ------------------------------------------------------------------
+            # Parse JSON report for accurate counts - NO FALLBACK TO REGEX
+            # ------------------------------------------------------------------
+            tests_executed = tests_passed = tests_failed = 0
+
+            if not report_file.exists():
+                error_msg = f"JSON report file not found: {report_file}. pytest-json-report may not be working correctly."
+                logger.error("❌ %s", error_msg)
+                return self.create_error_response(
+                    "execute_tests", 
+                    error_msg,
+                    "json_report_missing"
+                )
+
+            try:
+                with open(report_file, "r", encoding="utf-8") as jf:
+                    report_data = json.load(jf)
+                
+                summary = report_data.get("summary", {})
+                if not summary:
+                    error_msg = f"JSON report has no 'summary' section: {report_data}"
+                    logger.error("❌ %s", error_msg)
+                    return self.create_error_response(
+                        "execute_tests", 
+                        error_msg,
+                        "json_report_invalid"
+                    )
+                
+                tests_executed = summary.get("collected", 0)
+                tests_passed = summary.get("passed", 0)
+                # Treat `failed` + `errors` as failures
+                tests_failed = summary.get("failed", 0) + summary.get("errors", 0)
+                
+                logger.info("📊 JSON report parsed successfully:")
+                logger.info("   📋 Collected: %d", tests_executed)
+                logger.info("   ✅ Passed: %d", tests_passed)
+                logger.info("   ❌ Failed: %d", tests_failed)
+                
+            except json.JSONDecodeError as e:
+                error_msg = f"Failed to parse JSON report: {str(e)}"
+                logger.error("❌ %s", error_msg)
+                return self.create_error_response(
+                    "execute_tests", 
+                    error_msg,
+                    "json_report_parse_error"
+                )
+            except Exception as e:
+                error_msg = f"Unexpected error parsing JSON report: {str(e)}"
+                logger.error("❌ %s", error_msg)
+                return self.create_error_response(
+                    "execute_tests", 
+                    error_msg,
+                    "json_report_error"
+                )
+
+            # Log detailed test execution info
+            logger.info("🧪 Test execution completed:")
+            logger.info("   📊 Tests executed: %d", tests_executed)
+            logger.info("   ✅ Tests passed: %d", tests_passed)
+            logger.info("   ❌ Tests failed: %d", tests_failed)
+            logger.info("   🕒 Execution time: %.2fs", execution_time)
+            logger.info("   📤 Exit code: %d", result.returncode)
+
+            # Log stdout/stderr if there are issues
+            if result.returncode != 0:
+                logger.warning("❌ Test execution failed:")
+                if result.stdout:
+                    logger.warning("📤 STDOUT: %s", result.stdout[:1000])
+                if result.stderr:
+                    logger.warning("📤 STDERR: %s", result.stderr[:1000])
+
+            # Clean up report file to avoid clutter (best effort)
+            try:
+                if report_file.exists():
+                    report_file.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+            response_data = {
+                "tests_executed": tests_executed,
+                "test_execution": {
+                    "success": result.returncode == 0 and tests_executed > 0,
                     "exit_code": result.returncode,
                     "stdout": result.stdout,
                     "stderr": result.stderr,
                     "tests_directory": str(tests_dir),
-                    "tests_executed": self._count_tests_executed(result.stdout),
+                    "tests_passed": tests_passed,
+                    "tests_failed": tests_failed,
+                    "execution_time": execution_time,
+                    "execution_type": "standard",
+                    "entity": entity,
+                    "test_files_found": tests_executed,
                 },
-            )
+            }
 
-        except Exception as e:
+            # Determine overall success
+            success = result.returncode == 0 and tests_executed > 0
+            
+            if success:
+                return self.create_success_response("execute_tests", response_data)
+            else:
+                # Create error response without extra data parameter
+                error_response = self.create_error_response(
+                    "execute_tests",
+                    f"Test execution failed: {tests_executed} tests executed, {tests_passed} passed, exit code {result.returncode}",
+                    "test_execution_failed"
+                )
+                # Add the response data manually
+                error_response["data"] = response_data
+                return error_response
+
+        except subprocess.TimeoutExpired:
+            logger.error("❌ Test execution timed out after 120 seconds")
             return self.create_error_response(
-                "execute_all_tests", f"Error executing all tests: {str(e)}", "execution_error"
+                "execute_tests", 
+                "Test execution timed out after 120 seconds",
+                "timeout_error"
+            )
+        except Exception as e:
+            logger.error("❌ Test execution failed with exception: %s", str(e))
+            return self.create_error_response(
+                "execute_tests", 
+                f"Error executing all tests: {str(e)}", 
+                "execution_error"
             )
 
     def _count_tests_executed(self, stdout: str) -> int:
-        """Count the number of tests executed from pytest output."""
-        # Look for patterns like "collected X items" or "X passed"
-        collected_match = re.search(r"collected (\d+) items", stdout)
-        if collected_match:
-            return int(collected_match.group(1))
-
-        passed_match = re.search(r"(\d+) passed", stdout)
-        if passed_match:
-            return int(passed_match.group(1))
-
-        return 0
+        """DEPRECATED: This method is no longer used. JSON reporting is mandatory."""
+        raise NotImplementedError(
+            "Regex-based test counting is deprecated. JSON reporting is now mandatory. "
+            "If you see this error, there's an issue with pytest-json-report configuration."
+        )
 
     def _count_tests_passed(self, stdout: str) -> int:
-        """Count the number of tests that passed from pytest output."""
-        passed_match = re.search(r"(\d+) passed", stdout)
-        if passed_match:
-            return int(passed_match.group(1))
-
-        return 0
+        """DEPRECATED: This method is no longer used. JSON reporting is mandatory."""
+        raise NotImplementedError(
+            "Regex-based test counting is deprecated. JSON reporting is now mandatory. "
+            "If you see this error, there's an issue with pytest-json-report configuration."
+        )
 
     def _all_tests_passed(self, test_results: Dict[str, Any]) -> bool:
         """Check if all tests passed in the test results."""
@@ -464,7 +584,14 @@ class TestSWEA(BaseAgent):
         if data.get("success") is False:
             return False
 
-        # Check individual test executions
+        # UPDATED: Handle new structure where individual tests are not executed during generation
+        # Check if this is a test execution result (has test_execution data)
+        test_execution = data.get("test_execution", {})
+        if test_execution:
+            # This is an actual test execution result
+            return test_execution.get("success", False)
+        
+        # Check individual test executions (legacy support)
         test_executions = test_results.get("test_executions", [])
         for test_execution in test_executions:
             test_result = test_execution.get("result", {})
@@ -474,6 +601,8 @@ class TestSWEA(BaseAgent):
             if not test_exec.get("success", True):
                 return False
 
+        # If no test executions found, assume tests are generated but not executed yet
+        # This is now the normal case during generation
         return True
 
     def _generate_all_tests_basic(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -516,18 +645,42 @@ class TestSWEA(BaseAgent):
         """Fix test issues based on TechLeadSWEA coordination"""
         try:
             entity = payload.get("entity", "Student")
-            fix_context = payload.get("fix_context", {})
-            issue_type = fix_context.get("issue_type", "")
-            issue_description = fix_context.get("issue_description", "")
+            fix_action = payload.get("fix_action", "")
+            issue_type = payload.get("issue_type", "")
+            techlead_decision = payload.get("techlead_decision", {})
             
-            logger.info("🔧 TestSWEA: Fixing test issues for %s - %s", entity, issue_description)
+            # Extract detailed context from TechLeadSWEA decision
+            detailed_context = techlead_decision.get("detailed_context", {})
+            specific_issue = techlead_decision.get("specific_issue", "")
+            reasoning = techlead_decision.get("reasoning", "")
             
-            # Regenerate tests based on the issue type
-            if "test_generation" in issue_type or "missing_tests" in issue_type:
-                logger.debug("🔧 TestSWEA: Regenerating all tests due to test generation issues")
+            logger.info("🔧 TestSWEA: Fixing test issues for %s", entity)
+            logger.info("   🎯 Fix Action: %s", fix_action)
+            logger.info("   📋 Issue Type: %s", issue_type)
+            logger.info("   💡 Reasoning: %s", reasoning)
+            
+            # Handle specific fix actions from TechLeadSWEA
+            if fix_action in ["fix_test_mocking", "update_test_configuration"]:
+                logger.debug("🔧 TestSWEA: Fixing test mocking configuration")
+                # Regenerate tests with improved mocking
+                return self._generate_all_tests_with_improved_mocking(payload)
+                
+            elif fix_action in ["review_test_assertions", "fix_test_expectations"]:
+                logger.debug("🔧 TestSWEA: Reviewing and fixing test assertions")
+                # Regenerate tests with corrected assertions
+                return self._generate_all_tests_with_corrected_assertions(payload)
+                
+            elif fix_action in ["analyze_test_failure", "fix_test_issues"]:
+                logger.debug("🔧 TestSWEA: Analyzing and fixing general test issues")
+                # Comprehensive test regeneration
+                return self._generate_all_tests_with_collaboration(payload)
+                
+            # Fallback: Handle by issue type (legacy support)
+            elif "test_generation" in issue_type or "missing_tests" in issue_type:
+                logger.debug("🔧 TestSWEA: Regenerating all tests due to test generation issues (legacy)")
                 return self._generate_all_tests_with_collaboration(payload)
             elif "test_execution" in issue_type or "execution_failure" in issue_type:
-                logger.debug("🔧 TestSWEA: Re-executing tests due to execution issues")
+                logger.debug("🔧 TestSWEA: Re-executing tests due to execution issues (legacy)")
                 # First try to regenerate tests, then execute
                 generation_result = self._generate_all_tests_with_collaboration(payload)
                 if generation_result.get("success"):
@@ -535,7 +688,7 @@ class TestSWEA(BaseAgent):
                 else:
                     return generation_result
             elif "dependency" in issue_type:
-                logger.debug("🔧 TestSWEA: Handling dependency issues")
+                logger.debug("🔧 TestSWEA: Handling dependency issues (legacy)")
                 # For dependency issues, we need to ensure proper test environment
                 self._ensure_test_environment(entity)
                 return self._generate_all_tests_with_collaboration(payload)
@@ -547,6 +700,54 @@ class TestSWEA(BaseAgent):
         except Exception as e:
             logger.error("❌ TestSWEA fix_issues failed: %s", str(e))
             return self.create_error_response("fix_issues", str(e), "fix_error")
+
+    def _generate_all_tests_with_improved_mocking(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate tests with improved mocking to handle Mock object issues"""
+        try:
+            entity = payload.get("entity", "Student")
+            logger.info("🔧 TestSWEA: Regenerating tests with improved mocking for %s", entity)
+            
+            # Add mocking context to payload
+            enhanced_payload = payload.copy()
+            enhanced_payload["mocking_strategy"] = "improved"
+            enhanced_payload["mock_validation"] = True
+            
+            # Generate tests with enhanced mocking
+            result = self._generate_all_tests_with_collaboration(enhanced_payload)
+            
+            if result.get("success"):
+                result["data"]["fix_applied"] = True
+                result["data"]["fix_type"] = "improved_mocking"
+                
+            return result
+            
+        except Exception as e:
+            logger.error("❌ TestSWEA improved mocking failed: %s", str(e))
+            return self.create_error_response("fix_issues", str(e), "improved_mocking_error")
+
+    def _generate_all_tests_with_corrected_assertions(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate tests with corrected assertions to handle assertion failures"""
+        try:
+            entity = payload.get("entity", "Student")
+            logger.info("🔧 TestSWEA: Regenerating tests with corrected assertions for %s", entity)
+            
+            # Add assertion correction context to payload
+            enhanced_payload = payload.copy()
+            enhanced_payload["assertion_strategy"] = "corrected"
+            enhanced_payload["validate_responses"] = True
+            
+            # Generate tests with corrected assertions
+            result = self._generate_all_tests_with_collaboration(enhanced_payload)
+            
+            if result.get("success"):
+                result["data"]["fix_applied"] = True
+                result["data"]["fix_type"] = "corrected_assertions"
+                
+            return result
+            
+        except Exception as e:
+            logger.error("❌ TestSWEA corrected assertions failed: %s", str(e))
+            return self.create_error_response("fix_issues", str(e), "corrected_assertions_error")
 
     def _ensure_test_environment(self, entity: str):
         """Ensure proper test environment setup"""
@@ -605,7 +806,7 @@ Requirements:
         if test_type == "unit_tests":
             return (
                 base_prompt
-                + """
+                + f"""
 Generate comprehensive unit tests for the Pydantic model including:
 - Field validation tests
 - Type checking tests
@@ -613,6 +814,13 @@ Generate comprehensive unit tests for the Pydantic model including:
 - Serialization/deserialization tests
 - Edge case handling
 - Invalid data rejection tests
+
+CRITICAL IMPORT REQUIREMENTS:
+- Import the model using: 'from app.models.{entity.lower()}_model import {entity}'
+- Use 'import pytest' for pytest framework
+- Use 'from pydantic import ValidationError' for validation testing
+- DO NOT use placeholder imports like 'from your_module import {entity}'
+- ALL imports must be concrete and functional
 
 Return ONLY complete Python test code with imports and test classes.
 """
@@ -655,6 +863,15 @@ Generate comprehensive UI tests for the Streamlit interface including:
 - Navigation tests
 - Session state tests
 - API integration tests (mocked)
+
+CRITICAL IMPORT REQUIREMENTS:
+- Import the main function using: 'import sys; from pathlib import Path; sys.path.append(str(Path(__file__).parent.parent.parent / "ui")); from app import main'
+- Use 'from config import Config' for API endpoint URLs
+- Use 'import streamlit as st' for Streamlit components
+- Use 'from unittest.mock import patch, MagicMock' for mocking
+- Mock API calls using: '@patch("requests.get")' and '@patch("requests.post")'
+- DO NOT use placeholder imports like 'from your_module import main'
+- ALL imports must be concrete and functional
 
 Return ONLY complete Python test code with imports and test classes using appropriate mocking.
 """
@@ -773,7 +990,8 @@ Return ONLY complete Python test code with imports and test classes using approp
             managed_system_path = self.managed_system_manager.managed_system_path
 
             if code_type == "model":
-                model_file = managed_system_path / "app" / "models" / f"{entity.lower()}.py"
+                # Use the correct model file naming convention: {entity}_model.py
+                model_file = managed_system_path / "app" / "models" / f"{entity.lower()}_model.py"
                 if model_file.exists():
                     return model_file.read_text()
             elif code_type == "routes":
@@ -816,16 +1034,18 @@ Return ONLY complete Python test code with imports and test classes using approp
 
         test_file_path = self._write_test_to_managed_system(entity, "unit_tests", test_code)
 
-        # Execute the tests
-        test_results = self._execute_pytest(test_file_path)
-
+        # CRITICAL FIX: Don't execute individual tests during generation
+        # Tests will be executed as a batch after all artifacts are ready
+        # This prevents premature test execution when dependencies aren't ready
+        
         return self.create_success_response(
             "generate_unit_tests",
             {
                 "test_file_path": test_file_path,
                 "test_code": test_code,
-                "test_execution": test_results,
+                "test_generated": True,
                 "managed_system": True,
+                "note": "Test execution deferred until all system artifacts are ready"
             },
         )
 
@@ -851,16 +1071,18 @@ Return ONLY complete Python test code with imports and test classes using approp
 
         test_file_path = self._write_test_to_managed_system(entity, "integration_tests", test_code)
 
-        # Execute the tests
-        test_results = self._execute_pytest(test_file_path)
-
+        # CRITICAL FIX: Don't execute individual tests during generation
+        # Tests will be executed as a batch after all artifacts are ready
+        # This prevents premature test execution when dependencies aren't ready
+        
         return self.create_success_response(
             "generate_integration_tests",
             {
                 "test_file_path": test_file_path,
                 "test_code": test_code,
-                "test_execution": test_results,
+                "test_generated": True,
                 "managed_system": True,
+                "note": "Test execution deferred until all system artifacts are ready"
             },
         )
 
@@ -886,16 +1108,18 @@ Return ONLY complete Python test code with imports and test classes using approp
 
         test_file_path = self._write_test_to_managed_system(entity, "ui_tests", test_code)
 
-        # Execute the tests
-        test_results = self._execute_pytest(test_file_path)
-
+        # CRITICAL FIX: Don't execute individual tests during generation
+        # Tests will be executed as a batch after all artifacts are ready
+        # This prevents premature test execution when dependencies aren't ready
+        
         return self.create_success_response(
             "generate_ui_tests",
             {
                 "test_file_path": test_file_path,
                 "test_code": test_code,
-                "test_execution": test_results,
+                "test_generated": True,
                 "managed_system": True,
+                "note": "Test execution deferred until all system artifacts are ready"
             },
         )
 
@@ -909,12 +1133,41 @@ Return ONLY complete Python test code with imports and test classes using approp
             managed_system_path = self.managed_system_manager.managed_system_path
             tests_dir = managed_system_path / "tests"
 
-            if not tests_dir.exists():
+            # Check if managed system exists
+            if not managed_system_path.exists():
+                logger.warning("❌ Managed system directory not found: %s", managed_system_path)
                 return self.create_error_response(
-                    "execute_tests", f"No tests directory found for {entity}", "no_tests_found"
+                    "execute_tests", 
+                    f"Managed system not found at {managed_system_path}. System generation may have failed.",
+                    "no_managed_system"
                 )
 
-            # Build test command
+            # Check if tests directory exists
+            if not tests_dir.exists():
+                logger.warning("❌ Tests directory not found: %s", tests_dir)
+                return self.create_error_response(
+                    "execute_tests", 
+                    f"No tests directory found at {tests_dir}. Tests may not have been generated.",
+                    "no_tests_found"
+                )
+
+            # Check if there are any test files (search recursively)
+            test_files = list(tests_dir.rglob("test_*.py")) + list(tests_dir.rglob("*_test.py"))
+            if not test_files:
+                logger.warning("❌ No test files found in: %s", tests_dir)
+                return self.create_error_response(
+                    "execute_tests",
+                    f"No test files found in {tests_dir}. Test generation may have failed.",
+                    "no_test_files"
+                )
+
+            # ------------------------------------------------------------------
+            # Build pytest command with JSON reporting for reliable test counts
+            # ------------------------------------------------------------------
+            # Create a temporary file to hold the JSON report produced by
+            # pytest-json-report. We can safely remove it after parsing.
+            report_file = Path(tempfile.gettempdir()) / f"pytest_report_{int(time.time())}.json"
+
             cmd = [
                 sys.executable,
                 "-m",
@@ -924,18 +1177,13 @@ Return ONLY complete Python test code with imports and test classes using approp
                 "--tb=short",
                 "--no-header",
                 "-q",
+                "--json-report",
+                f"--json-report-file={report_file}",
             ]
 
-            # For evolution validation, focus on entity-specific tests
-            if execution_type == "evolution_validation":
-                entity_lower = entity.lower()
-                test_pattern = entity_lower  # Fixed: Remove asterisks to avoid pytest syntax error
-                cmd.extend(["-k", test_pattern])
-                print(f"🧪 Running evolution validation tests for {entity} entity")
-
-            import time
-
             start_time = time.time()
+            logger.info("🧪 Executing tests in: %s", tests_dir)
+            logger.debug("🧪 Test command: %s", " ".join(cmd))
 
             result = subprocess.run(
                 cmd,
@@ -946,18 +1194,89 @@ Return ONLY complete Python test code with imports and test classes using approp
             )
 
             execution_time = time.time() - start_time
-            tests_executed = self._count_tests_executed(result.stdout)
-            tests_passed = (
-                tests_executed
-                if result.returncode == 0
-                else self._count_tests_passed(result.stdout)
-            )
-            tests_failed = tests_executed - tests_passed
+            
+            # ------------------------------------------------------------------
+            # Parse JSON report for accurate counts - NO FALLBACK TO REGEX
+            # ------------------------------------------------------------------
+            tests_executed = tests_passed = tests_failed = 0
+
+            if not report_file.exists():
+                error_msg = f"JSON report file not found: {report_file}. pytest-json-report may not be working correctly."
+                logger.error("❌ %s", error_msg)
+                return self.create_error_response(
+                    "execute_tests", 
+                    error_msg,
+                    "json_report_missing"
+                )
+
+            try:
+                with open(report_file, "r", encoding="utf-8") as jf:
+                    report_data = json.load(jf)
+                
+                summary = report_data.get("summary", {})
+                if not summary:
+                    error_msg = f"JSON report has no 'summary' section: {report_data}"
+                    logger.error("❌ %s", error_msg)
+                    return self.create_error_response(
+                        "execute_tests", 
+                        error_msg,
+                        "json_report_invalid"
+                    )
+                
+                tests_executed = summary.get("collected", 0)
+                tests_passed = summary.get("passed", 0)
+                # Treat `failed` + `errors` as failures
+                tests_failed = summary.get("failed", 0) + summary.get("errors", 0)
+                
+                logger.info("📊 JSON report parsed successfully:")
+                logger.info("   📋 Collected: %d", tests_executed)
+                logger.info("   ✅ Passed: %d", tests_passed)
+                logger.info("   ❌ Failed: %d", tests_failed)
+                
+            except json.JSONDecodeError as e:
+                error_msg = f"Failed to parse JSON report: {str(e)}"
+                logger.error("❌ %s", error_msg)
+                return self.create_error_response(
+                    "execute_tests", 
+                    error_msg,
+                    "json_report_parse_error"
+                )
+            except Exception as e:
+                error_msg = f"Unexpected error parsing JSON report: {str(e)}"
+                logger.error("❌ %s", error_msg)
+                return self.create_error_response(
+                    "execute_tests", 
+                    error_msg,
+                    "json_report_error"
+                )
+
+            # Log detailed test execution info
+            logger.info("🧪 Test execution completed:")
+            logger.info("   📊 Tests executed: %d", tests_executed)
+            logger.info("   ✅ Tests passed: %d", tests_passed)
+            logger.info("   ❌ Tests failed: %d", tests_failed)
+            logger.info("   🕒 Execution time: %.2fs", execution_time)
+            logger.info("   📤 Exit code: %d", result.returncode)
+
+            # Log stdout/stderr if there are issues
+            if result.returncode != 0:
+                logger.warning("❌ Test execution failed:")
+                if result.stdout:
+                    logger.warning("📤 STDOUT: %s", result.stdout[:1000])
+                if result.stderr:
+                    logger.warning("📤 STDERR: %s", result.stderr[:1000])
+
+            # Clean up report file to avoid clutter (best effort)
+            try:
+                if report_file.exists():
+                    report_file.unlink(missing_ok=True)
+            except Exception:
+                pass
 
             response_data = {
                 "tests_executed": tests_executed,
                 "test_execution": {
-                    "success": result.returncode == 0,
+                    "success": result.returncode == 0 and tests_executed > 0,
                     "exit_code": result.returncode,
                     "stdout": result.stdout,
                     "stderr": result.stderr,
@@ -967,25 +1286,50 @@ Return ONLY complete Python test code with imports and test classes using approp
                     "execution_time": execution_time,
                     "execution_type": execution_type,
                     "entity": entity,
+                    "test_files_found": len(test_files),
                 },
             }
 
             if validate_after_changes:
                 response_data["test_execution"]["validation_status"] = (
-                    "passed" if result.returncode == 0 else "failed"
+                    "passed" if result.returncode == 0 and tests_executed > 0 else "failed"
                 )
                 response_data["test_execution"]["evolution_validation"] = True
 
-                if result.returncode != 0:
-                    print(f"⚠️  Evolution validation tests failed for {entity}")
+                if result.returncode != 0 or tests_executed == 0:
+                    logger.warning("⚠️  Evolution validation tests failed for %s", entity)
                 else:
-                    print(f"✅ Evolution validation tests passed for {entity}")
+                    logger.info("✅ Evolution validation tests passed for %s", entity)
 
-            return self.create_success_response("execute_tests", response_data)
+            # Determine overall success
+            success = result.returncode == 0 and tests_executed > 0
+            
+            if success:
+                return self.create_success_response("execute_tests", response_data)
+            else:
+                # Create error response without extra data parameter
+                error_response = self.create_error_response(
+                    "execute_tests",
+                    f"Test execution failed: {tests_executed} tests executed, {tests_passed} passed, exit code {result.returncode}",
+                    "test_execution_failed"
+                )
+                # Add the response data manually
+                error_response["data"] = response_data
+                return error_response
 
-        except Exception as e:
+        except subprocess.TimeoutExpired:
+            logger.error("❌ Test execution timed out after 120 seconds")
             return self.create_error_response(
-                "execute_tests", f"Error executing all tests: {str(e)}", "execution_error"
+                "execute_tests", 
+                "Test execution timed out after 120 seconds",
+                "timeout_error"
+            )
+        except Exception as e:
+            logger.error("❌ Test execution failed with exception: %s", str(e))
+            return self.create_error_response(
+                "execute_tests", 
+                f"Error executing all tests: {str(e)}", 
+                "execution_error"
             )
 
     def _generate_all_tests(self, payload: Dict[str, Any]) -> Dict[str, Any]:
