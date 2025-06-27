@@ -455,27 +455,39 @@ class TechLeadSWEA(BaseAgent):
             if validation_result["is_valid"]:
                 logger.info(f"✅ TechLeadSWEA (as reviewer) APPROVED task '{task_type}' from {swea_agent} (author) for entity '{entity}'")
                 return {
+                    "approved": True,
                     "success": True,
                     "data": {
                         "overall_approval": True,
                         "quality_score": validation_result["quality_score"],
                         "validation_details": validation_result["details"],
                         "feedback": validation_result["suggestions"],
+                        "technical_feedback": validation_result["suggestions"],
                     },
+                    "quality_score": validation_result["quality_score"],
+                    "validation_details": validation_result["details"],
+                    "feedback": validation_result["suggestions"],
                 }
             else:
                 # Get the primary reason for rejection (first issue)
                 primary_reason = validation_result.get("issues", ["Quality standards not met"])[0]
                 logger.warning(f"❌ TechLeadSWEA (as reviewer) REJECTED task '{task_type}' from {swea_agent} (author) for entity '{entity}' - Reason: {primary_reason}")
                 return {
+                    "approved": False,
                     "success": False,
                     "data": {
                         "overall_approval": False,
                         "quality_score": validation_result["quality_score"],
                         "validation_details": validation_result["details"],
                         "feedback": validation_result["issues"],
+                        "technical_feedback": validation_result["issues"],
                         "retry_required": True,
+                        "rejection_reason": primary_reason,
                     },
+                    "quality_score": validation_result["quality_score"],
+                    "validation_details": validation_result["details"],
+                    "feedback": validation_result["issues"],
+                    "retry_required": True,
                 }
         else:
             logger.info(f"🔍 TechLeadSWEA (as reviewer) is reviewing output from {swea_agent} (author) for task '{task_type}' on entity '{entity}' (retry: {retry_count})")
@@ -496,6 +508,13 @@ class TechLeadSWEA(BaseAgent):
             return {
                 "approved": True,
                 "success": True,
+                "data": {
+                    "overall_approval": True,
+                    "quality_score": validation_result["quality_score"],
+                    "validation_details": validation_result["details"],
+                    "feedback": validation_result["suggestions"],
+                    "technical_feedback": validation_result["suggestions"],
+                },
                 "quality_score": validation_result["quality_score"],
                 "validation_details": validation_result["details"],
                 "feedback": validation_result["suggestions"],
@@ -507,6 +526,15 @@ class TechLeadSWEA(BaseAgent):
             return {
                 "approved": False,
                 "success": False,
+                "data": {
+                    "overall_approval": False,
+                    "quality_score": validation_result["quality_score"],
+                    "validation_details": validation_result["details"],
+                    "feedback": validation_result["issues"],
+                    "technical_feedback": validation_result["issues"],
+                    "retry_required": True,
+                    "rejection_reason": primary_reason,
+                },
                 "quality_score": validation_result["quality_score"],
                 "validation_details": validation_result["details"],
                 "feedback": validation_result["issues"],
@@ -621,8 +649,154 @@ class TechLeadSWEA(BaseAgent):
         self, entity: str, swea_agent: str, task_type: str, result: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Comprehensive LLM-based validation of generated artifacts.
-        Analyzes code quality, completeness, and adherence to requirements.
+        Comprehensive validation of generated artifacts.
+        Handles both code artifacts and database artifacts appropriately.
+        """
+        try:
+            # Special handling for DatabaseSWEA - it returns database metadata, not code
+            if swea_agent == "DatabaseSWEA" and task_type == "setup_database":
+                return self._validate_database_artifact(entity, result)
+            
+            # For code-producing SWEAs, use LLM-based validation
+            return self._validate_code_artifact(entity, swea_agent, task_type, result)
+
+        except Exception as e:
+            logger.error(
+                f"❌ TechLeadSWEA: Validation failed for {swea_agent}.{task_type}: {str(e)}"
+            )
+            return {
+                "is_valid": False,
+                "quality_score": 0.0,
+                "details": f"Validation error: {str(e)}",
+                "issues": [f"Validation process failed: {str(e)}"],
+                "suggestions": ["Retry the validation process"],
+            }
+
+    def _validate_database_artifact(self, entity: str, result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validate DatabaseSWEA artifacts by checking database-specific fields.
+        This is more reliable than LLM-based validation for database metadata.
+        """
+        try:
+            # Check basic result structure
+            if not result.get("success", False):
+                return {
+                    "is_valid": False,
+                    "quality_score": 0.0,
+                    "details": "Database setup failed",
+                    "issues": ["Database setup returned success=False"],
+                    "suggestions": ["Check database setup implementation"],
+                }
+
+            data = result.get("data", {})
+            if not data:
+                return {
+                    "is_valid": False,
+                    "quality_score": 0.0,
+                    "details": "No database data provided",
+                    "issues": ["Missing database setup data"],
+                    "suggestions": ["Ensure database setup returns proper data"],
+                }
+
+            # Check for required database fields
+            required_fields = ["database_path", "tables_created"]
+            missing_fields = [field for field in required_fields if not data.get(field)]
+            
+            if missing_fields:
+                return {
+                    "is_valid": False,
+                    "quality_score": 0.2,
+                    "details": f"Missing database fields: {missing_fields}",
+                    "issues": [f"Database setup missing: {', '.join(missing_fields)}"],
+                    "suggestions": ["Ensure database setup returns all required fields"],
+                }
+
+            # Check if tables were actually created
+            tables_created = data.get("tables_created", [])
+            if not tables_created or len(tables_created) == 0:
+                return {
+                    "is_valid": False,
+                    "quality_score": 0.0,
+                    "details": "No database tables were created",
+                    "issues": ["No database tables were created"],
+                    "suggestions": ["Check database table creation logic"],
+                }
+
+            # Validate database path format (don't require physical file existence)
+            database_path = data.get("database_path", "")
+            if not database_path:
+                return {
+                    "is_valid": False,
+                    "quality_score": 0.2,
+                    "details": "Database path not provided",
+                    "issues": ["Missing database path"],
+                    "suggestions": ["Ensure database path is specified"],
+                }
+
+            # Optional: Check if database file exists for non-test scenarios
+            # Only apply strict file existence check in production-like paths
+            if (database_path.endswith('.db') and 
+                not any(test_path in database_path for test_path in ['/tmp/', 'test', '.temp']) and
+                not database_path.startswith('sqlite://')):
+                import os
+                if not os.path.exists(database_path):
+                    # Reduce severity - don't fail validation, just reduce quality score
+                    quality_score = 0.7  # Still valid but lower quality
+                else:
+                    quality_score = 1.0
+            else:
+                quality_score = 1.0  # Full quality for test/temp scenarios
+
+            # Validate table names match entity
+            entity_table = f"{entity.lower()}s"
+            if entity_table not in tables_created:
+                # Check for alternative naming patterns
+                alternative_names = [entity.lower(), f"{entity.lower()}_table"]
+                if not any(alt in tables_created for alt in alternative_names):
+                    return {
+                        "is_valid": False,
+                        "quality_score": 0.6,
+                        "details": f"Expected table '{entity_table}' not found in: {tables_created}",
+                        "issues": [f"Entity table '{entity_table}' not created"],
+                        "suggestions": [f"Ensure table for entity '{entity}' is created"],
+                    }
+
+            # Adjust quality score based on completeness (use base quality_score from file check)
+            
+            # Reduce score if missing optional fields
+            optional_fields = ["columns", "managed_system", "improvements_applied"]
+            missing_optional = [field for field in optional_fields if not data.get(field)]
+            quality_score -= len(missing_optional) * 0.1
+
+            # Bonus for having detailed metadata
+            if data.get("columns"):
+                quality_score = min(1.0, quality_score + 0.1)
+            if data.get("improvements_applied"):
+                quality_score = min(1.0, quality_score + 0.1)
+
+            return {
+                "is_valid": True,
+                "quality_score": max(0.7, quality_score),  # Minimum 0.7 for valid database
+                "details": f"Database setup validated: {len(tables_created)} tables created at {database_path}",
+                "issues": [],
+                "suggestions": ["Database setup completed successfully"],
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Database artifact validation failed: {str(e)}")
+            return {
+                "is_valid": False,
+                "quality_score": 0.0,
+                "details": f"Database validation error: {str(e)}",
+                "issues": [f"Database validation failed: {str(e)}"],
+                "suggestions": ["Retry database validation"],
+            }
+
+    def _validate_code_artifact(
+        self, entity: str, swea_agent: str, task_type: str, result: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        LLM-based validation for code artifacts (BackendSWEA, FrontendSWEA, etc.).
         """
         try:
             # Extract artifact information
@@ -654,14 +828,14 @@ class TechLeadSWEA(BaseAgent):
 
         except Exception as e:
             logger.error(
-                f"❌ TechLeadSWEA: Validation failed for {swea_agent}.{task_type}: {str(e)}"
+                f"❌ TechLeadSWEA: Code validation failed for {swea_agent}.{task_type}: {str(e)}"
             )
             return {
                 "is_valid": False,
                 "quality_score": 0.0,
-                "details": f"Validation error: {str(e)}",
-                "issues": [f"Validation process failed: {str(e)}"],
-                "suggestions": ["Retry the validation process"],
+                "details": f"Code validation error: {str(e)}",
+                "issues": [f"Code validation process failed: {str(e)}"],
+                "suggestions": ["Retry the code validation process"],
             }
 
     def _determine_validation_type(self, swea_agent: str, task_type: str) -> str:

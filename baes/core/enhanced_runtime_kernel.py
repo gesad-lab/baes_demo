@@ -1147,12 +1147,33 @@ class EnhancedRuntimeKernel:
                             # Check if we should retry (for non-TestSWEA tasks or if fix coordination wasn't triggered)
                             if not task_success and retry_count < max_retries:
                                 retry_count += 1
+                                
+                                # **CRITICAL FIX: Pass TechLeadSWEA feedback to SWEA agent for retry**
+                                # Enhance payload with TechLeadSWEA feedback for intelligent retry
+                                enhanced_payload = payload.copy()
+                                
+                                # Add TechLeadSWEA feedback for the SWEA agent to process
+                                enhanced_payload["techlead_feedback"] = feedback_items if feedback_items else technical_feedback
+                                enhanced_payload["previous_errors"] = [primary_reason]
+                                enhanced_payload["expected_output"] = self._get_expected_output_for_task(swea_agent, task_type, 
+                                    enhanced_payload.get("entity", "Unknown"))
+                                enhanced_payload["retry_count"] = retry_count
+                                
+                                # Update the task payload for the retry
+                                payload = enhanced_payload
+                                
                                 logger.info(
                                     "🔄 Retrying %s with TechLeadSWEA feedback (attempt %d/%d)...",
                                     task_name,
                                     retry_count + 1,
                                     max_retries + 1,
                                 )
+                                
+                                # Enhanced feedback logging for specific issues
+                                if feedback_items:
+                                    logger.info("   📝 Specific feedback provided: %s", feedback_items[0])
+                                elif technical_feedback:
+                                    logger.info("   📝 Technical feedback provided: %s", technical_feedback[0])
                             elif not task_success:
                                 # Max retries reached
                                 logger.error(
