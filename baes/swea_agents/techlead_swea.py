@@ -464,7 +464,9 @@ class TechLeadSWEA(BaseAgent):
                     },
                 }
             else:
-                logger.warning(f"❌ TechLeadSWEA (as reviewer) REJECTED task '{task_type}' from {swea_agent} (author) for entity '{entity}'")
+                # Get the primary reason for rejection (first issue)
+                primary_reason = validation_result.get("issues", ["Quality standards not met"])[0]
+                logger.warning(f"❌ TechLeadSWEA (as reviewer) REJECTED task '{task_type}' from {swea_agent} (author) for entity '{entity}' - Reason: {primary_reason}")
                 return {
                     "success": False,
                     "data": {
@@ -499,7 +501,9 @@ class TechLeadSWEA(BaseAgent):
                 "feedback": validation_result["suggestions"],
             }
         else:
-            logger.warning(f"❌ TechLeadSWEA (as reviewer) REJECTED task '{task_type}' from {swea_agent} (author) for entity '{entity}'")
+            # Get the primary reason for rejection (first issue)
+            primary_reason = validation_result.get("issues", ["Quality standards not met"])[0]
+            logger.warning(f"❌ TechLeadSWEA (as reviewer) REJECTED task '{task_type}' from {swea_agent} (author) for entity '{entity}' - Reason: {primary_reason}")
             return {
                 "approved": False,
                 "success": False,

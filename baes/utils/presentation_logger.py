@@ -106,9 +106,54 @@ class PresentationLogger:
             if feedback and len(feedback) > 0:
                 # Show first feedback item in simplified form
                 first_feedback = feedback[0] if isinstance(feedback, list) else str(feedback)
-                if len(first_feedback) > 60:
-                    first_feedback = first_feedback[:57] + "..."
-                print(f"   {Colors.DIM}📝 Feedback: {first_feedback}{Colors.RESET}")
+                
+                # Make the feedback more user-friendly by simplifying technical terms
+                user_friendly_feedback = self._make_feedback_user_friendly(first_feedback)
+                
+                if len(user_friendly_feedback) > 80:
+                    user_friendly_feedback = user_friendly_feedback[:77] + "..."
+                
+                print(f"   {Colors.WARNING}📝 Reason: {user_friendly_feedback}{Colors.RESET}")
+
+    def _make_feedback_user_friendly(self, feedback: str) -> str:
+        """Convert technical feedback to user-friendly language"""
+        if not feedback:
+            return "Quality standards not met"
+        
+        # Convert technical terms to user-friendly language
+        user_friendly_mappings = {
+            "Coordination task returned success=False": "Coordination setup failed",
+            "Empty coordination plan": "No execution plan created",
+            "Coordination plan missing": "Missing required components",
+            "Missing required SWEAs": "Missing required system components",
+            "coordination plan is empty": "No execution plan created",
+            "coordination task failed": "System coordination failed",
+            "Generated code is empty": "No code was generated",
+            "Contains placeholder comments": "Code contains incomplete sections",
+            "Missing Pydantic BaseModel import": "Missing required imports",
+            "Missing FastAPI imports": "API setup incomplete",
+            "Naming convention not followed": "Code naming standards not met",
+            "Quality standards not met": "Quality requirements not satisfied",
+            "Validation error": "Code validation failed",
+            "Syntax error": "Code syntax issues detected",
+            "Import error": "Missing dependencies",
+            "Module not found": "Required components missing"
+        }
+        
+        # Apply user-friendly mappings
+        feedback_lower = feedback.lower()
+        for technical_term, user_friendly in user_friendly_mappings.items():
+            if technical_term.lower() in feedback_lower:
+                return user_friendly
+        
+        # If no mapping found, try to simplify generic technical language
+        simplified = feedback.replace("_", " ").replace("  ", " ").strip()
+        
+        # Capitalize first letter
+        if simplified:
+            simplified = simplified[0].upper() + simplified[1:]
+            
+        return simplified
 
     def step_success(self, step_num: int, simplified_name: str, details: Dict[str, Any] = None):
         """Log successful step completion with timing"""

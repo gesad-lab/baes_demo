@@ -994,14 +994,24 @@ class EnhancedRuntimeKernel:
                             )
                             feedback_history.extend(technical_feedback)
 
+                            # Extract primary rejection reason for user-friendly display
+                            feedback_items = review_result.get("data", {}).get("feedback", [])
+                            primary_reason = "System not ready for deployment"
+                            if feedback_items and isinstance(feedback_items, list) and len(feedback_items) > 0:
+                                primary_reason = feedback_items[0]
+                            elif technical_feedback and len(technical_feedback) > 0:
+                                primary_reason = technical_feedback[0]
+
                             logger.warning(
-                                "❌ %s REJECTED by TechLeadSWEA - System not ready for deployment (attempt %d/%d)",
+                                "❌ %s REJECTED by TechLeadSWEA (attempt %d/%d) - %s",
                                 task_name,
                                 retry_count + 1,
                                 max_retries + 1,
+                                primary_reason
                             )
 
-                            if technical_feedback:
+                            # Only show detailed feedback in debug mode to keep output clean
+                            if is_debug_mode() and technical_feedback:
                                 logger.warning("📝 TechLeadSWEA feedback:")
                                 for feedback in technical_feedback:
                                     logger.warning("   • %s", feedback)
@@ -1109,14 +1119,24 @@ class EnhancedRuntimeKernel:
                                 False, simplified_name, 0.0, technical_feedback
                             )
 
+                            # Extract primary rejection reason for user-friendly display
+                            feedback_items = review_result.get("data", {}).get("feedback", [])
+                            primary_reason = "Quality standards not met"
+                            if feedback_items and isinstance(feedback_items, list) and len(feedback_items) > 0:
+                                primary_reason = feedback_items[0]
+                            elif technical_feedback and len(technical_feedback) > 0:
+                                primary_reason = technical_feedback[0]
+
                             logger.warning(
-                                "❌ %s REJECTED by TechLeadSWEA (attempt %d/%d)",
+                                "❌ %s REJECTED by TechLeadSWEA (attempt %d/%d) - %s",
                                 task_name,
                                 retry_count + 1,
                                 max_retries + 1,
+                                primary_reason
                             )
 
-                            if technical_feedback:
+                            # Only show detailed feedback in debug mode to keep output clean
+                            if is_debug_mode() and technical_feedback:
                                 logger.warning("📝 TechLeadSWEA feedback:")
                                 for feedback in technical_feedback:
                                     logger.warning("   • %s", feedback)
