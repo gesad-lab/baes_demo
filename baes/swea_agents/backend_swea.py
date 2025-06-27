@@ -228,7 +228,6 @@ class BackendSWEA(BaseAgent):
             safe_entity = str(entity).strip()
             safe_entity_lower = safe_entity.lower()
             safe_Entity = safe_entity.capitalize()
-            safe_Entity_lower = safe_entity.lower().capitalize()
             safe_attributes = ", ".join([str(attr).strip() for attr in attributes])
             safe_code_type = str(code_type).strip()
             safe_context = str(context).strip()
@@ -238,19 +237,23 @@ class BackendSWEA(BaseAgent):
                 entity=safe_entity,
                 entity_lower=safe_entity_lower,
                 Entity=safe_Entity,
-                Entity_lower=safe_Entity_lower,
                 attributes=safe_attributes,
                 code_type=safe_code_type,
                 context=safe_context,
                 feedback_section=safe_feedback_section,
             )
         except (KeyError, AttributeError) as e:
-            # If template had unexpected placeholders or attribute errors, fall back to simple prompt
-            logger.warning(f"BackendSWEA: Template formatting error: {e}, using fallback prompt")
-            return (
-                f"Generate {safe_code_type} for {safe_entity} with attributes: {safe_attributes}. "
-                f"Context: {safe_context}. Return ONLY code."
-            )
+            # CRITICAL: Remove silent fallback - raise explicit error for debugging
+            logger.error(f"BackendSWEA: Template formatting failed with error: {e}")
+            logger.error(f"BackendSWEA: Error type: {type(e)}")
+            logger.error(f"BackendSWEA: Error args: {e.args}")
+            logger.error(f"BackendSWEA: Template variables - entity: {entity} (type: {type(entity)})")
+            logger.error(f"BackendSWEA: Template variables - attributes: {attributes} (type: {type(attributes)})")
+            logger.error(f"BackendSWEA: Template variables - code_type: {code_type} (type: {type(code_type)})")
+            logger.error(f"BackendSWEA: Template variables - context: {context} (type: {type(context)})")
+            logger.error(f"BackendSWEA: Template variables - feedback_section: {feedback_section} (type: {type(feedback_section)})")
+            logger.error(f"BackendSWEA: Template content (first 500 chars): {template[:500]}")
+            raise BackendGenerationError(f"Template formatting failed: {e}. This indicates a critical issue with the prompt template or variable types.")
 
     def _write_to_managed_system(self, entity: str, artifact_type: str, code: str) -> str:
         """Write code to the managed system instead of the legacy generated directory."""
@@ -331,8 +334,8 @@ class BackendSWEA(BaseAgent):
         self, feedback: List[str], entity: str, code_type: str, original_attributes: List[str]
     ) -> Dict[str, Any]:
         """
-        Generic feedback interpretation using LLM to understand what backend code changes are needed.
-        This approach can handle any type of feedback without hardcoded conditions.
+        Enhanced feedback interpretation using LLM to understand what backend code changes are needed.
+        This approach specifically handles TechLeadSWEA's detailed, actionable feedback.
         """
         # CRITICAL FIX: Use centralized validation to prevent 'str' object has no attribute 'lower()' error
         try:
@@ -353,6 +356,7 @@ class BackendSWEA(BaseAgent):
                 "additional_requirements": [],
                 "code_improvements": [],
                 "modifications": [],
+                "feedback_section": "",
             }
 
         feedback_text = "\n".join(feedback)
@@ -360,16 +364,16 @@ class BackendSWEA(BaseAgent):
             f"BackendSWEA: Interpreting feedback for {entity} {code_type}: {feedback_text}"
         )
 
-        system_prompt = f"""You are a backend development expert helping to interpret feedback for improving {code_type} generation.
+        system_prompt = f"""You are a backend development expert helping to interpret TechLeadSWEA feedback for improving {code_type} generation.
 
 CONTEXT:
 - Entity: {entity}
 - Code Type: {code_type}
 - Original attributes: {original_attributes}
-- Feedback received: {feedback_text}
+- TechLeadSWEA Feedback: {feedback_text}
 
 TASK:
-Interpret the feedback and provide specific backend code improvements in JSON format.
+Interpret the TechLeadSWEA feedback and provide specific backend code improvements in JSON format. TechLeadSWEA provides detailed, actionable suggestions that you must implement precisely.
 
 RESPONSE FORMAT (JSON only):
 {{
@@ -377,8 +381,31 @@ RESPONSE FORMAT (JSON only):
     "additional_requirements": ["any", "new", "requirements", "identified"],
     "code_improvements": ["specific", "code", "improvements", "to", "make"],
     "modifications": ["changes", "to", "implement"],
+    "feedback_section": "structured feedback for prompt template",
     "explanation": "brief explanation of changes made based on feedback"
 }}
+
+FEEDBACK ANALYSIS GUIDELINES:
+1. **Database Connection Issues**: If feedback mentions "context manager", "connection leaks", or "proper connection handling", add database connection management improvements
+2. **Error Handling Issues**: If feedback mentions "error handling", "HTTP status codes", or "validation errors", add comprehensive error handling requirements
+3. **Code Structure Issues**: If feedback mentions "missing endpoints", "naming conventions", or "import statements", add structural improvements
+4. **Data Validation Issues**: If feedback mentions "field validation", "type hints", or "data conversion", add validation requirements
+5. **API Design Issues**: If feedback mentions "RESTful design", "response models", or "request validation", add API design improvements
+
+FEEDBACK_SECTION FORMAT:
+Create a structured feedback section that includes:
+- Specific issues identified by TechLeadSWEA
+- Exact fixes to implement
+- Code patterns to follow
+- Quality requirements to meet
+
+Example feedback_section:
+"TECHLEAD FEEDBACK TO IMPLEMENT:
+1. Database Connection Management: Use context managers for all database operations
+2. Error Handling: Add comprehensive try/except blocks with proper HTTP status codes
+3. API Structure: Ensure all CRUD endpoints are implemented with correct naming
+4. Data Validation: Add Pydantic validators for all input fields
+5. Response Models: Use proper Pydantic response models with from_attributes=True"
 
 GUIDELINES:
 - Preserve existing attributes unless feedback specifically requests changes
@@ -387,20 +414,18 @@ GUIDELINES:
 - Consider FastAPI/Pydantic best practices
 - Handle any type of feedback, even unexpected ones
 - If feedback is unclear, make reasonable backend development assumptions
-- Focus on code quality, validation, error handling, and API design
-- ALWAYS return valid JSON in the specified format
-- Ensure attributes are simple strings like "name:str" or "email:str"
+- ALWAYS include a structured feedback_section for the prompt template
 """
 
         user_prompt = f"""Based on the feedback provided, what backend code improvements should be made for the {entity} entity's {code_type}?
 
-Feedback to interpret:
+Feedback to interpret (contains specific fix suggestions):
 {feedback_text}
 
 Current attributes:
 {original_attributes}
 
-Please provide the JSON response with backend improvements."""
+Please provide the JSON response with backend improvements, implementing the specific fixes suggested in the feedback."""
 
         try:
             response = self.llm_client.generate_response(user_prompt, system_prompt)
@@ -429,77 +454,6 @@ Please provide the JSON response with backend improvements."""
             logger.error(
                 f"BackendSWEA: Failed to interpret feedback for {entity} {code_type}: {str(e)}"
             )
-            raise
-
-    def _apply_backend_improvements(
-        self, interpretation: Dict[str, Any], entity: str, code_type: str, context: str
-    ) -> str:
-        """Apply the interpreted improvements to the backend code generation"""
-        # CRITICAL FIX: Ensure entity is a valid string before any operations
-        try:
-            entity = self._validate_entity_parameter(entity)
-        except BackendGenerationError as e:
-            logger.error(f"BackendSWEA: Entity validation failed in _apply_backend_improvements: {e}")
-            raise BackendGenerationError(f"Invalid entity parameter: {e}")
-        
-        code_type = str(code_type).strip()
-        context = str(context).strip()
-        
-        if not isinstance(interpretation, dict):
-            raise BackendGenerationError(f"Interpretation must be a dictionary, received {type(interpretation)}")
-        
-        try:
-            attributes = interpretation.get("attributes", [])
-            additional_requirements = interpretation.get("additional_requirements", [])
-            code_improvements = interpretation.get("code_improvements", [])
-
-            # Validate lists
-            if not isinstance(attributes, list):
-                logger.error(f"BackendSWEA: attributes in _apply_backend_improvements is not a list: {attributes} (type: {type(attributes)})")
-                attributes = []
-            attributes = self._validate_attributes_parameter(attributes)
-            if not isinstance(additional_requirements, list):
-                additional_requirements = []
-            if not isinstance(code_improvements, list):
-                code_improvements = []
-
-            # Build enhanced prompt with feedback-driven improvements
-            logger.debug(f"BackendSWEA: attributes before prompt: {attributes}, types: {[type(a) for a in attributes]}")
-            base_prompt = self._build_prompt(entity, attributes, code_type, context)
-
-            # Add improvement instructions to the prompt
-            improvement_instructions = ""
-            if code_improvements:
-                improvement_instructions = "\n\nIMPROVEMENTS TO IMPLEMENT:\n" + "\n".join(
-                    f"- {imp}" for imp in code_improvements
-                )
-
-            if additional_requirements:
-                improvement_instructions += "\n\nADDITIONAL REQUIREMENTS:\n" + "\n".join(
-                    f"- {req}" for req in additional_requirements
-                )
-
-            enhanced_prompt = base_prompt + improvement_instructions
-
-            # Generate improved code
-            code = self.llm_client.generate_code_with_domain_focus(
-                enhanced_prompt,
-                code_type=code_type,
-                entity_context={
-                    "entity": entity,
-                    "attributes": attributes,
-                    "improvements_applied": interpretation,
-                },
-            )
-
-            # Validate generated code
-            if not isinstance(code, str):
-                raise BackendGenerationError(f"Generated code must be a string, received {type(code)}")
-            
-            return code
-
-        except Exception as e:
-            logger.error(f"BackendSWEA: Failed to apply backend improvements: {str(e)}")
             raise
 
     # ------------------------------------------------------------------
@@ -1117,3 +1071,108 @@ numpy==1.24.3
         requirements_path.write_text(content)
         
         return str(requirements_path)
+
+    def _apply_backend_improvements(
+        self, interpretation: Dict[str, Any], entity: str, code_type: str, context: str
+    ) -> str:
+        """Apply the interpreted improvements to the backend code generation"""
+        # CRITICAL FIX: Ensure entity is a valid string before any operations
+        try:
+            entity = self._validate_entity_parameter(entity)
+        except BackendGenerationError as e:
+            logger.error(f"BackendSWEA: Entity validation failed in _apply_backend_improvements: {e}")
+            raise BackendGenerationError(f"Invalid entity parameter: {e}")
+        
+        code_type = str(code_type).strip()
+        context = str(context).strip()
+        
+        if not isinstance(interpretation, dict):
+            logger.error(f"BackendSWEA: Interpretation must be a dictionary, received {type(interpretation)}")
+            raise BackendGenerationError(f"Invalid interpretation type: {type(interpretation)}")
+
+        # Extract feedback section for prompt template
+        feedback_section = interpretation.get("feedback_section", "")
+        if not feedback_section:
+            # Create a basic feedback section if none provided
+            feedback_section = "Generate complete, working FastAPI routes with proper error handling and database integration."
+        
+        # Extract attributes from interpretation
+        attributes = interpretation.get("attributes", [])
+        if not isinstance(attributes, list):
+            logger.error(f"BackendSWEA: attributes must be a list, received {type(attributes)}")
+            attributes = []
+        
+        # Validate attributes
+        try:
+            attributes = self._validate_attributes_parameter(attributes)
+        except BackendGenerationError as e:
+            logger.error(f"BackendSWEA: Attribute validation failed: {e}")
+            raise
+
+        # Build enhanced prompt with structured feedback
+        prompt = self._build_prompt(
+            entity=entity,
+            attributes=attributes,
+            code_type=code_type,
+            context=context,
+            feedback_section=feedback_section,
+        )
+
+        logger.debug(
+            f"BackendSWEA: Generating {code_type} for {entity} with {len(attributes)} attributes and feedback integration"
+        )
+
+        try:
+            # Generate code using LLM with enhanced prompt
+            response = self.llm_client.generate_response(
+                prompt=prompt,
+                system_prompt=f"You are a BackendSWEA agent generating {code_type} for {entity}. Implement ALL TechLeadSWEA feedback exactly as specified."
+            )
+
+            if not response or len(response.strip()) < 100:
+                raise BackendGenerationError(f"Generated code too short or empty for {entity}")
+
+            # Extract code from response (remove any markdown formatting)
+            code = self._extract_code_from_response(response)
+            
+            if not code or len(code.strip()) < 100:
+                raise BackendGenerationError(f"Extracted code too short for {entity}")
+
+            logger.info(
+                f"✅ BackendSWEA: Successfully generated {code_type} for {entity} with feedback integration"
+            )
+
+            return code
+
+        except Exception as e:
+            logger.error(f"❌ BackendSWEA: Failed to generate {code_type} for {entity}: {str(e)}")
+            raise BackendGenerationError(f"Code generation failed for {entity}: {str(e)}") from e
+
+    def _extract_code_from_response(self, response: str) -> str:
+        """Extract Python code from LLM response, removing markdown formatting and explanations."""
+        if not response or not isinstance(response, str):
+            return ""
+        
+        # Remove markdown code blocks
+        lines = response.split('\n')
+        code_lines = []
+        in_code_block = False
+        
+        for line in lines:
+            # Check for code block markers
+            if line.strip().startswith('```'):
+                if 'python' in line.lower():
+                    in_code_block = True
+                else:
+                    in_code_block = not in_code_block
+                continue
+            
+            # If we're in a code block or the line looks like code, include it
+            if in_code_block or (line.strip() and not line.strip().startswith('#')):
+                code_lines.append(line)
+        
+        # If no code block found, assume the entire response is code
+        if not code_lines:
+            code_lines = [line for line in lines if line.strip() and not line.strip().startswith('#')]
+        
+        return '\n'.join(code_lines).strip()
