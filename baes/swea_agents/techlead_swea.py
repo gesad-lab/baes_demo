@@ -448,32 +448,169 @@ class TechLeadSWEA(BaseAgent):
         final_review = payload.get("final_review", False)
         retry_count = payload.get("retry_count", 0)
 
-        logger.info(
-            f"🔍 TechLeadSWEA: Reviewing {swea_agent}.{task_type} for {entity} (retry: {retry_count})"
-        )
+        if swea_agent == "TechLeadSWEA" and task_type == "coordinate_system_generation":
+            logger.info(f"🔍 TechLeadSWEA (as reviewer) is validating its own coordination plan (author: TechLeadSWEA) for entity '{entity}' (retry: {retry_count})")
+            # For coordination tasks, we validate the coordination plan structure instead of code
+            validation_result = self._validate_coordination_plan(entity, result)
+            if validation_result["is_valid"]:
+                logger.info(f"✅ TechLeadSWEA (as reviewer) APPROVED task '{task_type}' from {swea_agent} (author) for entity '{entity}'")
+                return {
+                    "success": True,
+                    "data": {
+                        "overall_approval": True,
+                        "quality_score": validation_result["quality_score"],
+                        "validation_details": validation_result["details"],
+                        "feedback": validation_result["suggestions"],
+                    },
+                }
+            else:
+                logger.warning(f"❌ TechLeadSWEA (as reviewer) REJECTED task '{task_type}' from {swea_agent} (author) for entity '{entity}'")
+                return {
+                    "success": False,
+                    "data": {
+                        "overall_approval": False,
+                        "quality_score": validation_result["quality_score"],
+                        "validation_details": validation_result["details"],
+                        "feedback": validation_result["issues"],
+                        "retry_required": True,
+                    },
+                }
+        else:
+            logger.info(f"🔍 TechLeadSWEA (as reviewer) is reviewing output from {swea_agent} (author) for task '{task_type}' on entity '{entity}' (retry: {retry_count})")
 
         if final_review:
             return self._conduct_final_system_review(payload)
 
-        # Perform comprehensive LLM-based validation
-        validation_result = self._validate_generated_artifact(entity, swea_agent, task_type, result)
+        # Special case: TechLeadSWEA coordination tasks don't produce code artifacts
+        if swea_agent == "TechLeadSWEA" and task_type == "coordinate_system_generation":
+            # For coordination tasks, we validate the coordination plan structure instead of code
+            validation_result = self._validate_coordination_plan(entity, result)
+        else:
+            # Perform comprehensive LLM-based validation for code-producing tasks
+            validation_result = self._validate_generated_artifact(entity, swea_agent, task_type, result)
 
         if validation_result["is_valid"]:
-            logger.info(f"✅ TechLeadSWEA: {swea_agent}.{task_type} APPROVED for {entity}")
+            logger.info(f"✅ TechLeadSWEA (as reviewer) APPROVED task '{task_type}' from {swea_agent} (author) for entity '{entity}'")
             return {
                 "approved": True,
+                "success": True,
                 "quality_score": validation_result["quality_score"],
                 "validation_details": validation_result["details"],
                 "feedback": validation_result["suggestions"],
             }
         else:
-            logger.warning(f"❌ TechLeadSWEA: {swea_agent}.{task_type} REJECTED for {entity}")
+            logger.warning(f"❌ TechLeadSWEA (as reviewer) REJECTED task '{task_type}' from {swea_agent} (author) for entity '{entity}'")
             return {
                 "approved": False,
+                "success": False,
                 "quality_score": validation_result["quality_score"],
                 "validation_details": validation_result["details"],
                 "feedback": validation_result["issues"],
                 "retry_required": True,
+            }
+
+    def _validate_coordination_plan(self, entity: str, result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validate coordination plan structure and completeness.
+        This is used for TechLeadSWEA coordination tasks that don't produce code artifacts.
+        """
+        try:
+            logger.info(f"🔍 TechLeadSWEA (as reviewer) is validating its own coordination plan (author: TechLeadSWEA) for entity '{entity}'")
+            logger.info(f"   📋 Result keys: {list(result.keys())}")
+            logger.info(f"   📋 Success: {result.get('success', 'NOT_FOUND')}")
+            
+            # Check if the result has the expected structure for coordination tasks
+            if not result.get("success", False):
+                logger.warning(f"❌ TechLeadSWEA (as reviewer) found that its own coordination task failed - success=False (author: TechLeadSWEA)")
+                return {
+                    "is_valid": False,
+                    "quality_score": 0.0,
+                    "details": "Coordination task failed",
+                    "issues": ["Coordination task returned success=False"],
+                    "suggestions": ["Check coordination task implementation"],
+                }
+
+            data = result.get("data", {})
+            logger.info(f"   📋 Data keys: {list(data.keys())}")
+            
+            enhanced_plan = data.get("enhanced_coordination_plan", [])
+            logger.info(f"   📋 Enhanced plan length: {len(enhanced_plan)}")
+            logger.info(f"   📋 Enhanced plan content: {enhanced_plan}")
+            
+            # Validate that we have a coordination plan
+            if not enhanced_plan:
+                logger.warning(f"❌ TechLeadSWEA (as reviewer) found its own coordination plan is empty (author: TechLeadSWEA)")
+                return {
+                    "is_valid": False,
+                    "quality_score": 0.0,
+                    "details": "No coordination plan generated",
+                    "issues": ["Empty coordination plan"],
+                    "suggestions": ["Ensure coordination plan contains SWEA tasks"],
+                }
+
+            # Check for required SWEA tasks in the plan
+            required_sweas = ["DatabaseSWEA", "BackendSWEA", "FrontendSWEA"]
+            found_sweas = set()
+            
+            for i, task in enumerate(enhanced_plan):
+                swea_agent = task.get("swea_agent", "")
+                logger.info(f"   📋 Task {i+1}: {swea_agent}")
+                if swea_agent in required_sweas:
+                    found_sweas.add(swea_agent)
+
+            logger.info(f"   📋 Found SWEAs: {list(found_sweas)}")
+            logger.info(f"   📋 Required SWEAs: {required_sweas}")
+
+            # Validate that all required SWEAs are included
+            if len(found_sweas) != len(required_sweas):
+                missing_sweas = set(required_sweas) - found_sweas
+                logger.warning(f"❌ TechLeadSWEA (as reviewer) found its own coordination plan is missing required SWEAs: {missing_sweas} (author: TechLeadSWEA)")
+                return {
+                    "is_valid": False,
+                    "quality_score": 0.3,
+                    "details": f"Missing required SWEAs: {missing_sweas}",
+                    "issues": [f"Coordination plan missing: {', '.join(missing_sweas)}"],
+                    "suggestions": ["Include all required SWEAs in coordination plan"],
+                }
+
+            # Check for proper task structure
+            valid_tasks = 0
+            total_tasks = len(enhanced_plan)
+            
+            for task in enhanced_plan:
+                if all(key in task for key in ["swea_agent", "task_type", "payload"]):
+                    valid_tasks += 1
+
+            quality_score = valid_tasks / total_tasks if total_tasks > 0 else 0.0
+            logger.info(f"   📋 Quality score: {quality_score} ({valid_tasks}/{total_tasks} valid tasks)")
+
+            if quality_score >= 0.8:
+                logger.info(f"✅ TechLeadSWEA (as reviewer) validated its own coordination plan successfully (author: TechLeadSWEA)")
+                return {
+                    "is_valid": True,
+                    "quality_score": quality_score,
+                    "details": f"Coordination plan validated: {valid_tasks}/{total_tasks} tasks properly structured",
+                    "issues": [],
+                    "suggestions": ["Coordination plan ready for execution"],
+                }
+            else:
+                logger.warning(f"❌ TechLeadSWEA (as reviewer) found structural issues in its own coordination plan (author: TechLeadSWEA)")
+                return {
+                    "is_valid": False,
+                    "quality_score": quality_score,
+                    "details": f"Coordination plan has structural issues: {valid_tasks}/{total_tasks} tasks properly structured",
+                    "issues": ["Some tasks missing required fields"],
+                    "suggestions": ["Ensure all tasks have swea_agent, task_type, and payload fields"],
+                }
+
+        except Exception as e:
+            logger.error(f"❌ TechLeadSWEA (as reviewer) encountered an error while validating its own coordination plan (author: TechLeadSWEA): {str(e)}")
+            return {
+                "is_valid": False,
+                "quality_score": 0.0,
+                "details": f"Validation error: {str(e)}",
+                "issues": [f"Validation process failed: {str(e)}"],
+                "suggestions": ["Retry the validation process"],
             }
 
     def _validate_generated_artifact(
