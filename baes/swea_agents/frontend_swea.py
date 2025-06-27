@@ -342,39 +342,67 @@ Please provide the JSON response with UI improvements."""
         """Fix frontend issues based on TechLeadSWEA coordination"""
         try:
             entity = payload.get("entity", "Student")
-            fix_context = payload.get("fix_context", {})
-            issue_type = fix_context.get("issue_type", "")
             fix_action = payload.get("fix_action", "")
-            issue_description = fix_context.get("issue_description", "")
+            issue_type = payload.get("issue_type", "")
+            techlead_decision = payload.get("techlead_decision", {})
             
-            logger.info("🔧 FrontendSWEA: Fixing frontend issues for %s - %s", entity, issue_description)
+            # Extract detailed context from TechLeadSWEA decision
+            detailed_context = techlead_decision.get("detailed_context", {})
+            specific_issue = techlead_decision.get("specific_issue", "")
+            reasoning = techlead_decision.get("reasoning", "")
             
-            # Handle different types of frontend issues
-            if "ui" in issue_type or "interface" in issue_type or "streamlit" in issue_type:
-                logger.debug("🔧 FrontendSWEA: Regenerating UI due to interface issues")
-                return self._generate_ui(payload)
-            elif "form" in issue_type or "input" in issue_type:
-                logger.debug("🔧 FrontendSWEA: Fixing form/input issues")
-                # Add form-specific improvements to payload
+            logger.info("🔧 FrontendSWEA: Fixing frontend issues for %s", entity)
+            logger.info("   🎯 Fix Action: %s", fix_action)
+            logger.info("   📋 Issue Type: %s", issue_type)
+            logger.info("   💡 Reasoning: %s", reasoning)
+            
+            # Handle specific fix actions from TechLeadSWEA
+            if fix_action in ["regenerate_ui_with_functions", "add_missing_streamlit_functions"]:
+                logger.debug("🔧 FrontendSWEA: Regenerating UI with missing functions")
+                # Add specific feedback about missing functions
                 enhanced_payload = {
                     **payload,
-                    "techlead_feedback": [f"Fix form issues: {issue_description}"],
+                    "techlead_feedback": [
+                        f"Add missing UI functions: {reasoning}",
+                        "Ensure all display_, create_, edit_, delete_ functions are implemented",
+                        "Include proper function definitions for all UI operations"
+                    ],
+                    "fix_focus": "missing_functions"
+                }
+                return self._generate_ui(enhanced_payload)
+                
+            elif fix_action in ["fix_ui_interface", "regenerate_ui"]:
+                logger.debug("🔧 FrontendSWEA: Fixing UI interface issues")
+                enhanced_payload = {
+                    **payload,
+                    "techlead_feedback": [f"Fix UI interface issues: {reasoning}"],
+                    "fix_focus": "interface_issues"
+                }
+                return self._generate_ui(enhanced_payload)
+                
+            # Fallback: Handle by issue type (legacy support)
+            elif "ui" in issue_type or "interface" in issue_type or "streamlit" in issue_type:
+                logger.debug("🔧 FrontendSWEA: Regenerating UI due to interface issues (legacy)")
+                return self._generate_ui(payload)
+            elif "form" in issue_type or "input" in issue_type:
+                logger.debug("🔧 FrontendSWEA: Fixing form/input issues (legacy)")
+                enhanced_payload = {
+                    **payload,
+                    "techlead_feedback": [f"Fix form issues: {reasoning}"],
                 }
                 return self._generate_ui(enhanced_payload)
             elif "display" in issue_type or "layout" in issue_type:
-                logger.debug("🔧 FrontendSWEA: Fixing display/layout issues")
-                # Add layout-specific improvements to payload
+                logger.debug("🔧 FrontendSWEA: Fixing display/layout issues (legacy)")
                 enhanced_payload = {
                     **payload,
-                    "techlead_feedback": [f"Fix layout issues: {issue_description}"],
+                    "techlead_feedback": [f"Fix layout issues: {reasoning}"],
                 }
                 return self._generate_ui(enhanced_payload)
             elif "component" in issue_type or "widget" in issue_type:
-                logger.debug("🔧 FrontendSWEA: Fixing component/widget issues")
-                # Add component-specific improvements to payload
+                logger.debug("🔧 FrontendSWEA: Fixing component/widget issues (legacy)")
                 enhanced_payload = {
                     **payload,
-                    "techlead_feedback": [f"Fix component issues: {issue_description}"],
+                    "techlead_feedback": [f"Fix component issues: {reasoning}"],
                 }
                 return self._generate_ui(enhanced_payload)
             else:
@@ -382,7 +410,7 @@ Please provide the JSON response with UI improvements."""
                 logger.debug("🔧 FrontendSWEA: Default fix - regenerating UI with generic improvements")
                 enhanced_payload = {
                     **payload,
-                    "techlead_feedback": [f"General frontend fix needed: {issue_description}"],
+                    "techlead_feedback": [f"General frontend fix needed: {reasoning}"],
                 }
                 return self._generate_ui(enhanced_payload)
                 

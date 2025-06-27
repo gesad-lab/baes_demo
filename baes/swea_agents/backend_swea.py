@@ -411,25 +411,77 @@ Please provide the JSON response with backend improvements."""
         """Fix backend issues based on TechLeadSWEA coordination"""
         try:
             entity = payload.get("entity", "Student")
-            fix_context = payload.get("fix_context", {})
-            issue_type = fix_context.get("issue_type", "")
             fix_action = payload.get("fix_action", "")
-            issue_description = fix_context.get("issue_description", "")
+            issue_type = payload.get("issue_type", "")
+            techlead_decision = payload.get("techlead_decision", {})
             
-            logger.info("🔧 BackendSWEA: Fixing backend issues for %s - %s", entity, issue_description)
+            # Extract detailed context from TechLeadSWEA decision
+            detailed_context = techlead_decision.get("detailed_context", {})
+            specific_issue = techlead_decision.get("specific_issue", "")
+            reasoning = techlead_decision.get("reasoning", "")
             
-            # Handle different types of backend issues
-            if "dependency" in issue_type or "import" in issue_type or "missing" in issue_type:
-                logger.debug("🔧 BackendSWEA: Handling dependency/import issues")
+            logger.info("🔧 BackendSWEA: Fixing backend issues for %s", entity)
+            logger.info("   🎯 Fix Action: %s", fix_action)
+            logger.info("   📋 Issue Type: %s", issue_type)
+            logger.info("   💡 Reasoning: %s", reasoning)
+            
+            # Handle specific fix actions from TechLeadSWEA
+            if fix_action in ["fix_imports", "update_dependencies", "fix_import_dependencies"]:
+                logger.debug("🔧 BackendSWEA: Handling import/dependency issues")
                 return self._generate_requirements(payload)
-            elif "model" in issue_type or "pydantic" in issue_type or "validation" in issue_type:
+                
+            elif fix_action in ["fix_model_validation", "update_pydantic_models", "fix_pydantic_validation"]:
                 logger.debug("🔧 BackendSWEA: Regenerating model due to validation issues")
                 return self._generate_model(payload)
+                
+            elif fix_action in ["fix_api_validation", "update_error_handling", "fix_api_routing", "regenerate_api_endpoints"]:
+                logger.debug("🔧 BackendSWEA: Regenerating API due to routing/validation issues")
+                return self._generate_api(payload)
+                
+            elif fix_action in ["fix_syntax_errors", "regenerate_code"]:
+                logger.debug("🔧 BackendSWEA: Fixing syntax errors - regenerating both model and API")
+                # For syntax issues, regenerate both model and API
+                model_result = self._generate_model(payload)
+                if model_result.get("success"):
+                    api_result = self._generate_api(payload)
+                    if api_result.get("success"):
+                        return self.create_success_response(
+                            "fix_issues",
+                            {
+                                "fix_applied": True,
+                                "fix_type": "syntax_error_fix",
+                                "fix_action": fix_action,
+                                "model_result": model_result.get("data", {}),
+                                "api_result": api_result.get("data", {}),
+                            }
+                        )
+                    else:
+                        return api_result
+                else:
+                    return model_result
+                    
+            elif fix_action in ["regenerate_model_with_imports"]:
+                logger.debug("🔧 BackendSWEA: Regenerating model with proper imports")
+                # First generate requirements, then model
+                req_result = self._generate_requirements(payload)
+                if req_result.get("success"):
+                    model_result = self._generate_model(payload)
+                    return model_result
+                else:
+                    return req_result
+                    
+            # Fallback: Handle by issue type (legacy support)
+            elif "dependency" in issue_type or "import" in issue_type or "missing" in issue_type:
+                logger.debug("🔧 BackendSWEA: Handling dependency/import issues (legacy)")
+                return self._generate_requirements(payload)
+            elif "model" in issue_type or "pydantic" in issue_type or "validation" in issue_type:
+                logger.debug("🔧 BackendSWEA: Regenerating model due to validation issues (legacy)")
+                return self._generate_model(payload)
             elif "api" in issue_type or "route" in issue_type or "endpoint" in issue_type:
-                logger.debug("🔧 BackendSWEA: Regenerating API due to route issues")
+                logger.debug("🔧 BackendSWEA: Regenerating API due to route issues (legacy)")
                 return self._generate_api(payload)
             elif "syntax" in issue_type or "code" in issue_type:
-                logger.debug("🔧 BackendSWEA: Fixing code syntax issues")
+                logger.debug("🔧 BackendSWEA: Fixing code syntax issues (legacy)")
                 # For syntax issues, regenerate both model and API
                 model_result = self._generate_model(payload)
                 if model_result.get("success"):
@@ -449,6 +501,7 @@ Please provide the JSON response with backend improvements."""
                             {
                                 "fix_applied": True,
                                 "fix_type": "complete_backend_regeneration",
+                                "fix_action": fix_action or "default_regeneration",
                                 "model_result": model_result.get("data", {}),
                                 "api_result": api_result.get("data", {}),
                             }

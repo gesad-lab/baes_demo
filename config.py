@@ -56,5 +56,6 @@ class Config:
             return Path(managed_path)
         else:
             # Relative path - relative to BAE project root
-            bae_project_root = Path(__file__).resolve().parent.parent
+            # config.py is in the project root, so we use its parent directory
+            bae_project_root = Path(__file__).resolve().parent
             return bae_project_root / managed_path

@@ -18,6 +18,7 @@ pytest-mock>=3.10.0
 pytest-cov>=4.0.0
 pytest-xdist>=3.0.0
 pytest-timeout>=2.1.0
+pytest-json-report>=1.5.0
 
 # Real-world testing dependencies
 selenium==4.15.2     # Browser automation for UI testing

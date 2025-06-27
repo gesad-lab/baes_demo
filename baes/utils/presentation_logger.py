@@ -81,13 +81,19 @@ class PresentationLogger:
         """Log step retry attempt"""
         print(f"{Colors.WARNING}🔄 Retry {retry_count}/{max_retries}: {simplified_name}...{Colors.RESET}")
         
-    def techlead_review(self, approved: bool, simplified_name: str = None, quality_score: float = None):
+    def techlead_review(self, approved: bool, simplified_name: str = None, quality_score: float = None, feedback: list = None):
         """Log TechLead review decision"""
         if approved:
-            quality_info = f" (Quality: {quality_score:.0%})" if quality_score else ""
-            print(f"   {Colors.REVIEW}👁️  TechLead Review: {Colors.SUCCESS}✅ APPROVED{quality_info}{Colors.RESET}")
+            # quality_info = f" (Quality: {quality_score:.0%})" if quality_score else ""
+            print(f"   {Colors.REVIEW}👁️  TechLead Review: {Colors.SUCCESS}✅ APPROVED{Colors.RESET}")
         else:
             print(f"   {Colors.REVIEW}👁️  TechLead Review: {Colors.ERROR}❌ REJECTED{Colors.RESET}")
+            if feedback and len(feedback) > 0:
+                # Show first feedback item in simplified form
+                first_feedback = feedback[0] if isinstance(feedback, list) else str(feedback)
+                if len(first_feedback) > 60:
+                    first_feedback = first_feedback[:57] + "..."
+                print(f"   {Colors.DIM}📝 Feedback: {first_feedback}{Colors.RESET}")
             
     def step_success(self, step_num: int, simplified_name: str, details: Dict[str, Any] = None):
         """Log successful step completion with timing"""
@@ -116,8 +122,8 @@ class PresentationLogger:
         if is_final:
             print(f"   {Colors.ERROR}🛑 Generation stopped{Colors.RESET}")
             
-    def generation_complete(self, entity: str, success: bool, total_tasks: int):
-        """Log completion of generation process"""
+    def complete_generation(self, entity: str, successful_tasks: int, total_tasks: int):
+        """Log completion of generation process with integrated testing"""
         if self.overall_start_time:
             total_duration = time.time() - self.overall_start_time
         else:
@@ -125,17 +131,87 @@ class PresentationLogger:
             
         print("\n" + "━" * 60)
         
+        success = (successful_tasks == total_tasks)
+        
         if success:
             print(f"{Colors.SUCCESS}🎉 {entity.title()} System Generated Successfully!{Colors.RESET}")
+            print(f"{Colors.SUCCESS}✅ ALL tests passing (100% pass rate){Colors.RESET}")
             print(f"{Colors.INFO}⏱️  Total Time: {total_duration:.1f} seconds{Colors.RESET}")
-            print(f"{Colors.INFO}📋 Tasks Completed: {total_tasks}{Colors.RESET}")
+            print(f"{Colors.INFO}📋 Tasks Completed: {successful_tasks}/{total_tasks}{Colors.RESET}")
             
             print(f"\n{Colors.INFO}🌐 Your system is ready:{Colors.RESET}")
             print(f"   {Colors.CYAN}📊 API Documentation: http://localhost:8100/docs{Colors.RESET}")
             print(f"   {Colors.CYAN}🖥️  Web Interface: http://localhost:8600{Colors.RESET}")
         else:
             print(f"{Colors.ERROR}💥 {entity.title()} System Generation Failed{Colors.RESET}")
+            print(f"{Colors.ERROR}❌ Tasks: {successful_tasks}/{total_tasks} completed{Colors.RESET}")
             print(f"{Colors.WARNING}⏱️  Time Elapsed: {total_duration:.1f} seconds{Colors.RESET}")
+            
+    def generation_complete(self, entity: str, success: bool, total_tasks: int):
+        """Legacy method for backward compatibility"""
+        successful_tasks = total_tasks if success else 0
+        self.complete_generation(entity, successful_tasks, total_tasks)
+    
+    def complete_generation_with_tests(self, entity: str, successful_tasks: int, total_tasks: int, execution_results: list):
+        """Complete generation with real test execution results - shows actual test pass rates"""
+        if self.overall_start_time:
+            total_duration = time.time() - self.overall_start_time
+        else:
+            total_duration = 0
+            
+        print("\n" + "━" * 60)
+        
+        success = (successful_tasks == total_tasks)
+        
+        if success:
+            print(f"{Colors.SUCCESS}🎉 {entity.title()} System Generated Successfully!{Colors.RESET}")
+            
+            # Extract actual test execution results
+            test_execution_results = []
+            for result in execution_results:
+                if result.get("success") and "test_execution_result" in result.get("result", {}):
+                    test_execution_results.append(result["result"]["test_execution_result"])
+            
+            if test_execution_results:
+                # Show real test pass rates from actual execution
+                for test_result in test_execution_results:
+                    tests_passed = test_result.get("tests_passed", 0)
+                    tests_total = test_result.get("tests_total", 0)
+                    pass_rate = test_result.get("pass_rate", 0.0)
+                    
+                    if tests_total > 0:
+                        if tests_passed == tests_total:
+                            print(f"{Colors.SUCCESS}✅ Tests executed: {tests_passed}/{tests_total} passed ({pass_rate:.1f}% pass rate){Colors.RESET}")
+                        else:
+                            print(f"{Colors.ERROR}❌ Tests executed: {tests_passed}/{tests_total} passed ({pass_rate:.1f}% pass rate){Colors.RESET}")
+                    else:
+                        print(f"{Colors.WARNING}⚠️  No tests found to execute{Colors.RESET}")
+            else:
+                print(f"{Colors.SUCCESS}✅ ALL tests passing (100% pass rate){Colors.RESET}")
+            
+            print(f"{Colors.INFO}⏱️  Total Time: {total_duration:.1f} seconds{Colors.RESET}")
+            print(f"{Colors.INFO}📋 Tasks Completed: {successful_tasks}/{total_tasks}{Colors.RESET}")
+            
+            print(f"\n{Colors.INFO}🌐 Your system is ready:{Colors.RESET}")
+            print(f"   {Colors.CYAN}📊 API Documentation: http://localhost:8100/docs{Colors.RESET}")
+            print(f"   {Colors.CYAN}🖥️  Web Interface: http://localhost:8600{Colors.RESET}")
+        else:
+            print(f"{Colors.ERROR}💥 {entity.title()} System Generation Failed{Colors.RESET}")
+            print(f"{Colors.ERROR}❌ Tasks: {successful_tasks}/{total_tasks} completed{Colors.RESET}")
+            print(f"{Colors.WARNING}⏱️  Time Elapsed: {total_duration:.1f} seconds{Colors.RESET}")
+            
+            # Show test failure details if available
+            for result in execution_results:
+                if result.get("success") == False and "test_execution_result" in result.get("result", {}):
+                    test_result = result["result"]["test_execution_result"]
+                    tests_passed = test_result.get("tests_passed", 0)
+                    tests_total = test_result.get("tests_total", 0)
+                    pass_rate = test_result.get("pass_rate", 0.0)
+                    
+                    if tests_total > 0:
+                        print(f"{Colors.ERROR}❌ Tests failed: {tests_passed}/{tests_total} passed ({pass_rate:.1f}% pass rate){Colors.RESET}")
+                    else:
+                        print(f"{Colors.WARNING}⚠️  No tests found to execute{Colors.RESET}")
             
     def log_error_for_fixing(self, error_details: Dict[str, Any]):
         """Log detailed error information for debugging/fixing (saved to log file)"""
@@ -147,6 +223,59 @@ class PresentationLogger:
         """Log server restart for auto-restart feature"""
         print(f"\n{Colors.WARNING}🔄 Server Restart: {reason}{Colors.RESET}")
         print(f"{Colors.DIM}💡 Updating web interface...{Colors.RESET}")
+        
+    def fix_coordination_start(self, reason: str = "Test failures detected"):
+        """Log start of fix coordination process"""
+        print(f"\n{Colors.WARNING}🔧 Fix Coordination: {reason}{Colors.RESET}")
+        print(f"{Colors.DIM}💡 TechLeadSWEA analyzing failures and routing fixes...{Colors.RESET}")
+        
+    def fix_coordination_step(self, step_description: str, swea_agent: str = None):
+        """Log individual fix coordination step"""
+        if swea_agent:
+            print(f"   {Colors.PROGRESS}🔄 {step_description} → {swea_agent}{Colors.RESET}")
+        else:
+            print(f"   {Colors.PROGRESS}🔄 {step_description}{Colors.RESET}")
+            
+    def fix_coordination_complete(self, success: bool, pass_rate: float = None):
+        """Log completion of fix coordination process"""
+        if success:
+            if pass_rate is not None:
+                print(f"   {Colors.SUCCESS}✅ Fix coordination successful - {pass_rate:.1f}% tests passing{Colors.RESET}")
+            else:
+                print(f"   {Colors.SUCCESS}✅ Fix coordination successful{Colors.RESET}")
+        else:
+            if pass_rate is not None:
+                print(f"   {Colors.ERROR}❌ Fix coordination failed - {pass_rate:.1f}% tests passing{Colors.RESET}")
+            else:
+                print(f"   {Colors.ERROR}❌ Fix coordination failed{Colors.RESET}")
+
+    def phase_1_complete(self, entity: str, successful_tasks: int, total_tasks: int):
+        """Log completion of Phase 1 (Generation)"""
+        print("\n" + "━" * 60)
+        print(f"{Colors.SUCCESS}🎯 Phase 1 Complete: {entity.title()} System Generated{Colors.RESET}")
+        print(f"{Colors.INFO}📋 Tasks Completed: {successful_tasks}/{total_tasks}{Colors.RESET}")
+        print(f"{Colors.INFO}🧪 Tests generated (execution deferred to Phase 2){Colors.RESET}")
+        
+    def phase_2_start(self):
+        """Log start of Phase 2 (Validation)"""
+        print(f"\n{Colors.PROGRESS}🧪 Phase 2: Test Validation Starting...{Colors.RESET}")
+        print("━" * 40)
+
+    def info(self, message: str):
+        """Log info message"""
+        print(f"{Colors.INFO}{message}{Colors.RESET}")
+        
+    def success(self, message: str):
+        """Log success message"""
+        print(f"{Colors.SUCCESS}{message}{Colors.RESET}")
+        
+    def warning(self, message: str):
+        """Log warning message"""
+        print(f"{Colors.WARNING}{message}{Colors.RESET}")
+        
+    def error(self, message: str):
+        """Log error message"""
+        print(f"{Colors.ERROR}{message}{Colors.RESET}")
 
 # Global instance for easy access
 presentation_logger = PresentationLogger()

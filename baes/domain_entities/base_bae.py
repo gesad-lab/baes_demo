@@ -729,22 +729,52 @@ class BaseBae(BaseAgent):
 
     def _is_evolution_request(self, request: str) -> bool:
         """Determine if this is an evolution request"""
+        request_lower = request.lower()
+        
+        # Check if this is entity creation vs attribute evolution
+        entity_creation_patterns = [
+            f"add {self.entity_name.lower()}",
+            f"create {self.entity_name.lower()}",
+            f"generate {self.entity_name.lower()}",
+            f"build {self.entity_name.lower()}",
+            f"make {self.entity_name.lower()}",
+        ]
+        
+        # If it matches entity creation patterns, it's NOT evolution
+        for pattern in entity_creation_patterns:
+            if pattern in request_lower:
+                return False
+        
+        # Check for attribute evolution keywords
         evolution_keywords = [
-            "add",
             "modify",
-            "update",
+            "update", 
             "change",
             "remove",
             "delete",
-            "include",
             "extend",
             "enhance",
             "alter",
             "rename",
         ]
-
-        request_lower = request.lower()
-        return any(keyword in request_lower for keyword in evolution_keywords)
+        
+        # Check for attribute addition patterns (evolution)
+        attribute_addition_patterns = [
+            "add attribute",
+            "add field",
+            "add property", 
+            "include attribute",
+            "include field",
+            "add email to",
+            "add phone to",
+            "add address to",
+        ]
+        
+        # Check for evolution patterns
+        has_evolution_keyword = any(keyword in request_lower for keyword in evolution_keywords)
+        has_attribute_addition = any(pattern in request_lower for pattern in attribute_addition_patterns)
+        
+        return has_evolution_keyword or has_attribute_addition
 
     def _get_default_attributes(self) -> List[str]:
         """Get default attributes for this entity type"""
