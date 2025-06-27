@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 
 from ..agents.base_agent import BaseAgent
 from ..core.managed_system_manager import ManagedSystemManager
+from ..domain_entities.base_bae import is_debug_mode
 from ..llm.openai_client import OpenAIClient
 
 logger = logging.getLogger(__name__)
@@ -1258,6 +1259,12 @@ VALIDATION HELPERS FOR {entity.upper()}:
             },
         )
 
+        # Strict validation – ensure we got code back
+        if not isinstance(test_code, str) or len(test_code.strip()) == 0:
+            raise TestGenerationError(
+                f"LLM did not return valid test code for {entity} ({test_type}). Received type: {type(test_code)}"
+            )
+
         return test_code
 
     def _write_test_to_managed_system(self, entity: str, test_type: str, test_code: str) -> str:
@@ -1726,3 +1733,12 @@ VALIDATION HELPERS FOR {entity.upper()}:
             results["overall_success"] = False
 
         return self.create_success_response("generate_all_tests", results)
+
+# ---------------------------------------------------------------------------
+# Custom exception to enforce strict failures
+# ---------------------------------------------------------------------------
+
+
+class TestGenerationError(Exception):
+    """Raised when test generation fails or returns invalid content."""
+    pass

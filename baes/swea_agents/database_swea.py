@@ -6,6 +6,8 @@ from typing import Any, Dict, List
 from ..agents.base_agent import BaseAgent
 from ..core.managed_system_manager import ManagedSystemManager
 from ..llm.openai_client import OpenAIClient
+# Utility for conditional debug logging
+from ..domain_entities.base_bae import is_debug_mode
 
 logger = logging.getLogger(__name__)
 
@@ -115,25 +117,28 @@ Please provide the JSON response with database improvements."""
                 logger.debug(f"DatabaseSWEA: Parsed interpretation: {interpretation}")
                 return interpretation
             except json.JSONDecodeError as json_error:
-                logger.warning(f"DatabaseSWEA could not parse LLM response as JSON: {json_error}")
-                logger.warning(f"DatabaseSWEA raw response: {response}")
-                # Fallback: extract attributes from response text
-                return self._extract_attributes_from_text(response, original_attributes)
+                error_msg = (
+                    f"LLM response for DB feedback interpretation is not valid JSON: {json_error}. "
+                    f"Raw response: {response}"
+                )
+                logger.error(error_msg)
+                raise DatabaseGenerationError(error_msg) from json_error
                 
         except Exception as e:
             logger.error(f"DatabaseSWEA feedback interpretation failed: {e}")
-            # Fallback: return original attributes with error note
-            return {
-                "attributes": original_attributes,
-                "additional_requirements": [],
-                "constraints": [],
-                "modifications": [f"Could not interpret feedback: {str(e)}"],
-                "explanation": "Using original attributes due to feedback interpretation error"
-            }
+            raise
 
     def _extract_attributes_from_text(self, response_text: str, original_attributes: List[str]) -> Dict[str, Any]:
         """Fallback method to extract attributes from LLM text response when JSON parsing fails"""
-        # Simple text parsing fallback
+        # Type validation to avoid AttributeError on non-string response
+        if not isinstance(response_text, str):
+            raise DatabaseGenerationError(
+                f"LLM response expected str but got {type(response_text)}"
+            )
+
+        if is_debug_mode():
+            logger.debug("DatabaseSWEA raw fallback text preview: %.120s", repr(response_text))
+
         attributes = original_attributes.copy()
         modifications = []
         
@@ -527,3 +532,12 @@ Please provide the JSON response with database improvements."""
         except Exception as e:
             logger.error("❌ DatabaseSWEA fix_issues failed: %s", str(e))
             return self.create_error_response("fix_issues", str(e), "fix_error")
+
+# ---------------------------------------------------------------------------
+# Custom exception to make failures explicit
+# ---------------------------------------------------------------------------
+
+
+class DatabaseGenerationError(Exception):
+    """Raised when database generation or feedback interpretation fails"""
+    pass

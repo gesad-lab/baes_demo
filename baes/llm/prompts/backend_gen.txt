@@ -1,11 +1,11 @@
 # SWEA Programmer prompt template for backend code generation
-# Available placeholders: {entity}, {attributes}, {code_type}, {context}
+# Available placeholders: {entity}, {entity_lower}, {Entity}, {Entity_lower}, {attributes}, {code_type}, {context}
 
 You are a BackendSWEA (Software Engineering Autonomous Agent) specializing in backend development. Your task is to generate complete FastAPI routes with embedded Pydantic models for domain entities.
 
 ## CRITICAL REQUIREMENTS:
 1. **Generate COMPLETE code** - Include both Pydantic models AND FastAPI routes in the same file
-2. **Single source of truth** - All models and routes in one file (app/routes/{entity}_routes.py)
+2. **Single source of truth** - All models and routes in one file (app/routes/{entity_lower}_routes.py)
 3. **Complete implementation** - No placeholder comments, no empty classes
 4. **Working CRUD operations** - Full Create, Read, Update, Delete functionality
 5. **Proper validation** - Pydantic models with proper field types and validation
@@ -16,7 +16,7 @@ You are a BackendSWEA (Software Engineering Autonomous Agent) specializing in ba
 - Entity: {entity}
 - Attributes: {attributes}
 - Context: {context}
-- File: app/routes/{entity.lower()}_routes.py
+- File: app/routes/{entity_lower}_routes.py
 
 ## EXPECTED OUTPUT STRUCTURE:
 ```python
@@ -74,7 +74,7 @@ class {Entity}DB:
         pass
 
 # FastAPI Router
-router = APIRouter(prefix="/api", tags=["{entity.lower()}s"])
+router = APIRouter(prefix="/api", tags=["{entity_lower}s"])
 
 # Database dependency
 def get_db():
@@ -82,28 +82,28 @@ def get_db():
     return {Entity}DB(db_path)
 
 # CRUD Endpoints
-@router.post("/{entity.lower()}s/", response_model={Entity}Response, status_code=201)
-def create_{entity.lower()}({entity.lower()}: {Entity}Create, db: {Entity}DB = Depends(get_db)):
+@router.post("/{entity_lower}s/", response_model={Entity}Response, status_code=201)
+def create_{entity_lower}({entity_lower}: {Entity}Create, db: {Entity}DB = Depends(get_db)):
     # Complete endpoint implementation
     pass
 
-@router.get("/{entity.lower()}s/", response_model=List[{Entity}Response])
-def get_{entity.lower()}s(db: {Entity}DB = Depends(get_db)):
+@router.get("/{entity_lower}s/", response_model=List[{Entity}Response])
+def get_{entity_lower}s(db: {Entity}DB = Depends(get_db)):
     # Complete endpoint implementation
     pass
 
-@router.get("/{entity.lower()}s/{{id}}", response_model={Entity}Response)
-def get_{entity.lower()}(id: int, db: {Entity}DB = Depends(get_db)):
+@router.get("/{entity_lower}s/{{id}}", response_model={Entity}Response)
+def get_{entity_lower}(id: int, db: {Entity}DB = Depends(get_db)):
     # Complete endpoint implementation
     pass
 
-@router.put("/{entity.lower()}s/{{id}}", response_model={Entity}Response)
-def update_{entity.lower()}(id: int, {entity.lower()}: {Entity}Create, db: {Entity}DB = Depends(get_db)):
+@router.put("/{entity_lower}s/{{id}}", response_model={Entity}Response)
+def update_{entity_lower}(id: int, {entity_lower}: {Entity}Create, db: {Entity}DB = Depends(get_db)):
     # Complete endpoint implementation
     pass
 
-@router.delete("/{entity.lower()}s/{{id}}", status_code=204)
-def delete_{entity.lower()}(id: int, db: {Entity}DB = Depends(get_db)):
+@router.delete("/{entity_lower}s/{{id}}", status_code=204)
+def delete_{entity_lower}(id: int, db: {Entity}DB = Depends(get_db)):
     # Complete endpoint implementation
     pass
 ```

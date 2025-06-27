@@ -3,6 +3,8 @@ from typing import Any, Dict, List
 from ..agents.base_agent import BaseAgent
 from ..core.managed_system_manager import ManagedSystemManager
 from ..llm.openai_client import OpenAIClient
+# Utility for conditional debug logging
+from ..domain_entities.base_bae import is_debug_mode
 import logging
 
 logger = logging.getLogger(__name__)
@@ -185,25 +187,28 @@ Please provide the JSON response with UI improvements."""
                 logger.debug(f"FrontendSWEA: Parsed interpretation: {interpretation}")
                 return interpretation
             except json.JSONDecodeError as json_error:
-                logger.warning(f"FrontendSWEA could not parse LLM response as JSON: {json_error}")
-                logger.warning(f"FrontendSWEA raw response: {response}")
-                # Fallback: extract improvements from response text
-                return self._extract_ui_improvements_from_text(response, original_attributes)
+                error_msg = (
+                    f"LLM response for UI feedback interpretation is not valid JSON: {json_error}. "
+                    f"Raw response: {response}"
+                )
+                logger.error(error_msg)
+                raise FrontendGenerationError(error_msg) from json_error
                 
         except Exception as e:
             logger.error(f"FrontendSWEA feedback interpretation failed: {e}")
-            # Fallback: return original attributes with error note
-            return {
-                "attributes": original_attributes,
-                "ui_improvements": [],
-                "layout_changes": [],
-                "modifications": [f"Could not interpret feedback: {str(e)}"],
-                "explanation": "Using original attributes due to feedback interpretation error"
-            }
+            raise
 
     def _extract_ui_improvements_from_text(self, response_text: str, original_attributes: List[str]) -> Dict[str, Any]:
         """Fallback method to extract UI improvements from LLM text response when JSON parsing fails"""
-        # Simple text parsing fallback
+        # Type validation – this function should only be used intentionally
+        if not isinstance(response_text, str):
+            raise FrontendGenerationError(
+                f"LLM response expected to be str but got {type(response_text)}"
+            )
+
+        if is_debug_mode():
+            logger.debug("FrontendSWEA raw fallback text preview: %.120s", repr(response_text))
+
         attributes = original_attributes.copy()
         ui_improvements = []
         layout_changes = []
@@ -261,12 +266,8 @@ Please provide the JSON response with UI improvements."""
             return code
             
         except Exception as e:
-            # Fallback to basic generation
-            return self.llm_client.generate_code_with_domain_focus(
-                self._build_prompt(entity, interpretation.get("attributes", []), context),
-                code_type="Streamlit UI",
-                entity_context={"entity": entity, "attributes": interpretation.get("attributes", [])},
-            )
+            logger.error(f"FrontendSWEA UI improvement application failed: {e}")
+            raise
 
     def _generate_ui(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         entity = payload.get("entity", "Student")
@@ -417,3 +418,13 @@ Please provide the JSON response with UI improvements."""
         except Exception as e:
             logger.error("❌ FrontendSWEA fix_issues failed: %s", str(e))
             return self.create_error_response("fix_issues", str(e), "fix_error")
+
+
+# ---------------------------------------------------------------------------
+# Custom exception to make failures explicit (no silent fallback)
+# ---------------------------------------------------------------------------
+
+
+class FrontendGenerationError(Exception):
+    """Raised when UI generation or feedback interpretation fails"""
+    pass

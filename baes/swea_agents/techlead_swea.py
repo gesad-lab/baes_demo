@@ -799,9 +799,16 @@ class TechLeadSWEA(BaseAgent):
         LLM-based validation for code artifacts (BackendSWEA, FrontendSWEA, etc.).
         """
         try:
-            # Extract artifact information
-            code = result.get("code", "")
-            file_path = result.get("file_path", "")
+            # Extract artifact information - handle nested data structure from SWEAs
+            # BackendSWEA and other SWEAs return code in result.get("data", {}).get("code", "")
+            # But some might return it directly in result.get("code", "")
+            data = result.get("data", {})
+            code = data.get("code", "") if data else result.get("code", "")
+            file_path = data.get("file_path", "") if data else result.get("file_path", "")
+
+            # Log what we found for debugging
+            logger.info(f"🔍 TechLeadSWEA: Extracted code length: {len(code)} characters")
+            logger.info(f"🔍 TechLeadSWEA: File path: {file_path}")
 
             # Determine validation type based on SWEA and task
             validation_type = self._determine_validation_type(swea_agent, task_type)

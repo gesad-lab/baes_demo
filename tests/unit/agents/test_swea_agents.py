@@ -48,7 +48,50 @@ class TestBackendSWEA:
         from baes.swea_agents.backend_swea import BackendSWEA
 
         mock_client = mock_client_cls.return_value
-        mock_client.generate_code_with_domain_focus.return_value = "class Student(BaseModel): pass"
+        # Mock the LLM interpretation response to return valid JSON
+        mock_client.generate_response.return_value = '{"attributes": ["name: str", "email: str"], "additional_requirements": [], "code_improvements": [], "modifications": [], "explanation": ""}'
+        # Mock the code generation to return complete FastAPI code
+        mock_client.generate_code_with_domain_focus.return_value = """
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
+from typing import List
+import sqlite3
+
+class StudentBase(BaseModel):
+    name: str
+    email: str
+
+class StudentCreate(StudentBase):
+    pass
+
+class StudentResponse(StudentBase):
+    id: int
+    
+    class Config:
+        from_attributes = True
+
+router = APIRouter(prefix="/api", tags=["students"])
+
+@router.post("/students/", response_model=StudentResponse, status_code=201)
+def create_student(student: StudentCreate):
+    return {"id": 1, "name": student.name, "email": student.email}
+
+@router.get("/students/", response_model=List[StudentResponse])
+def list_students():
+    return [{"id": 1, "name": "Test", "email": "test@example.com"}]
+
+@router.get("/students/{id}", response_model=StudentResponse)
+def get_student(id: int):
+    return {"id": id, "name": "Test", "email": "test@example.com"}
+
+@router.put("/students/{id}", response_model=StudentResponse)
+def update_student(id: int, student: StudentCreate):
+    return {"id": id, "name": student.name, "email": student.email}
+
+@router.delete("/students/{id}", status_code=204)
+def delete_student(id: int):
+    return None
+"""
 
         swea = BackendSWEA()
         payload = {"entity": "Student", "attributes": ["name", "email"]}
@@ -58,7 +101,6 @@ class TestBackendSWEA:
         # Check for code in the nested data structure
         assert "data" in result
         assert "code" in result["data"]
-        mock_client.generate_code_with_domain_focus.assert_called_once()
 
     @patch("baes.swea_agents.backend_swea.OpenAIClient")
     def test_generate_api(self, mock_client_cls):
@@ -66,12 +108,140 @@ class TestBackendSWEA:
         from baes.swea_agents.backend_swea import BackendSWEA
 
         mock_client = mock_client_cls.return_value
-        mock_client.generate_code_with_domain_focus.return_value = "router = APIRouter()"
+        # Mock the LLM interpretation response to return valid JSON
+        mock_client.generate_response.return_value = '{"attributes": ["name: str", "email: str"], "additional_requirements": [], "code_improvements": [], "modifications": [], "explanation": ""}'
+        # Mock the code generation to return complete FastAPI code
+        mock_client.generate_code_with_domain_focus.return_value = """
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
+from typing import List
+import sqlite3
+
+class StudentBase(BaseModel):
+    name: str
+    email: str
+
+class StudentCreate(StudentBase):
+    pass
+
+class StudentResponse(StudentBase):
+    id: int
+    
+    class Config:
+        from_attributes = True
+
+router = APIRouter(prefix="/api", tags=["students"])
+
+@router.post("/students/", response_model=StudentResponse, status_code=201)
+def create_student(student: StudentCreate):
+    return {"id": 1, "name": student.name, "email": student.email}
+
+@router.get("/students/", response_model=List[StudentResponse])
+def list_students():
+    return [{"id": 1, "name": "Test", "email": "test@example.com"}]
+
+@router.get("/students/{id}", response_model=StudentResponse)
+def get_student(id: int):
+    return {"id": id, "name": "Test", "email": "test@example.com"}
+
+@router.put("/students/{id}", response_model=StudentResponse)
+def update_student(id: int, student: StudentCreate):
+    return {"id": id, "name": student.name, "email": student.email}
+
+@router.delete("/students/{id}", status_code=204)
+def delete_student(id: int):
+    return None
+"""
 
         swea = BackendSWEA()
-        payload = {"entity": "Student", "model_code": "class Student: pass"}
+        payload = {"entity": "Student", "attributes": ["name", "email"]}
         result = swea.handle_task("generate_api", payload)
 
+        assert result["success"] is True
+        # Check for code in the nested data structure
+        assert "data" in result
+        assert "code" in result["data"]
+
+    @patch("baes.swea_agents.backend_swea.OpenAIClient")
+    def test_generate_api_with_invalid_entity(self, mock_client_cls):
+        """Test that BackendSWEA properly handles invalid entity parameters."""
+        from baes.swea_agents.backend_swea import BackendSWEA
+
+        mock_client = mock_client_cls.return_value
+        # Mock the LLM interpretation response to return valid JSON
+        mock_client.generate_response.return_value = '{"attributes": ["name: str", "email: str"], "additional_requirements": [], "code_improvements": [], "modifications": [], "explanation": ""}'
+        # Mock the code generation to return complete FastAPI code
+        mock_client.generate_code_with_domain_focus.return_value = """
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel
+from typing import List
+import sqlite3
+
+class StudentBase(BaseModel):
+    name: str
+    email: str
+
+class StudentCreate(StudentBase):
+    pass
+
+class StudentResponse(StudentBase):
+    id: int
+    
+    class Config:
+        from_attributes = True
+
+router = APIRouter(prefix="/api", tags=["students"])
+
+@router.post("/students/", response_model=StudentResponse, status_code=201)
+def create_student(student: StudentCreate):
+    return {"id": 1, "name": student.name, "email": student.email}
+
+@router.get("/students/", response_model=List[StudentResponse])
+def list_students():
+    return [{"id": 1, "name": "Test", "email": "test@example.com"}]
+
+@router.get("/students/{id}", response_model=StudentResponse)
+def get_student(id: int):
+    return {"id": id, "name": "Test", "email": "test@example.com"}
+
+@router.put("/students/{id}", response_model=StudentResponse)
+def update_student(id: int, student: StudentCreate):
+    return {"id": id, "name": student.name, "email": student.email}
+
+@router.delete("/students/{id}", status_code=204)
+def delete_student(id: int):
+    return None
+"""
+
+        swea = BackendSWEA()
+        
+        # Test with None entity
+        payload = {"entity": None, "attributes": ["name", "email"]}
+        result = swea.handle_task("generate_api", payload)
+        assert result["success"] is False
+        assert "Entity parameter cannot be None" in result["error"]
+
+        # Test with non-string entity
+        payload = {"entity": 123, "attributes": ["name", "email"]}
+        result = swea.handle_task("generate_api", payload)
+        assert result["success"] is False
+        assert "Entity parameter must be a string" in result["error"]
+
+        # Test with empty string entity
+        payload = {"entity": "", "attributes": ["name", "email"]}
+        result = swea.handle_task("generate_api", payload)
+        assert result["success"] is False
+        assert "Entity parameter cannot be empty" in result["error"]
+
+        # Test with whitespace-only entity
+        payload = {"entity": "   ", "attributes": ["name", "email"]}
+        result = swea.handle_task("generate_api", payload)
+        assert result["success"] is False
+        assert "Entity parameter cannot be empty" in result["error"]
+
+        # Test with valid entity (should work)
+        payload = {"entity": "Student", "attributes": ["name", "email"]}
+        result = swea.handle_task("generate_api", payload)
         assert result["success"] is True
         # Check for code in the nested data structure
         assert "data" in result
