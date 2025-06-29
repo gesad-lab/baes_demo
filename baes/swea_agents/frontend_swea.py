@@ -25,6 +25,23 @@ class FrontendSWEA(BaseAgent):
             self._managed_system_manager = ManagedSystemManager()
         return self._managed_system_manager
 
+    def _get_do_not_ignore_warning(self) -> str:
+        """
+        Generate standard 'Do Not Ignore' warning text for all LLM prompts.
+        Stage 1 Improvement #10: Explicit warnings to prevent LLM from ignoring instructions.
+        """
+        return """
+🚨 CRITICAL WARNING: If you ignore ANY of the following instructions, your output will be REJECTED and you will be required to regenerate it. You MUST address EVERY requirement listed below. Failure to comply will result in immediate rejection.
+
+⚠️  DO NOT IGNORE ANY INSTRUCTIONS - Your response will be validated against ALL requirements.
+⚠️  DO NOT SKIP ANY STEPS - Every instruction must be implemented exactly as specified.
+⚠️  DO NOT USE PLACEHOLDERS - Generate complete, working code with no TODO comments.
+⚠️  DO NOT OMIT ERROR HANDLING - Implement comprehensive error handling as required.
+⚠️  DO NOT IGNORE FEEDBACK - Implement ALL TechLeadSWEA feedback exactly as provided.
+
+COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and retry.
+"""
+
     # Supported task identifiers
     _SUPPORTED_TASKS = {
         "generate_ui": "_generate_ui",
@@ -136,6 +153,8 @@ No markdown, no explanations, just working Python code.
         logger.debug(f"FrontendSWEA: Interpreting feedback for {entity} UI: {feedback_text}")
         
         system_prompt = f"""You are a UI/UX expert helping to interpret feedback for improving Streamlit UI generation.
+
+{self._get_do_not_ignore_warning()}
 
 CONTEXT:
 - Entity: {entity}

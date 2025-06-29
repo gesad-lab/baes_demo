@@ -366,6 +366,8 @@ class BackendSWEA(BaseAgent):
 
         system_prompt = f"""You are a backend development expert helping to interpret TechLeadSWEA feedback for improving {code_type} generation.
 
+{self._get_do_not_ignore_warning()}
+
 CONTEXT:
 - Entity: {entity}
 - Code Type: {code_type}
@@ -1126,7 +1128,7 @@ numpy==1.24.3
             # Generate code using LLM with enhanced prompt
             response = self.llm_client.generate_response(
                 prompt=prompt,
-                system_prompt=f"You are a BackendSWEA agent generating {code_type} for {entity}. Implement ALL TechLeadSWEA feedback exactly as specified."
+                system_prompt=f"You are a BackendSWEA agent generating {code_type} for {entity}. Implement ALL TechLeadSWEA feedback exactly as specified.\n\n{self._get_do_not_ignore_warning()}"
             )
 
             if not response or len(response.strip()) < 100:
@@ -1176,3 +1178,20 @@ numpy==1.24.3
             code_lines = [line for line in lines if line.strip() and not line.strip().startswith('#')]
         
         return '\n'.join(code_lines).strip()
+
+    def _get_do_not_ignore_warning(self) -> str:
+        """
+        Generate standard 'Do Not Ignore' warning text for all LLM prompts.
+        Stage 1 Improvement #10: Explicit warnings to prevent LLM from ignoring instructions.
+        """
+        return """
+🚨 CRITICAL WARNING: If you ignore ANY of the following instructions, your output will be REJECTED and you will be required to regenerate it. You MUST address EVERY requirement listed below. Failure to comply will result in immediate rejection.
+
+⚠️  DO NOT IGNORE ANY INSTRUCTIONS - Your response will be validated against ALL requirements.
+⚠️  DO NOT SKIP ANY STEPS - Every instruction must be implemented exactly as specified.
+⚠️  DO NOT USE PLACEHOLDERS - Generate complete, working code with no TODO comments.
+⚠️  DO NOT OMIT ERROR HANDLING - Implement comprehensive error handling as required.
+⚠️  DO NOT IGNORE FEEDBACK - Implement ALL TechLeadSWEA feedback exactly as provided.
+
+COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and retry.
+"""
