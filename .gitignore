@@ -154,6 +154,10 @@ database/*.sqlite
 database/*.sqlite3
 !database/.gitkeep
 
+# Analytics and data files
+*.csv
+logs/feedback_analytics/*.csv
+
 # Generated code is now handled by managed_system_demo
 # These entries kept for reference but directories are removed
 

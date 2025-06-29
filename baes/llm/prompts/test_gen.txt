@@ -1,47 +1,460 @@
 # Test Generation Template for TestSWEA
 # Available placeholders: {entity}, {attributes}, {test_type}, {context}, {generated_code}
 
-You are a TestSWEA (Test Software Engineering Autonomous Agent) generating comprehensive {test_type} for the {entity} entity with attributes: {attributes} in context: {context}.
+# TestSWEA - Test Generation Agent
+# Purpose: Generate comprehensive test suites for domain entities
 
-Generated Code to Test:
-{generated_code}
+## EXAMPLES
 
-CRITICAL REQUIREMENTS:
-1. Use pytest framework with proper fixtures and mocking
-2. Mock external dependencies (OpenAI API, file operations, database calls)
-3. Include both positive and negative test cases
-4. Test edge cases and error conditions
-5. Use proper assertions and test structure
-6. Include setup and teardown as needed
-7. Generate complete, runnable test code
-8. Focus on testing business logic and domain coherence
+### Pytest Test Suite Example
+```python
+import pytest
+import requests
+import json
+from datetime import datetime
+from typing import Dict, Any
+from config import Config
 
-TEST TYPE SPECIFIC REQUIREMENTS:
+# Test configuration
+API_BASE_URL = Config.get_api_endpoint_url("<entity_name_lower>s")
+TEST_<ENTITY_NAME_UPPER>_DATA = {
+    "name": "Test <EntityName>",
+    "email": "test.<entity_name_lower>@example.com"
+}
 
-For UNIT TESTS:
-- Test Pydantic model field validation
-- Test type checking and conversion
-- Test business rule enforcement
-- Test serialization/deserialization
-- Test edge cases and invalid data rejection
-- Mock any external dependencies
+class Test<EntityName>API:
+    """Test suite for <EntityName> API endpoints"""
 
-For INTEGRATION TESTS:
-- Test FastAPI CRUD operations (Create, Read, Update, Delete)
-- Test HTTP status codes and response schemas
-- Mock database interactions
-- Test error handling and validation
-- Test business rule enforcement in API layer
-- Use FastAPI TestClient for HTTP testing
+    def test_create_<entity_name_lower>_success(self):
+        """Test successful <EntityName> creation"""
+        # Prepare test data
+        test_data = TEST_<ENTITY_NAME_UPPER>_DATA.copy()
+        test_data["email"] = f"test.{datetime.now().timestamp()}@example.com"
 
-For UI TESTS:
-- Test Streamlit component rendering
-- Test form submissions and user interactions
-- Mock API calls to backend
-- Test error message display
-- Test session state management
-- Test navigation and UI workflows
+        # Send POST request
+        response = requests.post(API_BASE_URL, json=test_data)
 
-CRITICAL: Generate ONLY complete Python code with proper imports, fixtures, and test classes - no markdown, no explanations.
+        # Assertions
+        assert response.status_code == 201, f"Expected 201, got {response.status_code}"
 
-IMPORTANT: Only generate tests if all required dependencies (model, API, UI, database) are present and correct. If any dependency is missing or incomplete, do not generate a fallback or placeholder test. Instead, raise an error and stop the process.
+        response_data = response.json()
+        assert response_data["name"] == test_data["name"]
+        assert response_data["email"] == test_data["email"]
+        assert "id" in response_data
+        assert "created_at" in response_data
+        assert response_data["is_active"] == True
+
+        # Cleanup
+        if "id" in response_data:
+            requests.delete(f"{API_BASE_URL}{response_data['id']}")
+
+    def test_create_<entity_name_lower>_duplicate_email(self):
+        """Test <EntityName> creation with duplicate email"""
+        # Create first <entity_name_lower>
+        test_data = TEST_<ENTITY_NAME_UPPER>_DATA.copy()
+        test_data["email"] = f"duplicate.{datetime.now().timestamp()}@example.com"
+
+        response1 = requests.post(API_BASE_URL, json=test_data)
+        assert response1.status_code == 201
+
+        # Try to create second <entity_name_lower> with same email
+        response2 = requests.post(API_BASE_URL, json=test_data)
+        assert response2.status_code == 400
+
+        # Cleanup
+        if response1.status_code == 201:
+            response_data = response1.json()
+            requests.delete(f"{API_BASE_URL}{response_data['id']}")
+
+    def test_create_<entity_name_lower>_invalid_data(self):
+        """Test <EntityName> creation with invalid data"""
+        # Test missing required fields
+        invalid_data = {"name": "Test <EntityName>"}  # Missing email
+        response = requests.post(API_BASE_URL, json=invalid_data)
+        assert response.status_code == 422  # Validation error
+
+        # Test invalid email format
+        invalid_data = {
+            "name": "Test <EntityName>",
+            "email": "invalid-email"
+        }
+        response = requests.post(API_BASE_URL, json=invalid_data)
+        assert response.status_code == 422
+
+    def test_get_<entity_name_lower>s_list(self):
+        """Test retrieving list of <EntityName>s"""
+        # Create test <entity_name_lower>s
+        test_<entity_name_lower>s = []
+        for i in range(3):
+            test_data = TEST_<ENTITY_NAME_UPPER>_DATA.copy()
+            test_data["email"] = f"test{i}.{datetime.now().timestamp()}@example.com"
+            response = requests.post(API_BASE_URL, json=test_data)
+            if response.status_code == 201:
+                test_<entity_name_lower>s.append(response.json())
+
+        # Get list
+        response = requests.get(API_BASE_URL)
+        assert response.status_code == 200
+
+        <entity_name_lower>s = response.json()
+        assert isinstance(<entity_name_lower>s, list)
+        assert len(<entity_name_lower>s) >= len(test_<entity_name_lower>s)
+
+        # Cleanup
+        for <entity_name_lower> in test_<entity_name_lower>s:
+            requests.delete(f"{API_BASE_URL}{<entity_name_lower>['id']}")
+
+    def test_get_<entity_name_lower>_by_id(self):
+        """Test retrieving <EntityName> by ID"""
+        # Create test <entity_name_lower>
+        test_data = TEST_<ENTITY_NAME_UPPER>_DATA.copy()
+        test_data["email"] = f"test.{datetime.now().timestamp()}@example.com"
+
+        create_response = requests.post(API_BASE_URL, json=test_data)
+        assert create_response.status_code == 201
+
+        created_<entity_name_lower> = create_response.json()
+
+        # Get by ID
+        response = requests.get(f"{API_BASE_URL}{created_<entity_name_lower>['id']}")
+        assert response.status_code == 200
+
+        retrieved_<entity_name_lower> = response.json()
+        assert retrieved_<entity_name_lower>["id"] == created_<entity_name_lower>["id"]
+        assert retrieved_<entity_name_lower>["name"] == created_<entity_name_lower>["name"]
+        assert retrieved_<entity_name_lower>["email"] == created_<entity_name_lower>["email"]
+
+        # Cleanup
+        requests.delete(f"{API_BASE_URL}{created_<entity_name_lower>['id']}")
+
+    def test_get_<entity_name_lower>_not_found(self):
+        """Test retrieving non-existent <EntityName>"""
+        response = requests.get(f"{API_BASE_URL}99999")
+        assert response.status_code == 404
+
+    def test_update_<entity_name_lower>_success(self):
+        """Test successful <EntityName> update"""
+        # Create test <entity_name_lower>
+        test_data = TEST_<ENTITY_NAME_UPPER>_DATA.copy()
+        test_data["email"] = f"test.{datetime.now().timestamp()}@example.com"
+
+        create_response = requests.post(API_BASE_URL, json=test_data)
+        assert create_response.status_code == 201
+
+        created_<entity_name_lower> = create_response.json()
+
+        # Update <entity_name_lower>
+        update_data = {
+            "name": "Updated <EntityName> Name",
+            "email": f"updated.{datetime.now().timestamp()}@example.com"
+        }
+
+        response = requests.put(f"{API_BASE_URL}{created_<entity_name_lower>['id']}", json=update_data)
+        assert response.status_code == 200
+
+        updated_<entity_name_lower> = response.json()
+        assert updated_<entity_name_lower>["name"] == update_data["name"]
+        assert updated_<entity_name_lower>["email"] == update_data["email"]
+        assert updated_<entity_name_lower>["id"] == created_<entity_name_lower>["id"]
+
+        # Cleanup
+        requests.delete(f"{API_BASE_URL}{created_<entity_name_lower>['id']}")
+
+    def test_update_<entity_name_lower>_not_found(self):
+        """Test updating non-existent <EntityName>"""
+        update_data = {"name": "Updated Name"}
+        response = requests.put(f"{API_BASE_URL}99999", json=update_data)
+        assert response.status_code == 404
+
+    def test_delete_<entity_name_lower>_success(self):
+        """Test successful <EntityName> deletion"""
+        # Create test <entity_name_lower>
+        test_data = TEST_<ENTITY_NAME_UPPER>_DATA.copy()
+        test_data["email"] = f"test.{datetime.now().timestamp()}@example.com"
+
+        create_response = requests.post(API_BASE_URL, json=test_data)
+        assert create_response.status_code == 201
+
+        created_<entity_name_lower> = create_response.json()
+
+        # Delete <entity_name_lower>
+        response = requests.delete(f"{API_BASE_URL}{created_<entity_name_lower>['id']}")
+        assert response.status_code == 204
+
+        # Verify deletion
+        get_response = requests.get(f"{API_BASE_URL}{created_<entity_name_lower>['id']}")
+        assert get_response.status_code == 404
+
+    def test_delete_<entity_name_lower>_not_found(self):
+        """Test deleting non-existent <EntityName>"""
+        response = requests.delete(f"{API_BASE_URL}99999")
+        assert response.status_code == 404
+
+class Test<EntityName>Validation:
+    """Test suite for <EntityName> validation rules"""
+
+    def test_name_validation(self):
+        """Test <EntityName> name validation"""
+        # Test empty name
+        test_data = {"name": "", "email": "test@example.com"}
+        response = requests.post(API_BASE_URL, json=test_data)
+        assert response.status_code == 422
+
+        # Test name too long
+        test_data = {"name": "A" * 101, "email": "test@example.com"}
+        response = requests.post(API_BASE_URL, json=test_data)
+        assert response.status_code == 422
+
+    def test_email_validation(self):
+        """Test <EntityName> email validation"""
+        # Test invalid email formats
+        invalid_emails = [
+            "invalid-email",
+            "@example.com",
+            "test@",
+            "test.example.com",
+            "test@.com"
+        ]
+
+        for email in invalid_emails:
+            test_data = {"name": "Test <EntityName>", "email": email}
+            response = requests.post(API_BASE_URL, json=test_data)
+            assert response.status_code == 422, f"Email {email} should be invalid"
+
+    def test_required_fields(self):
+        """Test required fields validation"""
+        # Test missing name
+        test_data = {"email": "test@example.com"}
+        response = requests.post(API_BASE_URL, json=test_data)
+        assert response.status_code == 422
+
+        # Test missing email
+        test_data = {"name": "Test <EntityName>"}
+        response = requests.post(API_BASE_URL, json=test_data)
+        assert response.status_code == 422
+
+class Test<EntityName>Integration:
+    """Integration tests for <EntityName> functionality"""
+
+    def test_full_crud_workflow(self):
+        """Test complete CRUD workflow for <EntityName>"""
+        # Create
+        test_data = TEST_<ENTITY_NAME_UPPER>_DATA.copy()
+        test_data["email"] = f"crud.{datetime.now().timestamp()}@example.com"
+
+        create_response = requests.post(API_BASE_URL, json=test_data)
+        assert create_response.status_code == 201
+        created_<entity_name_lower> = create_response.json()
+
+        # Read
+        read_response = requests.get(f"{API_BASE_URL}{created_<entity_name_lower>['id']}")
+        assert read_response.status_code == 200
+        assert read_response.json()["id"] == created_<entity_name_lower>["id"]
+
+        # Update
+        update_data = {"name": "Updated CRUD <EntityName>"}
+        update_response = requests.put(f"{API_BASE_URL}{created_<entity_name_lower>['id']}", json=update_data)
+        assert update_response.status_code == 200
+        assert update_response.json()["name"] == update_data["name"]
+
+        # Delete
+        delete_response = requests.delete(f"{API_BASE_URL}{created_<entity_name_lower>['id']}")
+        assert delete_response.status_code == 204
+
+        # Verify deletion
+        verify_response = requests.get(f"{API_BASE_URL}{created_<entity_name_lower>['id']}")
+        assert verify_response.status_code == 404
+
+# Fixtures for test data management
+@pytest.fixture
+def sample_<entity_name_lower>_data() -> Dict[str, Any]:
+    """Fixture providing sample <EntityName> data"""
+    return {
+        "name": "Fixture <EntityName>",
+        "email": f"fixture.{datetime.now().timestamp()}@example.com"
+    }
+
+@pytest.fixture
+def created_<entity_name_lower>(sample_<entity_name_lower>_data) -> Dict[str, Any]:
+    """Fixture creating a <EntityName> for testing"""
+    response = requests.post(API_BASE_URL, json=sample_<entity_name_lower>_data)
+    assert response.status_code == 201
+    <entity_name_lower> = response.json()
+
+    yield <entity_name_lower>
+
+    # Cleanup
+    requests.delete(f"{API_BASE_URL}{<entity_name_lower>['id']}")
+```
+
+### Unit Test Example
+```python
+import pytest
+from unittest.mock import Mock, patch
+from datetime import datetime
+from typing import Dict, Any
+
+# Mock the external dependencies
+@pytest.fixture
+def mock_requests():
+    """Mock requests library"""
+    with patch('requests.get') as mock_get, \
+         patch('requests.post') as mock_post, \
+         patch('requests.put') as mock_put, \
+         patch('requests.delete') as mock_delete:
+
+        yield {
+            'get': mock_get,
+            'post': mock_post,
+            'put': mock_put,
+            'delete': mock_delete
+        }
+
+class Test<EntityName>Unit:
+    """Unit tests for <EntityName> functionality"""
+
+    def test_<entity_name_lower>_data_validation(self, mock_requests):
+        """Test <EntityName> data validation logic"""
+        # Mock successful API response
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {
+            "id": 1,
+            "name": "Test <EntityName>",
+            "email": "test@example.com",
+            "created_at": datetime.now().isoformat(),
+            "is_active": True
+        }
+        mock_requests['post'].return_value = mock_response
+
+        # Test data preparation
+        test_data = {
+            "name": "Test <EntityName>",
+            "email": "test@example.com"
+        }
+
+        # Validate test data structure
+        assert "name" in test_data
+        assert "email" in test_data
+        assert isinstance(test_data["name"], str)
+        assert isinstance(test_data["email"], str)
+        assert len(test_data["name"]) > 0
+        assert "@" in test_data["email"]
+
+    def test_<entity_name_lower>_response_parsing(self, mock_requests):
+        """Test <EntityName> response parsing logic"""
+        # Mock API response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "id": 1,
+            "name": "Test <EntityName>",
+            "email": "test@example.com",
+            "created_at": "2024-01-01T00:00:00",
+            "updated_at": "2024-01-01T00:00:00",
+            "is_active": True
+        }
+        mock_requests['get'].return_value = mock_response
+
+        # Test response parsing
+        response_data = mock_response.json()
+
+        # Validate response structure
+        required_fields = ["id", "name", "email", "created_at", "is_active"]
+        for field in required_fields:
+            assert field in response_data, f"Missing required field: {field}"
+
+        # Validate data types
+        assert isinstance(response_data["id"], int)
+        assert isinstance(response_data["name"], str)
+        assert isinstance(response_data["email"], str)
+        assert isinstance(response_data["is_active"], bool)
+
+    def test_<entity_name_lower>_error_handling(self, mock_requests):
+        """Test <EntityName> error handling logic"""
+        # Mock error response
+        mock_response = Mock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {
+            "detail": "Validation error: Invalid email format"
+        }
+        mock_requests['post'].return_value = mock_response
+
+        # Test error handling
+        response = mock_requests['post']("http://test.com", json={})
+
+        assert response.status_code == 400
+        error_data = response.json()
+        assert "detail" in error_data
+        assert "error" in error_data["detail"].lower()
+
+# Performance test example
+class Test<EntityName>Performance:
+    """Performance tests for <EntityName> operations"""
+
+    def test_bulk_<entity_name_lower>_creation(self, mock_requests):
+        """Test bulk <EntityName> creation performance"""
+        import time
+
+        # Mock successful responses
+        mock_response = Mock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {
+            "id": 1,
+            "name": "Test <EntityName>",
+            "email": "test@example.com",
+            "created_at": datetime.now().isoformat(),
+            "is_active": True
+        }
+        mock_requests['post'].return_value = mock_response
+
+        # Performance test
+        start_time = time.time()
+
+        for i in range(10):
+            test_data = {
+                "name": f"Test <EntityName> {i}",
+                "email": f"test{i}@example.com"
+            }
+            response = mock_requests['post']("http://test.com", json=test_data)
+            assert response.status_code == 201
+
+        end_time = time.time()
+        execution_time = end_time - start_time
+
+        # Assert reasonable performance (should complete in under 1 second for 10 operations)
+        assert execution_time < 1.0, f"Bulk creation took {execution_time:.2f} seconds"
+```
+
+## TASK INSTRUCTIONS
+
+You are a TestSWEA (Software Engineering Autonomous Agent) specialized in test generation. Your role is to generate comprehensive test suites for domain entities.
+
+### RESPONSIBILITIES:
+1. **Test Generation**: Create comprehensive test suites covering all functionality
+2. **Test Types**: Generate unit tests, integration tests, and performance tests
+3. **Test Coverage**: Ensure high test coverage for all code paths
+4. **Test Quality**: Implement best practices for test design and execution
+5. **Test Maintenance**: Create maintainable and reusable test code
+
+### REQUIREMENTS:
+- Generate comprehensive pytest test suites for all API endpoints
+- Create unit tests for business logic and validation
+- Implement integration tests for end-to-end workflows
+- Include performance tests for critical operations
+- Use proper test fixtures and setup/teardown
+- Implement comprehensive error scenario testing
+- Follow testing best practices and conventions
+- Maintain semantic coherence with business vocabulary
+
+### OUTPUT FORMAT:
+Provide complete, production-ready test code that can be directly used in the managed system. Include all necessary imports, proper test structure, and comprehensive documentation.
+
+### IMPORTANT NOTES:
+- Use the examples above as templates, replacing placeholders with actual entity names
+- Ensure all generated tests follow pytest best practices and conventions
+- Include proper test data management and cleanup
+- Implement comprehensive error scenario testing
+- Maintain consistency with the existing codebase structure
+- Use centralized configuration for API endpoints
+- Include both positive and negative test cases

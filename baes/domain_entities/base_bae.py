@@ -55,7 +55,8 @@ class BaseBae(BaseAgent):
             if stored_schema:
                 self.current_schema = stored_schema
                 logger.debug(
-                    f"📥 Loaded stored schema for {self.entity_name} with {len(stored_schema.get('attributes', []))} attributes"
+                    f"📥 Loaded stored schema for {self.entity_name} with "
+                    f"{len(stored_schema.get('attributes', []))} attributes"
                 )
                 return
 
@@ -84,7 +85,8 @@ class BaseBae(BaseAgent):
 
                     self.current_schema = actual_schema
                     logger.debug(
-                        f"📥 Restored schema for {self.entity_name} from context store with {len(actual_schema.get('attributes', []))} attributes"
+                        f"📥 Restored schema for {self.entity_name} from context store with "
+                        f"{len(actual_schema.get('attributes', []))} attributes"
                     )
                     return
 
@@ -108,7 +110,8 @@ class BaseBae(BaseAgent):
                     # Also store it in memory for future use
                     self.update_memory("current_schema", stored_schema)
                     logger.debug(
-                        f"📥 Reconstructed schema for {self.entity_name} from domain knowledge with {len(stored_schema['attributes'])} attributes"
+                        f"📥 Reconstructed schema for {self.entity_name} from domain knowledge with "
+                        f"{len(stored_schema['attributes'])} attributes"
                     )
                     return
 
@@ -203,6 +206,14 @@ class BaseBae(BaseAgent):
                 "business_context": payload.get("request", ""),
                 "semantic_coherence": True,
                 "domain_knowledge_preserved": True,
+                "interpreted_intent": f"{'evolve' if is_evolution else 'create'}_{self.entity_name.lower()}_management_system",
+                "domain_operations": (
+                    ["create_entity", "setup_crud"]
+                    if not is_evolution
+                    else ["evolve_entity", "update_schema"]
+                ),
+                "business_vocabulary": self._extract_business_vocabulary(),
+                "entity_focus": self.entity_name,
             }
 
             # Create comprehensive coordination plan with TechLeadSWEA governance
@@ -300,7 +311,8 @@ class BaseBae(BaseAgent):
 
             if is_debug_mode():
                 logger.info(
-                    f"✅ {self.entity_name}BAE: Interpreted request with {len(extracted_attributes)} attributes and {len(interpretation['swea_coordination'])} SWEA tasks"
+                    f"✅ {self.entity_name}BAE: Interpreted request with {len(extracted_attributes)} attributes "
+                    f"and {len(interpretation['swea_coordination'])} SWEA tasks"
                 )
 
             return interpretation
@@ -476,7 +488,9 @@ class BaseBae(BaseAgent):
 
         return {
             "entity": self.entity_name,
-            "interpreted_intent": f"Remove attributes from {self.entity_name} entity: {', '.join(attributes_to_remove)}",
+            "interpreted_intent": (
+                f"Remove attributes from {self.entity_name} entity: {', '.join(attributes_to_remove)}"
+            ),
             "extracted_attributes": remaining_attributes,
             "removed_attributes": removed_attributes,
             "existing_attributes": current_attributes,
@@ -562,7 +576,9 @@ class BaseBae(BaseAgent):
 
         return {
             "entity": self.entity_name,
-            "interpreted_intent": f"Modify attributes in {self.entity_name} entity: {'; '.join(modification_summary)}",
+            "interpreted_intent": (
+                f"Modify attributes in {self.entity_name} entity: {'; '.join(modification_summary)}"
+            ),
             "extracted_attributes": modified_attributes,
             "modifications": modifications,
             "existing_attributes": current_attributes,

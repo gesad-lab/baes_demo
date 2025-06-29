@@ -5,7 +5,7 @@ Validates that TechLeadSWEA acts as the "Technical Brain" of the BAE system.
 
 import os
 import tempfile
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -70,12 +70,18 @@ class TestTechLeadGovernance:
                         {
                             "swea_agent": "DatabaseSWEA",
                             "task_type": "setup_database",
-                            "payload": {"entity": "Student", "attributes": ["name: str", "email: str", "age: int"]},
+                            "payload": {
+                                "entity": "Student",
+                                "attributes": ["name: str", "email: str", "age: int"],
+                            },
                         },
                         {
                             "swea_agent": "BackendSWEA",
                             "task_type": "generate_model",
-                            "payload": {"entity": "Student", "attributes": ["name: str", "email: str", "age: int"]},
+                            "payload": {
+                                "entity": "Student",
+                                "attributes": ["name: str", "email: str", "age: int"],
+                            },
                         },
                     ],
                 },
@@ -391,7 +397,7 @@ class TestTechLeadGovernance:
 
     def test_testswea_fix_coordination_integration(self, runtime_kernel):
         """Test complete TestSWEA fix coordination workflow with runtime kernel"""
-        
+
         # Create a mock test failure scenario
         mock_execution_results = [
             {
@@ -401,7 +407,7 @@ class TestTechLeadGovernance:
                 "entity": "Student",
             }
         ]
-        
+
         # Mock TechLeadSWEA to return fix decisions that include TestSWEA
         with patch.object(runtime_kernel.techlead_swea, "handle_task") as mock_techlead:
             mock_techlead.return_value = {
@@ -415,31 +421,31 @@ class TestTechLeadGovernance:
                             "priority": "high",
                         },
                         {
-                            "responsible_swea": "BackendSWEA", 
+                            "responsible_swea": "BackendSWEA",
                             "recommended_action": "fix_model_imports",
                             "issue_type": "import_error",
                             "priority": "medium",
-                        }
+                        },
                     ],
                     "coordination_log": ["Analyzed test failures", "Created fix decisions"],
                 },
                 "technical_governance": True,
             }
-            
+
             # Mock TestSWEA to handle fix_issues task
             with patch.object(runtime_kernel.test_swea, "handle_task") as mock_test_swea:
                 mock_test_swea.return_value = {
                     "success": True,
                     "data": {"fix_applied": True, "fix_type": "test_regeneration"},
                 }
-                
+
                 # Mock BackendSWEA to handle fix_issues task
                 with patch.object(runtime_kernel.backend_swea, "handle_task") as mock_backend:
                     mock_backend.return_value = {
                         "success": True,
                         "data": {"fix_applied": True, "fix_type": "import_fix"},
                     }
-                    
+
                     # Execute the fix decisions
                     fix_decisions = [
                         {
@@ -449,37 +455,37 @@ class TestTechLeadGovernance:
                         },
                         {
                             "responsible_swea": "BackendSWEA",
-                            "recommended_action": "fix_model_imports", 
+                            "recommended_action": "fix_model_imports",
                             "issue_type": "import_error",
-                        }
+                        },
                     ]
-                    
+
                     # Test the fix coordination
                     fixes_applied = runtime_kernel._execute_techlead_fix_decisions(
                         fix_decisions, "Student", mock_execution_results
                     )
-                    
+
                     # Verify the coordination worked
                     assert fixes_applied is True
-                    
+
                     # Verify TestSWEA was called with correct parameters
                     mock_test_swea.assert_called_once_with(
-                        "fix_issues", 
+                        "fix_issues",
                         {
                             "entity": "Student",
                             "fix_action": "regenerate_tests",
                             "issue_type": "test_execution_failure",
                             "techlead_decision": fix_decisions[0],
                             "execution_results": mock_execution_results,
-                        }
+                        },
                     )
-                    
+
                     # Verify BackendSWEA was also called
                     mock_backend.assert_called_once()
 
     def test_hybrid_techlead_coordination_comprehensive(self, techlead_swea):
         """Test TechLeadSWEA hybrid coordination approach for test failure analysis and fix routing"""
-        
+
         # Test comprehensive failure analysis payload
         failure_analysis_payload = {
             "entity": "Student",
@@ -493,7 +499,7 @@ class TestTechLeadGovernance:
                     "tests_failed": 3,
                     "stderr": "SyntaxError: invalid syntax at line 15\nModuleNotFoundError: No module named 'student_model'\n404 Not Found: /api/students/",
                     "stdout": "Starting test execution...\nTest 1: PASS\nTest 2: PASS\nTest 3: FAIL - Syntax error\nTest 4: FAIL - Import error\nTest 5: FAIL - API endpoint missing",
-                    "exit_code": 1
+                    "exit_code": 1,
                 },
                 "execution_result": {"success": False, "error": "Multiple test failures"},
                 "execution_results": [
@@ -504,16 +510,14 @@ class TestTechLeadGovernance:
                             "data": {
                                 "code": "from pydantic import BaseModel\n\nclass Student(BaseModel):\n    name: str\n    email: str"
                             }
-                        }
+                        },
                     },
                     {
-                        "task": "BackendSWEA.generate_api", 
+                        "task": "BackendSWEA.generate_api",
                         "success": False,
                         "result": {
-                            "data": {
-                                "code": "# Incomplete API generation with syntax errors"
-                            }
-                        }
+                            "data": {"code": "# Incomplete API generation with syntax errors"}
+                        },
                     },
                     {
                         "task": "FrontendSWEA.generate_ui",
@@ -522,124 +526,134 @@ class TestTechLeadGovernance:
                             "data": {
                                 "code": "import streamlit as st\n\ndef main():\n    st.title('Student Management')"
                             }
-                        }
-                    }
-                ]
+                        },
+                    },
+                ],
             },
             "generated_artifacts": [
                 {"task": "BackendSWEA.generate_model", "success": True},
                 {"task": "BackendSWEA.generate_api", "success": False},
-                {"task": "FrontendSWEA.generate_ui", "success": True}
+                {"task": "FrontendSWEA.generate_ui", "success": True},
             ],
-            "coordination_id": "hybrid_analysis_test_student"
+            "coordination_id": "hybrid_analysis_test_student",
         }
-        
+
         # Execute hybrid coordination
         result = techlead_swea.handle_task("hybrid_coordination", failure_analysis_payload)
-        
+
         # Validate coordination success (analysis phases should work even if final success is not achieved)
         assert result["success"] is True
         coordination_data = result["data"]
-        
+
         # Validate hybrid analysis phases work correctly
         assert "error_analysis" in coordination_data
         assert "quality_analysis" in coordination_data
         assert "llm_analysis" in coordination_data
         assert "fix_decisions" in coordination_data
-        
+
         # Validate error pattern analysis (should detect syntax error as highest priority)
         error_analysis = coordination_data["error_analysis"]
         assert error_analysis["category"] == "syntax_error"  # Should prioritize syntax error
         assert error_analysis["confidence"] >= 0.7
         assert error_analysis["suggested_swea"] == "BackendSWEA"
-        
+
         # Should detect multiple error patterns
         assert error_analysis.get("multiple_errors") is True
         assert "all_categories" in error_analysis
         assert "syntax_error" in error_analysis["all_categories"]
         assert "import_error" in error_analysis["all_categories"]
         assert "endpoint_missing" in error_analysis["all_categories"]
-        
+
         # Validate code quality analysis
         quality_analysis = coordination_data["quality_analysis"]
         assert quality_analysis["total_artifacts"] == 3
         assert quality_analysis["issues_found"] >= 1  # Should detect API generation failure
         assert 0.0 <= quality_analysis["quality_score"] <= 1.0
-        
+
         # Validate LLM analysis
         llm_analysis = coordination_data["llm_analysis"]
         assert "root_cause" in llm_analysis
         assert "primary_swea" in llm_analysis
-        assert llm_analysis["primary_swea"] in ["BackendSWEA", "FrontendSWEA", "TestSWEA", "DatabaseSWEA"]
+        assert llm_analysis["primary_swea"] in [
+            "BackendSWEA",
+            "FrontendSWEA",
+            "TestSWEA",
+            "DatabaseSWEA",
+        ]
         assert "fix_actions" in llm_analysis
         assert isinstance(llm_analysis["fix_actions"], list)
         assert 0.0 <= llm_analysis["confidence"] <= 1.0
-        
+
         # Validate fix decisions
         fix_decisions = coordination_data["fix_decisions"]
         assert isinstance(fix_decisions, list)
         assert len(fix_decisions) >= 1
-        
+
         for decision in fix_decisions:
             assert "swea_agent" in decision
-            assert decision["swea_agent"] in ["BackendSWEA", "FrontendSWEA", "TestSWEA", "DatabaseSWEA"]
+            assert decision["swea_agent"] in [
+                "BackendSWEA",
+                "FrontendSWEA",
+                "TestSWEA",
+                "DatabaseSWEA",
+            ]
             assert "fix_actions" in decision
             assert "priority" in decision
             assert decision["priority"] in ["high", "medium", "low"]
             assert "confidence" in decision
             assert 0.0 <= decision["confidence"] <= 1.0
-        
+
         # Validate coordination logging
         coordination_log = coordination_data["coordination_log"]
         assert isinstance(coordination_log, list)
         assert len(coordination_log) >= 4  # At least one log entry per phase
-        
+
         # Validate specific log entries
         log_text = " ".join(coordination_log)
         assert "Error pattern:" in log_text  # Updated format
         assert "Quality analysis:" in log_text  # Updated format
         assert "LLM analysis:" in log_text  # Updated format
         assert "Created" in log_text and "fix decisions" in log_text
-        
+
         # Validate that iterations occurred (should show fix iteration attempts)
         assert coordination_data["fix_iterations"] <= 3  # Default BAE_MAX_RETRIES
 
     def test_hybrid_coordination_error_pattern_detection(self, techlead_swea):
         """Test that hybrid coordination correctly detects different error patterns"""
-        
+
         test_cases = [
             {
                 "name": "syntax_error",
                 "stderr": "SyntaxError: invalid syntax at line 10",
                 "expected_category": "syntax_error",
-                "expected_swea": "BackendSWEA"
+                "expected_swea": "BackendSWEA",
             },
             {
-                "name": "import_error", 
+                "name": "import_error",
                 "stderr": "ModuleNotFoundError: No module named 'student_model'",
                 "expected_category": "import_error",
-                "expected_swea": "BackendSWEA"
+                "expected_swea": "BackendSWEA",
             },
             {
                 "name": "api_error",
                 "stderr": "404 Not Found: /api/students/",
                 "expected_category": "endpoint_missing",
-                "expected_swea": "BackendSWEA"
+                "expected_swea": "BackendSWEA",
             },
             {
                 "name": "assertion_error",
                 "stderr": "AssertionError: Expected 201, got 500",
-                "expected_category": "assertion_failure", 
-                "expected_swea": "TestSWEA"
+                "expected_category": "assertion_failure",
+                "expected_swea": "TestSWEA",
             },
             {
                 "name": "connection_error",
                 "stderr": "ConnectionError: Connection refused",
                 "expected_category": "connection_error",
-                "expected_swea": "DatabaseSWEA"
-            }
+                "expected_swea": "DatabaseSWEA",
+            },
         ]
-        
+
         for test_case in test_cases:
             failure_payload = {
                 "entity": "Student",
@@ -648,75 +662,65 @@ class TestTechLeadGovernance:
                     "stderr": test_case["stderr"],
                     "stdout": "",
                     "exit_code": 1,
-                    "test_execution": {"success": False, "tests_failed": 1}
+                    "test_execution": {"success": False, "tests_failed": 1},
                 },
                 "generated_artifacts": [],
-                "coordination_id": f"test_{test_case['name']}"
+                "coordination_id": f"test_{test_case['name']}",
             }
-            
+
             result = techlead_swea.handle_task("hybrid_coordination", failure_payload)
-            
+
             assert result["success"] is True, f"Failed for {test_case['name']}"
-            
+
             error_analysis = result["data"]["error_analysis"]
-            assert error_analysis["category"] == test_case["expected_category"], \
-                f"Expected {test_case['expected_category']}, got {error_analysis['category']} for {test_case['name']}"
-            assert error_analysis["suggested_swea"] == test_case["expected_swea"], \
-                f"Expected {test_case['expected_swea']}, got {error_analysis['suggested_swea']} for {test_case['name']}"
+            assert (
+                error_analysis["category"] == test_case["expected_category"]
+            ), f"Expected {test_case['expected_category']}, got {error_analysis['category']} for {test_case['name']}"
+            assert (
+                error_analysis["suggested_swea"] == test_case["expected_swea"]
+            ), f"Expected {test_case['expected_swea']}, got {error_analysis['suggested_swea']} for {test_case['name']}"
 
     def test_hybrid_coordination_quality_analysis(self, techlead_swea):
         """Test that hybrid coordination properly analyzes code quality issues"""
-        
+
         # Test with various quality issues
         artifacts_with_issues = [
             {
                 "task": "BackendSWEA.generate_model",
                 "success": True,
-                "result": {
-                    "data": {
-                        "code": ""  # Empty code - should trigger quality issue
-                    }
-                }
+                "result": {"data": {"code": ""}},  # Empty code - should trigger quality issue
             },
             {
                 "task": "BackendSWEA.generate_api",
                 "success": True,
-                "result": {
-                    "data": {
-                        "code": "# Missing required elements"  # No FastAPI elements
-                    }
-                }
+                "result": {"data": {"code": "# Missing required elements"}},  # No FastAPI elements
             },
             {
                 "task": "FrontendSWEA.generate_ui",
                 "success": True,
-                "result": {
-                    "data": {
-                        "code": "print('hello')"  # No Streamlit elements
-                    }
-                }
-            }
+                "result": {"data": {"code": "print('hello')"}},  # No Streamlit elements
+            },
         ]
-        
+
         failure_payload = {
             "entity": "Student",
             "execution_type": "creation_validation",
             "failure_context": {
                 "stderr": "Quality issues detected",
-                "test_execution": {"success": False}
+                "test_execution": {"success": False},
             },
             "generated_artifacts": artifacts_with_issues,
         }
-        
+
         result = techlead_swea.handle_task("hybrid_coordination", failure_payload)
-        
+
         assert result["success"] is True
         quality_analysis = result["data"]["quality_analysis"]
-        
+
         # Should detect multiple quality issues
         assert quality_analysis["issues_found"] >= 3
         assert quality_analysis["quality_score"] < 0.5  # Poor quality due to issues
-        
+
         # Check specific issue types
         issue_types = [issue["type"] for issue in quality_analysis["issues"]]
         assert "empty_model" in issue_types

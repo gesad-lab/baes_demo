@@ -3,10 +3,12 @@ Unit tests for DatabaseSWEA feedback processing edge cases.
 Tests the fixes for 'dict' object has no attribute 'strip' error.
 """
 
-import pytest
-import tempfile
 import os
+import tempfile
 from unittest.mock import Mock, patch
+
+import pytest
+
 from baes.swea_agents.database_swea import DatabaseSWEA
 
 
@@ -26,12 +28,12 @@ class TestDatabaseSWEAFeedbackProcessing:
             "attributes": [
                 {"name": "student_name", "type": "str"},  # Dict format
                 {"name": "student_email", "type": "str"},  # Dict format
-                "age:int"  # String format (expected)
+                "age:int",  # String format (expected)
             ],
             "additional_requirements": [],
             "constraints": [],
             "modifications": [],
-            "explanation": "Test with mixed attribute formats"
+            "explanation": "Test with mixed attribute formats",
         }
 
         # This should not raise "'dict' object has no attribute 'strip'" error
@@ -51,12 +53,12 @@ class TestDatabaseSWEAFeedbackProcessing:
                 ["name", "str"],  # List (unexpected)
                 {"name": "email", "type": "str"},  # Dict (fixed in Phase 1)
                 "age:int",  # String (expected)
-                None  # None (unexpected)
+                None,  # None (unexpected)
             ],
             "additional_requirements": [],
             "constraints": [],
             "modifications": [],
-            "explanation": "Test with various unexpected types"
+            "explanation": "Test with various unexpected types",
         }
 
         # Should handle all types gracefully
@@ -70,9 +72,9 @@ class TestDatabaseSWEAFeedbackProcessing:
         """Test fallback database creation when interpretation fails"""
         with tempfile.TemporaryDirectory() as temp_dir:
             db_file = os.path.join(temp_dir, "test_academic.db")
-            
+
             result = self.database_swea._create_fallback_database(self.test_entity, db_file)
-            
+
             # Verify fallback database is created
             assert os.path.exists(db_file)
             assert result["database_path"] == db_file
@@ -80,46 +82,49 @@ class TestDatabaseSWEAFeedbackProcessing:
             assert result["fallback_used"] is True
             assert "name" in str(result["columns"])
 
-    @patch('baes.swea_agents.database_swea.OpenAIClient')
+    @patch("baes.swea_agents.database_swea.OpenAIClient")
     def test_llm_response_json_parsing_error(self, mock_openai):
         """Test handling of invalid JSON from LLM"""
         # Mock LLM to return invalid JSON
         mock_client = Mock()
         mock_client.generate_response.return_value = "Invalid JSON response { broken"
         mock_openai.return_value = mock_client
-        
+
         self.database_swea.llm_client = mock_client
-        
+
         feedback = ["No database tables were created"]
         result = self.database_swea._interpret_feedback_for_database_setup(
             feedback, self.test_entity, self.original_attributes
         )
-        
+
         # Should fallback gracefully
         assert "attributes" in result
-        assert result["explanation"] == "Extracted information from text response (JSON parsing failed)"
+        assert (
+            result["explanation"]
+            == "Extracted information from text response (JSON parsing failed)"
+        )
 
     def test_apply_improvements_with_validation(self):
         """Test _apply_database_improvements with pre-validation"""
         interpretation = {
             "attributes": [
                 {"name": "student_name", "type": "str"},  # Dict format that caused original error
-                "email:str"  # String format
+                "email:str",  # String format
             ],
             "additional_requirements": ["Add index on email"],
             "constraints": ["UNIQUE(email)"],
             "modifications": ["Updated schema based on feedback"],
-            "explanation": "Test mixed attribute format handling"
+            "explanation": "Test mixed attribute format handling",
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
             db_file = os.path.join(temp_dir, "test_academic.db")
-            
+
             # This should not raise any errors
             result = self.database_swea._apply_database_improvements(
                 interpretation, self.test_entity, db_file
             )
-            
+
             # Verify database is created successfully
             assert os.path.exists(db_file)
             assert result["tables_created"] == ["students"]
@@ -130,7 +135,7 @@ class TestDatabaseSWEAFeedbackProcessing:
         result = self.database_swea._interpret_feedback_for_database_setup(
             [], self.test_entity, self.original_attributes
         )
-        
+
         assert result["attributes"] == self.original_attributes
         assert result["additional_requirements"] == []
         assert result["constraints"] == []
@@ -144,31 +149,33 @@ class TestDatabaseSWEAFeedbackProcessing:
             "attributes": ["name:str", "email:str"],
             "techlead_feedback": ["No database tables were created"],
             "previous_errors": ["Missing database creation confirmation"],
-            "expected_output": "Database with students table"
+            "expected_output": "Database with students table",
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # Mock managed system path
-            with patch.object(self.database_swea, 'managed_system_manager') as mock_manager:
+            with patch.object(self.database_swea, "managed_system_manager") as mock_manager:
                 mock_manager.managed_system_path = temp_dir
                 mock_manager.ensure_managed_system_structure.return_value = None
-                
+
                 # Mock LLM response that might return dict attributes
-                with patch.object(self.database_swea, '_interpret_feedback_for_database_setup') as mock_interpret:
+                with patch.object(
+                    self.database_swea, "_interpret_feedback_for_database_setup"
+                ) as mock_interpret:
                     mock_interpret.return_value = {
                         "attributes": [
                             {"name": "name", "type": "str"},  # Dict format (original bug trigger)
-                            {"name": "email", "type": "str"}
+                            {"name": "email", "type": "str"},
                         ],
                         "additional_requirements": [],
                         "constraints": [],
                         "modifications": [],
-                        "explanation": "Test database setup"
+                        "explanation": "Test database setup",
                     }
-                    
+
                     # This should not raise "'dict' object has no attribute 'strip'" error
                     result = self.database_swea._setup_database(payload)
-                    
+
                     assert result["success"] is True
                     assert "database_path" in result["data"]
 
@@ -176,23 +183,26 @@ class TestDatabaseSWEAFeedbackProcessing:
         """Test that attribute names are properly sanitized"""
         interpretation = {
             "attributes": [
-                {"name": "Student Name", "type": "str"},  # Spaces should be converted to underscores
+                {
+                    "name": "Student Name",
+                    "type": "str",
+                },  # Spaces should be converted to underscores
                 {"name": "EMAIL ADDRESS", "type": "str"},  # Should be lowercased
-                "Age In Years:int"  # Already string format
+                "Age In Years:int",  # Already string format
             ],
             "additional_requirements": [],
             "constraints": [],
             "modifications": [],
-            "explanation": "Test attribute sanitization"
+            "explanation": "Test attribute sanitization",
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
             db_file = os.path.join(temp_dir, "test_academic.db")
-            
+
             result = self.database_swea._apply_database_improvements(
                 interpretation, self.test_entity, db_file
             )
-            
+
             # Check that column names are properly sanitized
             columns_str = str(result["columns"])
             assert "student_name" in columns_str.lower()
@@ -202,28 +212,30 @@ class TestDatabaseSWEAFeedbackProcessing:
         """Test complete error recovery chain: LLM failure → fallback → database creation"""
         with tempfile.TemporaryDirectory() as temp_dir:
             # Mock LLM to raise an exception
-            with patch.object(self.database_swea, 'llm_client') as mock_client:
+            with patch.object(self.database_swea, "llm_client") as mock_client:
                 mock_client.generate_response.side_effect = Exception("LLM API error")
-                
+
                 # Mock managed system path
-                with patch.object(self.database_swea, 'managed_system_manager') as mock_manager:
+                with patch.object(self.database_swea, "managed_system_manager") as mock_manager:
                     mock_manager.managed_system_path = temp_dir
-                    
+
                     db_file = os.path.join(temp_dir, "test_academic.db")
-                    
+
                     # Should recover gracefully with fallback database
                     interpretation = self.database_swea._interpret_feedback_for_database_setup(
-                        ["No database tables were created"], self.test_entity, self.original_attributes
+                        ["No database tables were created"],
+                        self.test_entity,
+                        self.original_attributes,
                     )
-                    
+
                     result = self.database_swea._apply_database_improvements(
                         interpretation, self.test_entity, db_file
                     )
-                    
+
                     # Verify fallback worked
                     assert os.path.exists(db_file)
                     assert result["fallback_used"] is True
 
 
 if __name__ == "__main__":
-    pytest.main([__file__]) 
+    pytest.main([__file__])

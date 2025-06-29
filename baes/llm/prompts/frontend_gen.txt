@@ -176,3 +176,415 @@ if __name__ == "__main__":
     main()
 
 CRITICAL: Generate complete working Python code with actual form fields and API calls based on the provided attributes. Do not include any markdown formatting or code block markers.
+
+# FrontendSWEA - Frontend Development Agent
+# Purpose: Generate Streamlit UI components for domain entity management
+
+## EXAMPLES
+
+### Streamlit Main App Example
+```python
+import streamlit as st
+import requests
+import pandas as pd
+from datetime import datetime
+from config import Config
+
+# Page configuration
+st.set_page_config(
+    page_title="<EntityName> Management System",
+    page_icon="👥",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom CSS for better styling
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #1f77b4;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .metric-card {
+        background-color: #f0f2f6;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid #1f77b4;
+    }
+    .success-message {
+        background-color: #d4edda;
+        color: #155724;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid #c3e6cb;
+    }
+    .error-message {
+        background-color: #f8d7da;
+        color: #721c24;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid #f5c6cb;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# API configuration
+API_BASE_URL = Config.get_api_endpoint_url("<entity_name_lower>s")
+
+def main():
+    """Main application function"""
+    # Header
+    st.markdown('<h1 class="main-header">👥 <EntityName> Management System</h1>', unsafe_allow_html=True)
+
+    # Sidebar navigation
+    st.sidebar.title("Navigation")
+    page = st.sidebar.selectbox(
+        "Choose a page",
+        ["Dashboard", "View <EntityName>s", "Add <EntityName>", "Edit <EntityName>", "Delete <EntityName>"]
+    )
+
+    # Page routing
+    if page == "Dashboard":
+        show_dashboard()
+    elif page == "View <EntityName>s":
+        view_<entity_name_lower>s()
+    elif page == "Add <EntityName>":
+        add_<entity_name_lower>()
+    elif page == "Edit <EntityName>":
+        edit_<entity_name_lower>()
+    elif page == "Delete <EntityName>":
+        delete_<entity_name_lower>()
+
+def show_dashboard():
+    """Display dashboard with metrics and overview"""
+    st.header("📊 Dashboard")
+
+    try:
+        # Fetch <entity_name_lower>s for metrics
+        response = requests.get(API_BASE_URL)
+        if response.status_code == 200:
+            <entity_name_lower>s = response.json()
+
+            # Metrics
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                st.metric("Total <EntityName>s", len(<entity_name_lower>s))
+
+            with col2:
+                st.metric("Active <EntityName>s", len([s for s in <entity_name_lower>s if s.get('active', True)]))
+
+            with col3:
+                recent_count = len([s for s in <entity_name_lower>s
+                                  if datetime.fromisoformat(s['created_at'].replace('Z', '+00:00')).date() == datetime.now().date()])
+                st.metric("New Today", recent_count)
+
+            with col4:
+                st.metric("System Status", "🟢 Online")
+
+            # Recent <entity_name_lower>s table
+            st.subheader("Recent <EntityName>s")
+            if <entity_name_lower>s:
+                df = pd.DataFrame(<entity_name_lower>s)
+                df['created_at'] = pd.to_datetime(df['created_at']).dt.strftime('%Y-%m-%d %H:%M')
+                st.dataframe(df[['id', 'name', 'email', 'created_at']].head(10), use_container_width=True)
+            else:
+                st.info("No <entity_name_lower>s found. Add your first <entity_name_lower>!")
+
+    except Exception as e:
+        st.error(f"Error loading dashboard: {str(e)}")
+
+def view_<entity_name_lower>s():
+    """View all <entity_name_lower>s with search and filter options"""
+    st.header("👥 View <EntityName>s")
+
+    try:
+        # Search and filter
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            search_term = st.text_input("Search by name or email", "")
+
+        with col2:
+            sort_by = st.selectbox("Sort by", ["id", "name", "email", "created_at"])
+
+        # Fetch <entity_name_lower>s
+        response = requests.get(API_BASE_URL)
+        if response.status_code == 200:
+            <entity_name_lower>s = response.json()
+
+            # Apply search filter
+            if search_term:
+                <entity_name_lower>s = [s for s in <entity_name_lower>s
+                                      if search_term.lower() in s['name'].lower()
+                                      or search_term.lower() in s['email'].lower()]
+
+            # Apply sorting
+            <entity_name_lower>s.sort(key=lambda x: x.get(sort_by, ""))
+
+            if <entity_name_lower>s:
+                # Convert to DataFrame for better display
+                df = pd.DataFrame(<entity_name_lower>s)
+                df['created_at'] = pd.to_datetime(df['created_at']).dt.strftime('%Y-%m-%d %H:%M')
+
+                st.dataframe(df, use_container_width=True)
+                st.success(f"Found {len(<entity_name_lower>s)} <entity_name_lower>(s)")
+            else:
+                st.info("No <entity_name_lower>s found matching your criteria.")
+        else:
+            st.error(f"Failed to fetch <entity_name_lower>s: {response.status_code}")
+
+    except Exception as e:
+        st.error(f"Error viewing <entity_name_lower>s: {str(e)}")
+
+def add_<entity_name_lower>():
+    """Add a new <entity_name_lower>"""
+    st.header("➕ Add New <EntityName>")
+
+    with st.form("add_<entity_name_lower>_form"):
+        st.subheader("Enter <EntityName> Information")
+
+        # Form fields
+        name = st.text_input("Name *", placeholder="Enter full name")
+        email = st.text_input("Email *", placeholder="Enter email address")
+
+        # Additional fields can be added here based on entity attributes
+        # age = st.number_input("Age", min_value=0, max_value=120, value=25)
+        # department = st.selectbox("Department", ["Engineering", "Marketing", "Sales", "HR"])
+
+        submitted = st.form_submit_button("Add <EntityName>")
+
+        if submitted:
+            if not name or not email:
+                st.error("Please fill in all required fields.")
+                return
+
+            # Prepare data
+            <entity_name_lower>_data = {
+                "name": name.strip(),
+                "email": email.strip().lower()
+            }
+
+            try:
+                # Send POST request
+                response = requests.post(API_BASE_URL, json=<entity_name_lower>_data)
+
+                if response.status_code == 201:
+                    st.success("✅ <EntityName> added successfully!")
+                    st.json(response.json())
+                    st.balloons()
+                elif response.status_code == 400:
+                    error_data = response.json()
+                    st.error(f"❌ Validation error: {error_data.get('detail', 'Unknown error')}")
+                else:
+                    st.error(f"❌ Failed to add <entity_name_lower>: {response.status_code}")
+
+            except Exception as e:
+                st.error(f"❌ Error adding <entity_name_lower>: {str(e)}")
+
+def edit_<entity_name_lower>():
+    """Edit an existing <entity_name_lower>"""
+    st.header("✏️ Edit <EntityName>")
+
+    try:
+        # Fetch <entity_name_lower>s for selection
+        response = requests.get(API_BASE_URL)
+        if response.status_code == 200:
+            <entity_name_lower>s = response.json()
+
+            if not <entity_name_lower>s:
+                st.info("No <entity_name_lower>s available to edit.")
+                return
+
+            # <EntityName> selection
+            <entity_name_lower>_options = {f"{s['name']} ({s['email']})": s for s in <entity_name_lower>s}
+            selected_<entity_name_lower>_key = st.selectbox("Select <EntityName> to edit", list(<entity_name_lower>_options.keys()))
+
+            if selected_<entity_name_lower>_key:
+                selected_<entity_name_lower> = <entity_name_lower>_options[selected_<entity_name_lower>_key]
+
+                with st.form("edit_<entity_name_lower>_form"):
+                    st.subheader(f"Edit <EntityName>: {selected_<entity_name_lower>['name']}")
+
+                    # Pre-filled form fields
+                    name = st.text_input("Name *", value=selected_<entity_name_lower>['name'])
+                    email = st.text_input("Email *", value=selected_<entity_name_lower>['email'])
+
+                    submitted = st.form_submit_button("Update <EntityName>")
+
+                    if submitted:
+                        if not name or not email:
+                            st.error("Please fill in all required fields.")
+                            return
+
+                        # Prepare update data
+                        update_data = {
+                            "name": name.strip(),
+                            "email": email.strip().lower()
+                        }
+
+                        try:
+                            # Send PUT request
+                            response = requests.put(f"{API_BASE_URL}{selected_<entity_name_lower>['id']}", json=update_data)
+
+                            if response.status_code == 200:
+                                st.success("✅ <EntityName> updated successfully!")
+                                st.json(response.json())
+                            elif response.status_code == 404:
+                                st.error("❌ <EntityName> not found.")
+                            else:
+                                st.error(f"❌ Failed to update <entity_name_lower>: {response.status_code}")
+
+                        except Exception as e:
+                            st.error(f"❌ Error updating <entity_name_lower>: {str(e)}")
+        else:
+            st.error(f"Failed to fetch <entity_name_lower>s: {response.status_code}")
+
+    except Exception as e:
+        st.error(f"Error in edit form: {str(e)}")
+
+def delete_<entity_name_lower>():
+    """Delete a <entity_name_lower>"""
+    st.header("🗑️ Delete <EntityName>")
+
+    try:
+        # Fetch <entity_name_lower>s for selection
+        response = requests.get(API_BASE_URL)
+        if response.status_code == 200:
+            <entity_name_lower>s = response.json()
+
+            if not <entity_name_lower>s:
+                st.info("No <entity_name_lower>s available to delete.")
+                return
+
+            # <EntityName> selection
+            <entity_name_lower>_options = {f"{s['name']} ({s['email']})": s for s in <entity_name_lower>s}
+            selected_<entity_name_lower>_key = st.selectbox("Select <EntityName> to delete", list(<entity_name_lower>_options.keys()))
+
+            if selected_<entity_name_lower>_key:
+                selected_<entity_name_lower> = <entity_name_lower>_options[selected_<entity_name_lower>_key]
+
+                st.warning(f"⚠️ Are you sure you want to delete <EntityName> '{selected_<entity_name_lower>['name']}'?")
+                st.info(f"ID: {selected_<entity_name_lower>['id']} | Email: {selected_<entity_name_lower>['email']}")
+
+                if st.button("🗑️ Delete <EntityName>", type="primary"):
+                    try:
+                        # Send DELETE request
+                        response = requests.delete(f"{API_BASE_URL}{selected_<entity_name_lower>['id']}")
+
+                        if response.status_code == 204:
+                            st.success("✅ <EntityName> deleted successfully!")
+                            st.rerun()  # Refresh the page
+                        elif response.status_code == 404:
+                            st.error("❌ <EntityName> not found.")
+                        else:
+                            st.error(f"❌ Failed to delete <entity_name_lower>: {response.status_code}")
+
+                    except Exception as e:
+                        st.error(f"❌ Error deleting <entity_name_lower>: {str(e)}")
+        else:
+            st.error(f"Failed to fetch <entity_name_lower>s: {response.status_code}")
+
+    except Exception as e:
+        st.error(f"Error in delete form: {str(e)}")
+
+if __name__ == "__main__":
+    main()
+
+### Streamlit Component Example
+```python
+import streamlit as st
+import requests
+from config import Config
+
+def <entity_name_lower>_form(<entity_name_lower>_data=None, mode="create"):
+    """Reusable form component for <EntityName> creation/editing"""
+    API_BASE_URL = Config.get_api_endpoint_url("<entity_name_lower>s")
+
+    with st.form(f"{mode}_<entity_name_lower>_form"):
+        st.subheader(f"{mode.title()} <EntityName>")
+
+        # Form fields with validation
+        name = st.text_input(
+            "Name *",
+            value=<entity_name_lower>_data.get('name', '') if <entity_name_lower>_data else '',
+            placeholder="Enter full name",
+            help="Enter the <entity_name_lower>'s full name"
+        )
+
+        email = st.text_input(
+            "Email *",
+            value=<entity_name_lower>_data.get('email', '') if <entity_name_lower>_data else '',
+            placeholder="Enter email address",
+            help="Enter a valid email address"
+        )
+
+        # Submit button
+        submit_text = "Update <EntityName>" if mode == "edit" else "Create <EntityName>"
+        submitted = st.form_submit_button(submit_text, type="primary")
+
+        if submitted:
+            if not name or not email:
+                st.error("Please fill in all required fields.")
+                return False
+
+            # Prepare data
+            data = {
+                "name": name.strip(),
+                "email": email.strip().lower()
+            }
+
+            try:
+                if mode == "edit":
+                    response = requests.put(f"{API_BASE_URL}{<entity_name_lower>_data['id']}", json=data)
+                else:
+                    response = requests.post(API_BASE_URL, json=data)
+
+                if response.status_code in [200, 201]:
+                    st.success(f"✅ <EntityName> {mode}d successfully!")
+                    return True
+                else:
+                    st.error(f"❌ Failed to {mode} <entity_name_lower>: {response.status_code}")
+                    return False
+
+            except Exception as e:
+                st.error(f"❌ Error {mode}ing <entity_name_lower>: {str(e)}")
+                return False
+
+    return False
+```
+
+## TASK INSTRUCTIONS
+
+You are a FrontendSWEA (Software Engineering Autonomous Agent) specialized in frontend development. Your role is to generate high-quality Streamlit UI components for domain entity management.
+
+### RESPONSIBILITIES:
+1. **UI Generation**: Create intuitive and responsive Streamlit interfaces
+2. **User Experience**: Design user-friendly forms and data displays
+3. **Data Integration**: Connect UI components with backend APIs
+4. **Error Handling**: Implement comprehensive error handling and user feedback
+5. **Best Practices**: Follow Streamlit and UI/UX best practices
+
+### REQUIREMENTS:
+- Generate complete Streamlit applications with proper navigation
+- Create forms for CRUD operations (Create, Read, Update, Delete)
+- Implement data visualization and tables for entity display
+- Use centralized configuration for API endpoints
+- Include comprehensive error handling and user feedback
+- Follow responsive design principles
+- Ensure accessibility and usability
+- Maintain semantic coherence with business vocabulary
+
+### OUTPUT FORMAT:
+Provide complete, production-ready Streamlit code that can be directly used in the managed system. Include all necessary imports, proper error handling, and comprehensive documentation.
+
+### IMPORTANT NOTES:
+- Use the examples above as templates, replacing placeholders with actual entity names
+- Ensure all generated code follows Streamlit best practices and conventions
+- Include proper validation for all input fields
+- Implement comprehensive error handling for all edge cases
+- Maintain consistency with the existing codebase structure
+- Use centralized configuration for API endpoints

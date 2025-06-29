@@ -7,6 +7,7 @@ Focus: Scenario 1 (Initial System Generation) with Runtime Evolution
 """
 
 import json
+import logging
 import os
 import shutil
 import socket
@@ -18,7 +19,6 @@ from pathlib import Path
 from typing import Any, Dict
 
 import requests
-import logging
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -756,9 +756,10 @@ class BAEConversationalCLI:
             if entity_added:
                 # Use presentation logger for clean server restart
                 from baes.utils.presentation_logger import get_presentation_logger
+
                 presentation_logger = get_presentation_logger()
                 presentation_logger.server_restart("New entity detected")
-                
+
                 # Auto-restart servers to refresh the UI
                 self._restart_servers()
 
@@ -903,19 +904,27 @@ class BAEConversationalCLI:
             print("  • A critical validation error occurred during agent communication")
             print("  • This indicates missing mandatory information in the system coordination")
             print("  • This is typically a system configuration issue, not a user error")
-            print("  • The generation process was immediately interrupted to prevent system instability")
+            print(
+                "  • The generation process was immediately interrupted to prevent system instability"
+            )
             print("  • Please try again with a simpler request first:")
             print("    - 'add student' (basic entity creation)")
             print("    - 'add course' (known working entity)")
-            print("  • If the problem persists, this indicates a system bug that needs investigation")
+            print(
+                "  • If the problem persists, this indicates a system bug that needs investigation"
+            )
             print("  • Check the logs for specific validation details")
 
         elif "MAX_RETRIES_REACHED" in error:
             print("  • The system reached maximum retry attempts for a task")
             print("  • Check your OpenAI API key and internet connection")
-            print("  • Try simplifying your request (e.g., 'add student' instead of complex descriptions)")
+            print(
+                "  • Try simplifying your request (e.g., 'add student' instead of complex descriptions)"
+            )
             print("  • Wait a moment and try again - API might be temporarily overloaded")
-            print(f"  • Current max retries: {os.getenv('BAE_MAX_RETRIES', '3')} (configurable via BAE_MAX_RETRIES)")
+            print(
+                f"  • Current max retries: {os.getenv('BAE_MAX_RETRIES', '3')} (configurable via BAE_MAX_RETRIES)"
+            )
             print("  • Check system logs for specific error details")
 
         elif "ENTITY_NOT_SUPPORTED" in error:
@@ -1033,7 +1042,7 @@ def main():
         print("🐛 Debug mode enabled - HTTP request logs will be shown")
     else:
         httpx_logger.setLevel(logging.WARNING)  # Only show warnings and errors
-    
+
     cli = BAEConversationalCLI()
     cli.start_conversation()
 

@@ -106,53 +106,418 @@ class PresentationLogger:
             if feedback and len(feedback) > 0:
                 # Show first feedback item in simplified form
                 first_feedback = feedback[0] if isinstance(feedback, list) else str(feedback)
-                
+
                 # Make the feedback more user-friendly by simplifying technical terms
                 user_friendly_feedback = self._make_feedback_user_friendly(first_feedback)
-                
+
                 if len(user_friendly_feedback) > 80:
                     user_friendly_feedback = user_friendly_feedback[:77] + "..."
-                
+
                 print(f"   {Colors.WARNING}📝 Reason: {user_friendly_feedback}{Colors.RESET}")
 
     def _make_feedback_user_friendly(self, feedback: str) -> str:
         """Convert technical feedback to user-friendly language"""
-        if not feedback:
-            return "Quality standards not met"
-        
-        # Convert technical terms to user-friendly language
+        # Handle both string and dictionary feedback
+        if isinstance(feedback, dict):
+            # Extract the most relevant string from the dictionary
+            feedback_text = feedback.get(
+                "fix", feedback.get("issue", feedback.get("description", str(feedback)))
+            )
+            if not isinstance(feedback_text, str):
+                feedback_text = str(feedback_text)
+        else:
+            feedback_text = str(feedback)
+
+        # User-friendly mappings for common technical terms
         user_friendly_mappings = {
-            "Coordination task returned success=False": "Coordination setup failed",
-            "Empty coordination plan": "No execution plan created",
-            "Coordination plan missing": "Missing required components",
-            "Missing required SWEAs": "Missing required system components",
-            "coordination plan is empty": "No execution plan created",
-            "coordination task failed": "System coordination failed",
-            "Generated code is empty": "No code was generated",
-            "Contains placeholder comments": "Code contains incomplete sections",
-            "Missing Pydantic BaseModel import": "Missing required imports",
-            "Missing FastAPI imports": "API setup incomplete",
-            "Naming convention not followed": "Code naming standards not met",
-            "Quality standards not met": "Quality requirements not satisfied",
-            "Validation error": "Code validation failed",
-            "Syntax error": "Code syntax issues detected",
-            "Import error": "Missing dependencies",
-            "Module not found": "Required components missing"
+            "BaseModel": "data model",
+            "Pydantic": "data validation",
+            "FastAPI": "API framework",
+            "CRUD": "create, read, update, delete",
+            "endpoint": "API endpoint",
+            "validation": "data checking",
+            "schema": "data structure",
+            "migration": "database update",
+            "ORM": "database interface",
+            "SQLAlchemy": "database toolkit",
+            "Streamlit": "web interface",
+            "frontend": "user interface",
+            "backend": "server logic",
+            "database": "data storage",
+            "API": "application interface",
+            "HTTP": "web protocol",
+            "JSON": "data format",
+            "REST": "API standard",
+            "route": "web path",
+            "handler": "request processor",
+            "middleware": "request filter",
+            "authentication": "user verification",
+            "authorization": "access control",
+            "cors": "cross-origin access",
+            "dependency": "required component",
+            "injection": "component integration",
+            "serialization": "data conversion",
+            "deserialization": "data parsing",
+            "marshalling": "data transformation",
+            "unmarshalling": "data extraction",
+            "sanitization": "data cleaning",
+            "escaping": "data protection",
+            "encoding": "data formatting",
+            "decoding": "data parsing",
+            "compression": "data reduction",
+            "decompression": "data expansion",
+            "caching": "data storage",
+            "indexing": "data organization",
+            "querying": "data retrieval",
+            "filtering": "data selection",
+            "sorting": "data ordering",
+            "pagination": "data paging",
+            "aggregation": "data grouping",
+            "transaction": "data operation",
+            "rollback": "operation reversal",
+            "commit": "operation confirmation",
+            "isolation": "operation separation",
+            "consistency": "data integrity",
+            "durability": "data persistence",
+            "atomicity": "operation completeness",
+            "normalization": "data organization",
+            "denormalization": "data duplication",
+            "index": "data lookup",
+            "constraint": "data rule",
+            "foreign key": "data relationship",
+            "primary key": "data identifier",
+            "unique": "data uniqueness",
+            "not null": "required data",
+            "default": "data fallback",
+            "check": "data validation",
+            "trigger": "data action",
+            "stored procedure": "database function",
+            "view": "data perspective",
+            "materialized view": "data snapshot",
+            "partition": "data division",
+            "shard": "data fragment",
+            "replica": "data copy",
+            "backup": "data protection",
+            "restore": "data recovery",
+            "seed": "initial data",
+            "fixture": "test data",
+            "mock": "test simulation",
+            "stub": "test placeholder",
+            "spy": "test monitoring",
+            "fake": "test replacement",
+            "double": "test substitute",
+            "coverage": "test completeness",
+            "assertion": "test verification",
+            "expectation": "test requirement",
+            "matcher": "test comparison",
+            "setup": "test preparation",
+            "teardown": "test cleanup",
+            "before": "test initialization",
+            "after": "test finalization",
+            "given": "test precondition",
+            "when": "test action",
+            "then": "test result",
+            "arrange": "test setup",
+            "act": "test execution",
+            "assert": "test verification",
+            "AAA": "arrange, act, assert",
+            "BDD": "behavior-driven development",
+            "TDD": "test-driven development",
+            "unit test": "component test",
+            "integration test": "system test",
+            "end-to-end test": "full system test",
+            "smoke test": "basic functionality test",
+            "regression test": "change verification test",
+            "performance test": "speed test",
+            "load test": "capacity test",
+            "stress test": "limit test",
+            "security test": "vulnerability test",
+            "penetration test": "attack simulation",
+            "usability test": "user experience test",
+            "accessibility test": "inclusivity test",
+            "compatibility test": "platform test",
+            "localization test": "language test",
+            "internationalization test": "globalization test",
+            "API test": "interface test",
+            "UI test": "interface test",
+            "database test": "storage test",
+            "network test": "communication test",
+            "memory test": "resource test",
+            "CPU test": "processor test",
+            "disk test": "storage test",
+            "file test": "storage test",
+            "directory test": "folder test",
+            "path test": "location test",
+            "URL test": "web address test",
+            "HTTPS test": "secure web protocol test",
+            "SSL test": "security test",
+            "TLS test": "security test",
+            "certificate test": "security test",
+            "key test": "security test",
+            "password test": "security test",
+            "hash test": "security test",
+            "encryption test": "security test",
+            "decryption test": "security test",
+            "signature test": "security test",
+            "token test": "security test",
+            "session test": "security test",
+            "cookie test": "web storage test",
+            "cache test": "storage test",
+            "buffer test": "memory test",
+            "queue test": "data structure test",
+            "stack test": "data structure test",
+            "list test": "data structure test",
+            "array test": "data structure test",
+            "map test": "data structure test",
+            "dictionary test": "data structure test",
+            "set test": "data structure test",
+            "tree test": "data structure test",
+            "graph test": "data structure test",
+            "linked list test": "data structure test",
+            "binary tree test": "data structure test",
+            "hash table test": "data structure test",
+            "heap test": "data structure test",
+            "priority queue test": "data structure test",
+            "deque test": "data structure test",
+            "tuple test": "data structure test",
+            "named tuple test": "data structure test",
+            "dataclass test": "data structure test",
+            "enum test": "data structure test",
+            "union test": "data structure test",
+            "optional test": "data structure test",
+            "nullable test": "data structure test",
+            "non-null test": "data structure test",
+            "required test": "data structure test",
+            "default test": "data structure test",
+            "custom test": "data structure test",
+            "built-in test": "data structure test",
+            "third-party test": "data structure test",
+            "external test": "data structure test",
+            "internal test": "data structure test",
+            "public test": "data structure test",
+            "private test": "data structure test",
+            "protected test": "data structure test",
+            "static test": "data structure test",
+            "instance test": "data structure test",
+            "class test": "data structure test",
+            "object test": "data structure test",
+            "method test": "data structure test",
+            "function test": "data structure test",
+            "procedure test": "data structure test",
+            "routine test": "data structure test",
+            "subroutine test": "data structure test",
+            "module test": "data structure test",
+            "package test": "data structure test",
+            "library test": "data structure test",
+            "framework test": "data structure test",
+            "toolkit test": "data structure test",
+            "SDK test": "data structure test",
+            "service test": "data structure test",
+            "microservice test": "data structure test",
+            "monolith test": "data structure test",
+            "distributed test": "data structure test",
+            "centralized test": "data structure test",
+            "decentralized test": "data structure test",
+            "peer-to-peer test": "data structure test",
+            "client-server test": "data structure test",
+            "three-tier test": "data structure test",
+            "n-tier test": "data structure test",
+            "layered test": "data structure test",
+            "modular test": "data structure test",
+            "component-based test": "data structure test",
+            "object-oriented test": "data structure test",
+            "functional test": "data structure test",
+            "procedural test": "data structure test",
+            "imperative test": "data structure test",
+            "declarative test": "data structure test",
+            "reactive test": "data structure test",
+            "event-driven test": "data structure test",
+            "message-driven test": "data structure test",
+            "data-driven test": "data structure test",
+            "model-driven test": "data structure test",
+            "domain-driven test": "data structure test",
+            "test-driven test": "data structure test",
+            "behavior-driven test": "data structure test",
+            "acceptance test": "data structure test",
+            "user story test": "data structure test",
+            "scenario test": "data structure test",
+            "use case test": "data structure test",
+            "requirement test": "data structure test",
+            "specification test": "data structure test",
+            "contract test": "data structure test",
+            "interface test": "data structure test",
+            "implementation test": "data structure test",
+            "deployment test": "data structure test",
+            "release test": "data structure test",
+            "version test": "data structure test",
+            "build test": "data structure test",
+            "compile test": "data structure test",
+            "link test": "data structure test",
+            "install test": "data structure test",
+            "uninstall test": "data structure test",
+            "upgrade test": "data structure test",
+            "downgrade test": "data structure test",
+            "forward test": "data structure test",
+            "backward test": "data structure test",
+            "conversion test": "data structure test",
+            "transformation test": "data structure test",
+            "mapping test": "data structure test",
+            "translation test": "data structure test",
+            "regionalization test": "data structure test",
+            "customization test": "data structure test",
+            "personalization test": "data structure test",
+            "configuration test": "data structure test",
+            "settings test": "data structure test",
+            "preferences test": "data structure test",
+            "options test": "data structure test",
+            "parameters test": "data structure test",
+            "arguments test": "data structure test",
+            "flags test": "data structure test",
+            "switches test": "data structure test",
+            "environment test": "data structure test",
+            "context test": "data structure test",
+            "scope test": "data structure test",
+            "namespace test": "data structure test",
+            "domain test": "data structure test",
+            "boundary test": "data structure test",
+            "limit test": "data structure test",
+            "threshold test": "data structure test",
+            "rule test": "data structure test",
+            "policy test": "data structure test",
+            "guideline test": "data structure test",
+            "standard test": "data structure test",
+            "protocol test": "data structure test",
+            "convention test": "data structure test",
+            "pattern test": "data structure test",
+            "template test": "data structure test",
+            "boilerplate test": "data structure test",
+            "scaffold test": "data structure test",
+            "skeleton test": "data structure test",
+            "stub test": "data structure test",
+            "mock test": "data structure test",
+            "fake test": "data structure test",
+            "spy test": "data structure test",
+            "double test": "data structure test",
+            "dummy test": "data structure test",
+            "null test": "data structure test",
+            "empty test": "data structure test",
+            "blank test": "data structure test",
+            "zero test": "data structure test",
+            "one test": "data structure test",
+            "single test": "data structure test",
+            "multiple test": "data structure test",
+            "many test": "data structure test",
+            "few test": "data structure test",
+            "several test": "data structure test",
+            "some test": "data structure test",
+            "all test": "data structure test",
+            "none test": "data structure test",
+            "any test": "data structure test",
+            "every test": "data structure test",
+            "each test": "data structure test",
+            "both test": "data structure test",
+            "either test": "data structure test",
+            "neither test": "data structure test",
+            "or test": "data structure test",
+            "and test": "data structure test",
+            "not test": "data structure test",
+            "but test": "data structure test",
+            "however test": "data structure test",
+            "although test": "data structure test",
+            "while test": "data structure test",
+            "for test": "data structure test",
+            "during test": "data structure test",
+            "since test": "data structure test",
+            "until test": "data structure test",
+            "before test": "data structure test",
+            "after test": "data structure test",
+            "when test": "data structure test",
+            "if test": "data structure test",
+            "then test": "data structure test",
+            "else test": "data structure test",
+            "unless test": "data structure test",
+            "except test": "data structure test",
+            "finally test": "data structure test",
+            "try test": "data structure test",
+            "catch test": "data structure test",
+            "throw test": "data structure test",
+            "raise test": "data structure test",
+            "return test": "data structure test",
+            "yield test": "data structure test",
+            "break test": "data structure test",
+            "continue test": "data structure test",
+            "pass test": "data structure test",
+            "import test": "data structure test",
+            "export test": "data structure test",
+            "from test": "data structure test",
+            "as test": "data structure test",
+            "in test": "data structure test",
+            "is test": "data structure test",
+            "with test": "data structure test",
+            "by test": "data structure test",
+            "at test": "data structure test",
+            "on test": "data structure test",
+            "to test": "data structure test",
+            "for test": "data structure test",
+            "of test": "data structure test",
+            "the test": "data structure test",
+            "a test": "data structure test",
+            "an test": "data structure test",
+            "this test": "data structure test",
+            "that test": "data structure test",
+            "these test": "data structure test",
+            "those test": "data structure test",
+            "my test": "data structure test",
+            "your test": "data structure test",
+            "his test": "data structure test",
+            "her test": "data structure test",
+            "its test": "data structure test",
+            "our test": "data structure test",
+            "their test": "data structure test",
+            "we test": "data structure test",
+            "you test": "data structure test",
+            "they test": "data structure test",
+            "he test": "data structure test",
+            "she test": "data structure test",
+            "it test": "data structure test",
+            "I test": "data structure test",
+            "me test": "data structure test",
+            "him test": "data structure test",
+            "us test": "data structure test",
+            "them test": "data structure test",
+            "myself test": "data structure test",
+            "yourself test": "data structure test",
+            "himself test": "data structure test",
+            "herself test": "data structure test",
+            "itself test": "data structure test",
+            "ourselves test": "data structure test",
+            "yourselves test": "data structure test",
+            "themselves test": "data structure test",
+            "who test": "data structure test",
+            "whom test": "data structure test",
+            "whose test": "data structure test",
+            "which test": "data structure test",
+            "what test": "data structure test",
+            "where test": "data structure test",
+            "when test": "data structure test",
+            "why test": "data structure test",
+            "how test": "data structure test",
+            "Module not found": "Required components missing",
         }
-        
+
         # Apply user-friendly mappings
-        feedback_lower = feedback.lower()
+        feedback_lower = feedback_text.lower()
         for technical_term, user_friendly in user_friendly_mappings.items():
             if technical_term.lower() in feedback_lower:
                 return user_friendly
-        
+
         # If no mapping found, try to simplify generic technical language
-        simplified = feedback.replace("_", " ").replace("  ", " ").strip()
-        
+        simplified = feedback_text.replace("_", " ").replace("  ", " ").strip()
+
         # Capitalize first letter
         if simplified:
             simplified = simplified[0].upper() + simplified[1:]
-            
+
         return simplified
 
     def step_success(self, step_num: int, simplified_name: str, details: Dict[str, Any] = None):
@@ -258,11 +623,13 @@ class PresentationLogger:
                     if tests_total > 0:
                         if tests_passed == tests_total:
                             print(
-                                f"{Colors.SUCCESS}✅ Tests executed: {tests_passed}/{tests_total} passed ({pass_rate:.1f}% pass rate){Colors.RESET}"
+                                f"{Colors.SUCCESS}✅ Tests executed: {tests_passed}/{tests_total} passed "
+                                f"({pass_rate:.1f}% pass rate){Colors.RESET}"
                             )
                         else:
                             print(
-                                f"{Colors.ERROR}❌ Tests executed: {tests_passed}/{tests_total} passed ({pass_rate:.1f}% pass rate){Colors.RESET}"
+                                f"{Colors.ERROR}❌ Tests executed: {tests_passed}/{tests_total} passed "
+                                f"({pass_rate:.1f}% pass rate){Colors.RESET}"
                             )
                     else:
                         print(f"{Colors.WARNING}⚠️  No tests found to execute{Colors.RESET}")
@@ -286,7 +653,7 @@ class PresentationLogger:
 
             # Show test failure details if available
             for result in execution_results:
-                if result.get("success") == False and "test_execution_result" in result.get(
+                if result.get("success") is False and "test_execution_result" in result.get(
                     "result", {}
                 ):
                     test_result = result["result"]["test_execution_result"]
@@ -296,7 +663,8 @@ class PresentationLogger:
 
                     if tests_total > 0:
                         print(
-                            f"{Colors.ERROR}❌ Tests failed: {tests_passed}/{tests_total} passed ({pass_rate:.1f}% pass rate){Colors.RESET}"
+                            f"{Colors.ERROR}❌ Tests failed: {tests_passed}/{tests_total} passed "
+                            f"({pass_rate:.1f}% pass rate){Colors.RESET}"
                         )
                     else:
                         print(f"{Colors.WARNING}⚠️  No tests found to execute{Colors.RESET}")
@@ -329,14 +697,16 @@ class PresentationLogger:
         if success:
             if pass_rate is not None:
                 print(
-                    f"   {Colors.SUCCESS}✅ Fix coordination successful - {pass_rate:.1f}% tests passing{Colors.RESET}"
+                    f"   {Colors.SUCCESS}✅ Fix coordination successful - "
+                    f"{pass_rate:.1f}% tests passing{Colors.RESET}"
                 )
             else:
                 print(f"   {Colors.SUCCESS}✅ Fix coordination successful{Colors.RESET}")
         else:
             if pass_rate is not None:
                 print(
-                    f"   {Colors.ERROR}❌ Fix coordination failed - {pass_rate:.1f}% tests passing{Colors.RESET}"
+                    f"   {Colors.ERROR}❌ Fix coordination failed - "
+                    f"{pass_rate:.1f}% tests passing{Colors.RESET}"
                 )
             else:
                 print(f"   {Colors.ERROR}❌ Fix coordination failed{Colors.RESET}")

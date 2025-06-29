@@ -1,19 +1,19 @@
+import csv
+import json
 import logging
 import os
 import sqlite3
-from typing import Any, Dict, List
-import json
-import csv
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, List
 
-from ..agents.base_agent import BaseAgent
-from ..core.managed_system_manager import ManagedSystemManager
-from ..llm.openai_client import OpenAIClient
-# Utility for conditional debug logging
-from ..domain_entities.base_bae import is_debug_mode
+from baes.core.managed_system_manager import ManagedSystemManager
+from baes.domain_entities.base_bae import BaseAgent, is_debug_mode
+from baes.llm.openai_client import OpenAIClient
+from config import Config
 
 logger = logging.getLogger(__name__)
+
 
 # Stage 2 Improvement #8: Feedback Loop Analytics for DatabaseSWEA
 class FeedbackLoopAnalytics:
@@ -21,115 +21,140 @@ class FeedbackLoopAnalytics:
     Stage 2 Improvement #8: Feedback Loop Logging and Analytics
     Tracks all feedback interactions between TechLeadSWEA and DatabaseSWEA in CSV format.
     """
-    
+
     def __init__(self):
-        self.analytics_dir = Path("logs/feedback_analytics")
+        # Use tests/.temp for analytics during tests
+        if Config.IS_TEST_ENVIRONMENT:
+            self.analytics_dir = Path("tests/.temp")
+        else:
+            self.analytics_dir = Path("logs/feedback_analytics")
         self.analytics_dir.mkdir(parents=True, exist_ok=True)
         self.csv_file = self.analytics_dir / "database_feedback_analytics.csv"
         self._ensure_csv_headers()
-    
+
     def _ensure_csv_headers(self):
         """Ensure CSV file exists with proper headers for pandas DataFrame compatibility"""
         if not self.csv_file.exists():
             headers = [
-                'timestamp',
-                'session_id', 
-                'entity',
-                'feedback_round',
-                'techlead_feedback_count',
-                'feedback_categories',
-                'database_response_time_seconds',
-                'feedback_addressed',
-                'retry_count',
-                'final_success',
-                'feedback_text_length',
-                'database_changes_made',
-                'improvement_areas'
+                "timestamp",
+                "session_id",
+                "entity",
+                "feedback_round",
+                "techlead_feedback_count",
+                "feedback_categories",
+                "database_response_time_seconds",
+                "feedback_addressed",
+                "retry_count",
+                "final_success",
+                "feedback_text_length",
+                "database_changes_made",
+                "improvement_areas",
             ]
-            with open(self.csv_file, 'w', newline='', encoding='utf-8') as f:
+            with open(self.csv_file, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerow(headers)
-    
-    def log_feedback_interaction(self, session_id: str, entity: str, 
-                               feedback_round: int, techlead_feedback: List[str],
-                               database_response_time: float, feedback_addressed: bool,
-                               retry_count: int, final_success: bool, 
-                               database_changes_made: List[str] = None):
+
+    def log_feedback_interaction(
+        self,
+        session_id: str,
+        entity: str,
+        feedback_round: int,
+        techlead_feedback: List[str],
+        database_response_time: float,
+        feedback_addressed: bool,
+        retry_count: int,
+        final_success: bool,
+        database_changes_made: List[str] = None,
+    ):
         """Log feedback loop interaction to CSV for analytics"""
         try:
             # Categorize feedback for analytics
             feedback_categories = self._categorize_feedback(techlead_feedback)
             improvement_areas = self._extract_improvement_areas(techlead_feedback)
-            
+
             row_data = [
                 datetime.now().isoformat(),
                 session_id,
                 entity,
                 feedback_round,
                 len(techlead_feedback),
-                ';'.join(feedback_categories),
+                ";".join(feedback_categories),
                 round(database_response_time, 2),
                 feedback_addressed,
                 retry_count,
                 final_success,
                 sum(len(fb) for fb in techlead_feedback),
-                ';'.join(database_changes_made or []),
-                ';'.join(improvement_areas)
+                ";".join(database_changes_made or []),
+                ";".join(improvement_areas),
             ]
-            
-            with open(self.csv_file, 'a', newline='', encoding='utf-8') as f:
+
+            with open(self.csv_file, "a", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerow(row_data)
-                
+
             logger.info(f"📊 Database feedback analytics logged: {entity} round {feedback_round}")
-            
+
         except Exception as e:
             logger.warning(f"Failed to log database feedback analytics: {e}")
-    
+
     def _categorize_feedback(self, feedback_list: List[str]) -> List[str]:
         """Categorize feedback for analytics purposes"""
         categories = set()
-        feedback_text = ' '.join(feedback_list).lower()
-        
+        feedback_text = " ".join(feedback_list).lower()
+
         # Schema feedback
-        if any(term in feedback_text for term in ['schema', 'table', 'column', 'field', 'structure']):
-            categories.add('schema')
-        
-        # Performance feedback  
-        if any(term in feedback_text for term in ['performance', 'index', 'query', 'optimization', 'slow']):
-            categories.add('performance')
-            
+        if any(
+            term in feedback_text for term in ["schema", "table", "column", "field", "structure"]
+        ):
+            categories.add("schema")
+
+        # Performance feedback
+        if any(
+            term in feedback_text
+            for term in ["performance", "index", "query", "optimization", "slow"]
+        ):
+            categories.add("performance")
+
         # Integrity feedback
-        if any(term in feedback_text for term in ['constraint', 'foreign key', 'primary key', 'unique', 'integrity']):
-            categories.add('integrity')
-            
+        if any(
+            term in feedback_text
+            for term in ["constraint", "foreign key", "primary key", "unique", "integrity"]
+        ):
+            categories.add("integrity")
+
         # Connection feedback
-        if any(term in feedback_text for term in ['connection', 'pool', 'timeout', 'session', 'context']):
-            categories.add('connection')
-            
+        if any(
+            term in feedback_text
+            for term in ["connection", "pool", "timeout", "session", "context"]
+        ):
+            categories.add("connection")
+
         # Migration feedback
-        if any(term in feedback_text for term in ['migration', 'alter', 'drop', 'create', 'modify']):
-            categories.add('migration')
-            
-        return list(categories) if categories else ['general']
-    
+        if any(
+            term in feedback_text for term in ["migration", "alter", "drop", "create", "modify"]
+        ):
+            categories.add("migration")
+
+        return list(categories) if categories else ["general"]
+
     def _extract_improvement_areas(self, feedback_list: List[str]) -> List[str]:
         """Extract specific improvement areas from feedback"""
         areas = set()
-        feedback_text = ' '.join(feedback_list).lower()
-        
-        if 'scalability' in feedback_text:
-            areas.add('scalability')
-        if 'security' in feedback_text:
-            areas.add('security') 
-        if 'backup' in feedback_text:
-            areas.add('backup_recovery')
-        if 'transaction' in feedback_text:
-            areas.add('transaction_management')
-        if 'normalization' in feedback_text:
-            areas.add('normalization')
-            
-        return list(areas) if areas else ['data_management']
+        feedback_text = " ".join(feedback_list).lower()
+
+        if "scalability" in feedback_text:
+            areas.add("scalability")
+        if "security" in feedback_text:
+            areas.add("security")
+        if "backup" in feedback_text:
+            areas.add("backup_recovery")
+        if "transaction" in feedback_text:
+            areas.add("transaction_management")
+        if "normalization" in feedback_text:
+            areas.add("normalization")
+
+        return list(areas) if areas else ["data_management"]
+
 
 class DatabaseSWEA(BaseAgent):
     """SWEA responsible for preparing SQLite database schemas based on entity attributes."""
@@ -155,7 +180,9 @@ class DatabaseSWEA(BaseAgent):
         Stage 1 Improvement #10: Explicit warnings to prevent LLM from ignoring instructions.
         """
         return """
-🚨 CRITICAL WARNING: If you ignore ANY of the following instructions, your output will be REJECTED and you will be required to regenerate it. You MUST address EVERY requirement listed below. Failure to comply will result in immediate rejection.
+🚨 CRITICAL WARNING: If you ignore ANY of the following instructions, your output will be REJECTED \
+    and you will be required to regenerate it. You MUST address EVERY requirement listed below. \
+    Failure to comply will result in immediate rejection.
 
 ⚠️  DO NOT IGNORE ANY INSTRUCTIONS - Your response will be validated against ALL requirements.
 ⚠️  DO NOT SKIP ANY STEPS - Every instruction must be implemented exactly as specified.
@@ -187,26 +214,32 @@ COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and 
         except Exception as e:
             return self.create_error_response(task, str(e), "execution_error")
 
-    def _interpret_feedback_for_database_setup(self, feedback: List[str], entity: str, original_attributes: List[str]) -> Dict[str, Any]:
+    def _interpret_feedback_for_database_setup(
+        self, feedback: List[str], entity: str, original_attributes: List[str]
+    ) -> Dict[str, Any]:
         """
         Generic feedback interpretation using LLM to understand what database changes are needed.
         This approach can handle any type of feedback without hardcoded conditions.
         """
         if not feedback:
-            logger.debug(f"DatabaseSWEA: No feedback provided, using original attributes for {entity}")
+            logger.debug(
+                f"DatabaseSWEA: No feedback provided, using original attributes for {entity}"
+            )
             return {
                 "attributes": original_attributes,
                 "additional_requirements": [],
                 "constraints": [],
-                "modifications": []
+                "modifications": [],
             }
 
         feedback_text = "\n".join(feedback)
         logger.debug(f"DatabaseSWEA: Interpreting feedback for {entity}: {feedback_text}")
-        
+
         # Stage 4 Improvement #1: Get structured feedback for injection
-        structured_feedback = self._get_structured_feedback_injection(entity, "DatabaseSWEA", "setup_database")
-        
+        structured_feedback = self._get_structured_feedback_injection(
+            entity, "DatabaseSWEA", "setup_database"
+        )
+
         system_prompt = f"""You are a database design expert helping to interpret feedback for improving a database setup.
 
 {self._get_do_not_ignore_warning()}
@@ -221,7 +254,7 @@ CONTEXT:
 STAGE 3 IMPROVEMENT #4: PRIORITY-BASED FEEDBACK HANDLING
 TechLeadSWEA now provides categorized feedback with priority levels:
 - CRITICAL: Issues that prevent system from working (MUST fix immediately)
-- REQUIRED: Important functionality issues (MUST fix before approval)  
+- REQUIRED: Important functionality issues (MUST fix before approval)
 - OPTIONAL: Nice-to-have improvements (can ignore for now)
 
 You MUST focus on CRITICAL and REQUIRED feedback only. Ignore OPTIONAL suggestions.
@@ -261,21 +294,25 @@ Please provide the JSON response with database improvements."""
 
         # Stage 2 Improvement #8: Track analytics timing
         start_time = datetime.now()
-        
+
         try:
             response = self.llm_client.generate_response(user_prompt, system_prompt)
             logger.debug(f"DatabaseSWEA: Raw LLM response: {response}")
-            
+
             # Try to parse JSON response
             try:
                 interpretation = json.loads(response)
-                logger.info(f"DatabaseSWEA interpreted feedback: {interpretation.get('explanation', 'No explanation provided')}")
+                logger.info(
+                    f"DatabaseSWEA interpreted feedback: {interpretation.get('explanation', 'No explanation provided')}"
+                )
                 logger.debug(f"DatabaseSWEA: Parsed interpretation: {interpretation}")
-                
+
                 # Stage 2 Improvement #8: Log successful feedback interaction
                 response_time = (datetime.now() - start_time).total_seconds()
-                db_changes = interpretation.get("constraints", []) + interpretation.get("modifications", [])
-                
+                db_changes = interpretation.get("constraints", []) + interpretation.get(
+                    "modifications", []
+                )
+
                 self.feedback_analytics.log_feedback_interaction(
                     session_id=self.current_session_id,
                     entity=entity,
@@ -285,9 +322,9 @@ Please provide the JSON response with database improvements."""
                     feedback_addressed=True,
                     retry_count=0,
                     final_success=True,
-                    database_changes_made=db_changes
+                    database_changes_made=db_changes,
                 )
-                
+
                 return interpretation
             except json.JSONDecodeError as json_error:
                 error_msg = (
@@ -295,7 +332,7 @@ Please provide the JSON response with database improvements."""
                     f"Raw response: {response}"
                 )
                 logger.error(error_msg)
-                
+
                 # Stage 2 Improvement #8: Log failed feedback interaction
                 response_time = (datetime.now() - start_time).total_seconds()
                 self.feedback_analytics.log_feedback_interaction(
@@ -307,14 +344,14 @@ Please provide the JSON response with database improvements."""
                     feedback_addressed=False,
                     retry_count=0,
                     final_success=False,
-                    database_changes_made=[]
+                    database_changes_made=[],
                 )
-                
+
                 raise DatabaseGenerationError(error_msg) from json_error
-                
+
         except Exception as e:
             logger.error(f"DatabaseSWEA feedback interpretation failed: {e}")
-            
+
             # Stage 2 Improvement #8: Log failed feedback interaction
             response_time = (datetime.now() - start_time).total_seconds()
             self.feedback_analytics.log_feedback_interaction(
@@ -326,12 +363,14 @@ Please provide the JSON response with database improvements."""
                 feedback_addressed=False,
                 retry_count=0,
                 final_success=False,
-                database_changes_made=[]
+                database_changes_made=[],
             )
-            
+
             raise
 
-    def _get_structured_feedback_injection(self, entity: str, swea_agent: str, task_type: str) -> str:
+    def _get_structured_feedback_injection(
+        self, entity: str, swea_agent: str, task_type: str
+    ) -> str:
         """
         Stage 4 Improvement #1: Get structured feedback injection from TechLeadSWEA.
         Returns formatted feedback instructions for prompt injection.
@@ -339,23 +378,31 @@ Please provide the JSON response with database improvements."""
         try:
             # Import TechLeadSWEA to access feedback storage
             from baes.swea_agents.techlead_swea import TechLeadSWEA
-            
+
             # Create temporary TechLeadSWEA instance to access feedback storage
             techlead = TechLeadSWEA()
-            structured_instructions = techlead._retrieve_feedback_for_injection(entity, swea_agent, task_type)
-            
+            structured_instructions = techlead._retrieve_feedback_for_injection(
+                entity, swea_agent, task_type
+            )
+
             if structured_instructions:
-                logger.info(f"📤 DatabaseSWEA: Retrieved structured feedback for {entity}.{swea_agent}.{task_type}")
+                logger.info(
+                    f"📤 DatabaseSWEA: Retrieved structured feedback for {entity}.{swea_agent}.{task_type}"
+                )
                 return structured_instructions
             else:
-                logger.debug(f"📤 DatabaseSWEA: No structured feedback available for {entity}.{swea_agent}.{task_type}")
+                logger.debug(
+                    f"📤 DatabaseSWEA: No structured feedback available for {entity}.{swea_agent}.{task_type}"
+                )
                 return ""
-                
+
         except Exception as e:
             logger.warning(f"DatabaseSWEA: Failed to get structured feedback injection: {str(e)}")
             return ""
 
-    def _extract_attributes_from_text(self, response_text: str, original_attributes: List[str]) -> Dict[str, Any]:
+    def _extract_attributes_from_text(
+        self, response_text: str, original_attributes: List[str]
+    ) -> Dict[str, Any]:
         """Fallback method to extract attributes from LLM text response when JSON parsing fails"""
         # Type validation to avoid AttributeError on non-string response
         if not isinstance(response_text, str):
@@ -368,21 +415,21 @@ Please provide the JSON response with database improvements."""
 
         attributes = original_attributes.copy()
         modifications = []
-        
+
         # Look for common patterns in the response
-        lines = response_text.lower().split('\n')
+        lines = response_text.lower().split("\n")
         for line in lines:
-            if 'add' in line and ('field' in line or 'column' in line or 'attribute' in line):
+            if "add" in line and ("field" in line or "column" in line or "attribute" in line):
                 modifications.append(f"Suggested addition from text: {line.strip()}")
-            elif 'remove' in line and ('field' in line or 'column' in line or 'attribute' in line):
+            elif "remove" in line and ("field" in line or "column" in line or "attribute" in line):
                 modifications.append(f"Suggested removal from text: {line.strip()}")
-        
+
         return {
             "attributes": attributes,
             "additional_requirements": [],
             "constraints": [],
             "modifications": modifications,
-            "explanation": "Extracted information from text response (JSON parsing failed)"
+            "explanation": "Extracted information from text response (JSON parsing failed)",
         }
 
     def _validate_interpretation_structure(self, interpretation: Dict[str, Any]) -> Dict[str, Any]:
@@ -392,13 +439,15 @@ Please provide the JSON response with database improvements."""
             "additional_requirements": [],
             "constraints": [],
             "modifications": [],
-            "explanation": interpretation.get("explanation", "No explanation provided")
+            "explanation": interpretation.get("explanation", "No explanation provided"),
         }
-        
+
         # Normalize attributes to consistent string format
         raw_attributes = interpretation.get("attributes", [])
-        logger.debug(f"DatabaseSWEA: Processing {len(raw_attributes)} attributes with types: {[type(attr) for attr in raw_attributes]}")
-        
+        logger.debug(
+            f"DatabaseSWEA: Processing {len(raw_attributes)} attributes with types: {[type(attr) for attr in raw_attributes]}"
+        )
+
         for attr in raw_attributes:
             if isinstance(attr, dict):
                 # Convert dict to "name:type" string format
@@ -412,14 +461,18 @@ Please provide the JSON response with database improvements."""
                 # Fallback - convert to string
                 str_attr = str(attr)
                 validated["attributes"].append(str_attr)
-                logger.warning(f"DatabaseSWEA: Converted unexpected attribute type {type(attr)} to string: {str_attr}")
-        
+                logger.warning(
+                    f"DatabaseSWEA: Converted unexpected attribute type {type(attr)} to string: {str_attr}"
+                )
+
         # Ensure other fields are lists of strings
         for field in ["additional_requirements", "constraints", "modifications"]:
             raw_list = interpretation.get(field, [])
             validated[field] = [str(item) for item in raw_list if item]
-        
-        logger.debug(f"DatabaseSWEA: Validated interpretation with {len(validated['attributes'])} normalized attributes")
+
+        logger.debug(
+            f"DatabaseSWEA: Validated interpretation with {len(validated['attributes'])} normalized attributes"
+        )
         return validated
 
     def _create_fallback_database(self, entity: str, db_file: str) -> Dict[str, Any]:
@@ -431,7 +484,7 @@ Please provide the JSON response with database improvements."""
                 "id INTEGER PRIMARY KEY AUTOINCREMENT",
                 "name TEXT NOT NULL",
                 "email TEXT",
-                "created_at TEXT DEFAULT CURRENT_TIMESTAMP"
+                "created_at TEXT DEFAULT CURRENT_TIMESTAMP",
             ]
             columns_sql_str = ", ".join(basic_columns)
 
@@ -452,30 +505,38 @@ Please provide the JSON response with database improvements."""
                     "additional_requirements": [],
                     "constraints": [],
                     "modifications": ["Used fallback schema due to interpretation error"],
-                    "explanation": "Fallback database created with basic schema"
-                }
+                    "explanation": "Fallback database created with basic schema",
+                },
             }
-            
+
             logger.info(f"DatabaseSWEA: Created fallback database for {entity} at {db_file}")
             return result
-            
+
         except Exception as e:
             logger.error(f"DatabaseSWEA: Fallback database creation failed: {e}")
             raise
 
-    def _apply_database_improvements(self, interpretation: Dict[str, Any], entity: str, db_file: str) -> Dict[str, Any]:
+    def _apply_database_improvements(
+        self, interpretation: Dict[str, Any], entity: str, db_file: str
+    ) -> Dict[str, Any]:
         """Apply the interpreted improvements to the database setup"""
         try:
             # Validate and normalize interpretation structure (Phase 1 fix)
             interpretation = self._validate_interpretation_structure(interpretation)
-            
+
             attributes = interpretation.get("attributes", [])
             additional_requirements = interpretation.get("additional_requirements", [])
             constraints = interpretation.get("constraints", [])
             modifications = interpretation.get("modifications", [])
-            
+
             # Map Python types → SQLite
-            type_map = {"str": "TEXT", "int": "INTEGER", "float": "REAL", "date": "TEXT", "bool": "INTEGER"}
+            type_map = {
+                "str": "TEXT",
+                "int": "INTEGER",
+                "float": "REAL",
+                "date": "TEXT",
+                "bool": "INTEGER",
+            }
 
             # Build column definitions - always start with ID column
             columns_sql: List[str] = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
@@ -496,9 +557,11 @@ Please provide the JSON response with database improvements."""
                     logger.debug(f"DatabaseSWEA: Processing string attribute: {name}:{typ}")
                 else:
                     # Fallback for unexpected formats (Phase 1 fix)
-                    logger.warning(f"DatabaseSWEA: Unexpected attribute format: {attr} (type: {type(attr)})")
+                    logger.warning(
+                        f"DatabaseSWEA: Unexpected attribute format: {attr} (type: {type(attr)})"
+                    )
                     name, typ = str(attr), "str"
-                
+
                 # Sanitize field name
                 name = name.replace(" ", "_").lower()
                 sql_type = type_map.get(typ.replace("Optional[", "").replace("]", ""), "TEXT")
@@ -509,12 +572,12 @@ Please provide the JSON response with database improvements."""
 
             with sqlite3.connect(db_file) as conn:
                 cursor = conn.cursor()
-                
+
                 # Drop and recreate table to apply all changes
                 # In production, this would use ALTER TABLE for data preservation
                 cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
                 cursor.execute(f"CREATE TABLE {table_name} ({columns_sql_str})")
-                
+
                 # Apply additional constraints if specified
                 for constraint in constraints:
                     try:
@@ -522,7 +585,7 @@ Please provide the JSON response with database improvements."""
                         logger.info(f"Applied database constraint: {constraint}")
                     except Exception as e:
                         logger.warning(f"Could not apply constraint '{constraint}': {e}")
-                
+
                 conn.commit()
 
             result = {
@@ -536,18 +599,22 @@ Please provide the JSON response with database improvements."""
                     "additional_requirements": additional_requirements,
                     "constraints": constraints,
                     "modifications": modifications,
-                    "explanation": interpretation.get("explanation", "No explanation provided")
-                }
+                    "explanation": interpretation.get("explanation", "No explanation provided"),
+                },
             }
-            
-            logger.info(f"DatabaseSWEA applied improvements based on feedback: {interpretation.get('explanation', 'No explanation')}")
+
+            logger.info(
+                f"DatabaseSWEA applied improvements based on feedback: {interpretation.get('explanation', 'No explanation')}"
+            )
             return result
-            
+
         except Exception as e:
             logger.error(f"Failed to apply database improvements: {e}")
             logger.error(f"Interpretation data: {interpretation}")
-            logger.error(f"Attribute types: {[type(attr) for attr in interpretation.get('attributes', [])]}")
-            
+            logger.error(
+                f"Attribute types: {[type(attr) for attr in interpretation.get('attributes', [])]}"
+            )
+
             # Provide fallback database creation with basic schema (Phase 1 fix)
             logger.info("DatabaseSWEA: Attempting fallback database creation...")
             return self._create_fallback_database(entity, db_file)
@@ -557,18 +624,22 @@ Please provide the JSON response with database improvements."""
         """Create SQLite database and a basic table for the entity with feedback-aware improvements."""
         entity = payload.get("entity", "Student")
         attributes: List[str] = payload.get("attributes", [])
-        
+
         # Extract feedback information from payload
         techlead_feedback = payload.get("techlead_feedback", [])
         previous_errors = payload.get("previous_errors", [])
         expected_output = payload.get("expected_output", "")
-        
+
         # Combine all feedback sources
         all_feedback = []
         if techlead_feedback:
-            all_feedback.extend(techlead_feedback if isinstance(techlead_feedback, list) else [techlead_feedback])
+            all_feedback.extend(
+                techlead_feedback if isinstance(techlead_feedback, list) else [techlead_feedback]
+            )
         if previous_errors:
-            all_feedback.extend(previous_errors if isinstance(previous_errors, list) else [previous_errors])
+            all_feedback.extend(
+                previous_errors if isinstance(previous_errors, list) else [previous_errors]
+            )
         if expected_output:
             all_feedback.append(f"Expected output: {expected_output}")
 
@@ -580,15 +651,19 @@ Please provide the JSON response with database improvements."""
         os.makedirs(os.path.dirname(db_file), exist_ok=True)
 
         # Interpret feedback generically using LLM
-        interpretation = self._interpret_feedback_for_database_setup(all_feedback, entity, attributes)
-        
+        interpretation = self._interpret_feedback_for_database_setup(
+            all_feedback, entity, attributes
+        )
+
         # Apply the interpreted improvements
         result = self._apply_database_improvements(interpretation, entity, db_file)
 
         # Ensure managed system structure is updated
         self.managed_system_manager.ensure_managed_system_structure()
 
-        logger.info(f"Managed system database created/updated at {db_file} with feedback-aware improvements")
+        logger.info(
+            f"Managed system database created/updated at {db_file} with feedback-aware improvements"
+        )
         return self.create_success_response("setup_database", result)
 
     def _migrate_schema(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -597,38 +672,44 @@ Please provide the JSON response with database improvements."""
             entity = payload.get("entity", "Student")
             attributes = payload.get("attributes", [])
             feedback = payload.get("feedback", [])
-            
+
             logger.info(f"🔄 DatabaseSWEA: Migrating schema for {entity} entity")
-            
+
             # Interpret feedback for schema migration
-            interpretation = self._interpret_feedback_for_database_setup(feedback, entity, attributes)
+            interpretation = self._interpret_feedback_for_database_setup(
+                feedback, entity, attributes
+            )
             interpretation = self._validate_interpretation_structure(interpretation)
-            
+
             # Get database file path
-            db_file = self.managed_system_manager.managed_system_path / "app" / "database" / "academic.db"
-            
+            db_file = (
+                self.managed_system_manager.managed_system_path / "app" / "database" / "academic.db"
+            )
+
             # Apply schema migration
             result = self._apply_schema_migration(interpretation, entity, str(db_file))
-            
+
             logger.info(f"✅ DatabaseSWEA: Schema migration completed for {entity}")
             return self.create_success_response("migrate_schema", result)
-            
+
         except Exception as e:
             logger.error(f"❌ DatabaseSWEA schema migration failed: {str(e)}")
             return self.create_error_response("migrate_schema", str(e), "migration_error")
 
-    def _apply_schema_migration(self, interpretation: Dict[str, Any], entity: str, db_file: str) -> Dict[str, Any]:
+    def _apply_schema_migration(
+        self, interpretation: Dict[str, Any], entity: str, db_file: str
+    ) -> Dict[str, Any]:
         """Apply schema migration based on interpretation"""
         try:
             table_name = entity.lower() + "s"
-            
+
             # Get current schema
-            current_columns = self._get_current_table_schema(db_file, table_name)
-            
+            # current_columns = self._get_current_table_schema(db_file, table_name)
+
             # Build new schema from interpretation
             new_attributes = interpretation.get("attributes", [])
             new_columns = []
-            
+
             for attr in new_attributes:
                 if ":" in attr:
                     name, type_hint = attr.split(":", 1)
@@ -636,51 +717,55 @@ Please provide the JSON response with database improvements."""
                     new_columns.append(f"{name.strip()} {sql_type}")
                 else:
                     new_columns.append(f"{attr.strip()} TEXT")
-            
+
             # Add ID column if not present
             if not any("id" in col.lower() for col in new_columns):
                 new_columns.insert(0, "id INTEGER PRIMARY KEY AUTOINCREMENT")
-            
+
             # Apply migration using ALTER TABLE (for simple cases) or recreate table
             with sqlite3.connect(db_file) as conn:
                 cursor = conn.cursor()
-                
+
                 # For simplicity, we'll recreate the table with new schema
                 # In production, this would need more sophisticated migration logic
-                
+
                 # Backup existing data
-                cursor.execute(f"CREATE TEMPORARY TABLE {table_name}_backup AS SELECT * FROM {table_name}")
-                
+                cursor.execute(
+                    f"CREATE TEMPORARY TABLE {table_name}_backup AS SELECT * FROM {table_name}"
+                )
+
                 # Drop old table
                 cursor.execute(f"DROP TABLE {table_name}")
-                
+
                 # Create new table with updated schema
                 columns_sql = ", ".join(new_columns)
                 cursor.execute(f"CREATE TABLE {table_name} ({columns_sql})")
-                
+
                 # Restore data (matching columns only)
                 try:
                     cursor.execute(f"INSERT INTO {table_name} SELECT * FROM {table_name}_backup")
                 except sqlite3.Error:
                     # If schemas don't match, insert only matching columns
-                    logger.warning(f"Schema mismatch during migration for {table_name}, inserting compatible data only")
-                
+                    logger.warning(
+                        f"Schema mismatch during migration for {table_name}, inserting compatible data only"
+                    )
+
                 # Clean up backup table
                 cursor.execute(f"DROP TABLE {table_name}_backup")
-                
+
                 conn.commit()
-            
+
             result = {
                 "database_path": db_file,
                 "table": table_name,
                 "migrated_columns": new_columns,
                 "migration_applied": True,
-                "improvements_applied": interpretation
+                "improvements_applied": interpretation,
             }
-            
+
             logger.info(f"✅ Schema migration completed for {table_name}")
             return result
-            
+
         except Exception as e:
             logger.error(f"❌ Schema migration failed: {str(e)}")
             raise
@@ -700,11 +785,11 @@ Please provide the JSON response with database improvements."""
         """Convert Python type hint to SQL type"""
         type_mapping = {
             "str": "TEXT",
-            "int": "INTEGER", 
+            "int": "INTEGER",
             "float": "REAL",
             "bool": "INTEGER",
             "date": "TEXT",
-            "datetime": "TEXT"
+            "datetime": "TEXT",
         }
         return type_mapping.get(type_hint.lower(), "TEXT")
 
@@ -714,11 +799,12 @@ Please provide the JSON response with database improvements."""
             entity = payload.get("entity", "Student")
             fix_context = payload.get("fix_context", {})
             issue_type = fix_context.get("issue_type", "")
-            fix_action = payload.get("fix_action", "")
             issue_description = fix_context.get("issue_description", "")
-            
-            logger.info("🔧 DatabaseSWEA: Fixing database issues for %s - %s", entity, issue_description)
-            
+
+            logger.info(
+                "🔧 DatabaseSWEA: Fixing database issues for %s - %s", entity, issue_description
+            )
+
             # Handle different types of database issues
             if "schema" in issue_type or "table" in issue_type or "column" in issue_type:
                 logger.debug("🔧 DatabaseSWEA: Fixing schema/table issues - recreating database")
@@ -755,10 +841,11 @@ Please provide the JSON response with database improvements."""
                     "techlead_feedback": [f"General database fix needed: {issue_description}"],
                 }
                 return self._setup_database(enhanced_payload)
-                
+
         except Exception as e:
             logger.error("❌ DatabaseSWEA fix_issues failed: %s", str(e))
             return self.create_error_response("fix_issues", str(e), "fix_error")
+
 
 # ---------------------------------------------------------------------------
 # Custom exception to make failures explicit
@@ -767,4 +854,5 @@ Please provide the JSON response with database improvements."""
 
 class DatabaseGenerationError(Exception):
     """Raised when database generation or feedback interpretation fails"""
+
     pass

@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -10,6 +11,13 @@ class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "your_openai_api_key_here")
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///database/academic.db")
+
+    # Test Environment Detection
+    IS_TEST_ENVIRONMENT = (
+        "pytest" in sys.modules
+        or "PYTEST_CURRENT_TEST" in os.environ
+        or any("test" in arg.lower() for arg in sys.argv)
+    )
 
     # Server Configuration - Centralized Port Management
     API_HOST = os.getenv("API_HOST", "127.0.0.1")  # nosec B104

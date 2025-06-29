@@ -1,3 +1,4 @@
+import csv
 import json
 import logging
 import re
@@ -5,17 +6,17 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
-import csv
-from datetime import datetime
 
-from ..agents.base_agent import BaseAgent
-from ..core.managed_system_manager import ManagedSystemManager
-from ..domain_entities.base_bae import is_debug_mode
-from ..llm.openai_client import OpenAIClient
+from baes.core.managed_system_manager import ManagedSystemManager
+from baes.domain_entities.base_bae import BaseAgent
+from baes.llm.openai_client import OpenAIClient
+from config import Config
 
 logger = logging.getLogger(__name__)
+
 
 # Stage 2 Improvement #8: Feedback Loop Analytics for TestSWEA
 class FeedbackLoopAnalytics:
@@ -23,50 +24,63 @@ class FeedbackLoopAnalytics:
     Stage 2 Improvement #8: Feedback Loop Logging and Analytics
     Tracks all feedback interactions between TechLeadSWEA and TestSWEA in CSV format.
     """
-    
+
     def __init__(self):
-        self.analytics_dir = Path("logs/feedback_analytics")
+        # Use tests/.temp for analytics during tests
+        if Config.IS_TEST_ENVIRONMENT:
+            self.analytics_dir = Path("tests/.temp")
+        else:
+            self.analytics_dir = Path("logs/feedback_analytics")
         self.analytics_dir.mkdir(parents=True, exist_ok=True)
         self.csv_file = self.analytics_dir / "test_feedback_analytics.csv"
         self._ensure_csv_headers()
-    
+
     def _ensure_csv_headers(self):
         """Ensure CSV file exists with proper headers for pandas DataFrame compatibility"""
         if not self.csv_file.exists():
             headers = [
-                'timestamp',
-                'session_id', 
-                'entity',
-                'test_type',
-                'feedback_round',
-                'techlead_feedback_count',
-                'feedback_categories',
-                'test_response_time_seconds',
-                'feedback_addressed',
-                'retry_count',
-                'final_success',
-                'feedback_text_length',
-                'test_changes_made',
-                'improvement_areas',
-                'tests_passed',
-                'tests_failed'
+                "timestamp",
+                "session_id",
+                "entity",
+                "test_type",
+                "feedback_round",
+                "techlead_feedback_count",
+                "feedback_categories",
+                "test_response_time_seconds",
+                "feedback_addressed",
+                "retry_count",
+                "final_success",
+                "feedback_text_length",
+                "test_changes_made",
+                "improvement_areas",
+                "tests_passed",
+                "tests_failed",
             ]
-            with open(self.csv_file, 'w', newline='', encoding='utf-8') as f:
+            with open(self.csv_file, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerow(headers)
-    
-    def log_feedback_interaction(self, session_id: str, entity: str, test_type: str,
-                               feedback_round: int, techlead_feedback: List[str],
-                               test_response_time: float, feedback_addressed: bool,
-                               retry_count: int, final_success: bool, 
-                               test_changes_made: List[str] = None,
-                               tests_passed: int = 0, tests_failed: int = 0):
+
+    def log_feedback_interaction(
+        self,
+        session_id: str,
+        entity: str,
+        test_type: str,
+        feedback_round: int,
+        techlead_feedback: List[str],
+        test_response_time: float,
+        feedback_addressed: bool,
+        retry_count: int,
+        final_success: bool,
+        test_changes_made: List[str] = None,
+        tests_passed: int = 0,
+        tests_failed: int = 0,
+    ):
         """Log feedback loop interaction to CSV for analytics"""
         try:
             # Categorize feedback for analytics
             feedback_categories = self._categorize_feedback(techlead_feedback)
             improvement_areas = self._extract_improvement_areas(techlead_feedback)
-            
+
             row_data = [
                 datetime.now().isoformat(),
                 session_id,
@@ -74,71 +88,84 @@ class FeedbackLoopAnalytics:
                 test_type,
                 feedback_round,
                 len(techlead_feedback),
-                ';'.join(feedback_categories),
+                ";".join(feedback_categories),
                 round(test_response_time, 2),
                 feedback_addressed,
                 retry_count,
                 final_success,
                 sum(len(fb) for fb in techlead_feedback),
-                ';'.join(test_changes_made or []),
-                ';'.join(improvement_areas),
+                ";".join(test_changes_made or []),
+                ";".join(improvement_areas),
                 tests_passed,
-                tests_failed
+                tests_failed,
             ]
-            
-            with open(self.csv_file, 'a', newline='', encoding='utf-8') as f:
+
+            with open(self.csv_file, "a", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerow(row_data)
-                
-            logger.info(f"📊 Test feedback analytics logged: {entity}.{test_type} round {feedback_round}")
-            
+
+            logger.info(
+                f"📊 Test feedback analytics logged: {entity}.{test_type} round {feedback_round}"
+            )
+
         except Exception as e:
             logger.warning(f"Failed to log test feedback analytics: {e}")
-    
+
     def _categorize_feedback(self, feedback_list: List[str]) -> List[str]:
         """Categorize feedback for analytics purposes"""
         categories = set()
-        feedback_text = ' '.join(feedback_list).lower()
-        
+        feedback_text = " ".join(feedback_list).lower()
+
         # Test assertion feedback
-        if any(term in feedback_text for term in ['assertion', 'assert', 'expect', 'should', 'test']):
-            categories.add('test_assertions')
-        
-        # Mock/Setup feedback  
-        if any(term in feedback_text for term in ['mock', 'setup', 'fixture', 'patch', 'monkeypatch']):
-            categories.add('test_setup')
-            
+        if any(
+            term in feedback_text for term in ["assertion", "assert", "expect", "should", "test"]
+        ):
+            categories.add("test_assertions")
+
+        # Mock/Setup feedback
+        if any(
+            term in feedback_text for term in ["mock", "setup", "fixture", "patch", "monkeypatch"]
+        ):
+            categories.add("test_setup")
+
         # Coverage feedback
-        if any(term in feedback_text for term in ['coverage', 'missing', 'untested', 'branch']):
-            categories.add('test_coverage')
-            
+        if any(term in feedback_text for term in ["coverage", "missing", "untested", "branch"]):
+            categories.add("test_coverage")
+
         # Integration feedback
-        if any(term in feedback_text for term in ['integration', 'api', 'endpoint', 'database', 'connection']):
-            categories.add('integration_tests')
-            
+        if any(
+            term in feedback_text
+            for term in ["integration", "api", "endpoint", "database", "connection"]
+        ):
+            categories.add("integration_tests")
+
         # Performance feedback
-        if any(term in feedback_text for term in ['performance', 'slow', 'timeout', 'speed', 'benchmark']):
-            categories.add('performance_tests')
-            
-        return list(categories) if categories else ['general']
-    
+        if any(
+            term in feedback_text
+            for term in ["performance", "slow", "timeout", "speed", "benchmark"]
+        ):
+            categories.add("performance_tests")
+
+        return list(categories) if categories else ["general"]
+
     def _extract_improvement_areas(self, feedback_list: List[str]) -> List[str]:
         """Extract specific improvement areas from feedback"""
         areas = set()
-        feedback_text = ' '.join(feedback_list).lower()
-        
-        if 'reliability' in feedback_text:
-            areas.add('reliability')
-        if 'maintainability' in feedback_text:
-            areas.add('maintainability') 
-        if 'readability' in feedback_text:
-            areas.add('readability')
-        if 'edge case' in feedback_text:
-            areas.add('edge_cases')
-        if 'error handling' in feedback_text:
-            areas.add('error_handling')
-            
-        return list(areas) if areas else ['test_quality']
+        feedback_text = " ".join(feedback_list).lower()
+
+        if "reliability" in feedback_text:
+            areas.add("reliability")
+        if "maintainability" in feedback_text:
+            areas.add("maintainability")
+        if "readability" in feedback_text:
+            areas.add("readability")
+        if "edge case" in feedback_text:
+            areas.add("edge_cases")
+        if "error handling" in feedback_text:
+            areas.add("error_handling")
+
+        return list(areas) if areas else ["test_quality"]
+
 
 class TestSWEA(BaseAgent):
     """
@@ -1289,7 +1316,7 @@ VALIDATION HELPERS FOR {entity.upper()}:
                     routes_content = routes_file.read_text()
                     if not self._has_actual_endpoints(routes_content):
                         validation_result["warnings"].append(
-                            f"Routes file has no actual endpoints defined"
+                            "Routes file has no actual endpoints defined"
                         )
                         validation_result["recommendations"].append(
                             "Complete API generation before testing"
@@ -1312,7 +1339,7 @@ VALIDATION HELPERS FOR {entity.upper()}:
                     ui_content = ui_file.read_text()
                     if not self._has_actual_ui_components(ui_content):
                         validation_result["warnings"].append(
-                            f"UI file has no actual components defined"
+                            "UI file has no actual components defined"
                         )
                         validation_result["recommendations"].append(
                             "Complete UI generation before testing"
@@ -1389,14 +1416,14 @@ VALIDATION HELPERS FOR {entity.upper()}:
 
         # Add validation warnings to the prompt
         if validation["warnings"]:
-            prompt += f"\nVALIDATION WARNINGS:\n" + "\n".join(
+            prompt += "\nVALIDATION WARNINGS:\n" + "\n".join(
                 f"- {w}" for w in validation["warnings"]
             )
             prompt += "\n\nGenerate tests that handle these warnings gracefully."
 
         # Stage 2 Improvement #8: Track analytics timing
         start_time = datetime.now()
-        
+
         # Generate test code
         test_code = self.llm_client.generate_code_with_domain_focus(
             prompt,
@@ -1411,7 +1438,7 @@ VALIDATION HELPERS FOR {entity.upper()}:
 
         # Stage 2 Improvement #8: Log analytics for test generation
         response_time = (datetime.now() - start_time).total_seconds()
-        
+
         # Strict validation – ensure we got code back
         if not isinstance(test_code, str) or len(test_code.strip()) == 0:
             # Stage 2 Improvement #8: Log failed test generation
@@ -1427,9 +1454,9 @@ VALIDATION HELPERS FOR {entity.upper()}:
                 final_success=False,
                 test_changes_made=[],
                 tests_passed=0,
-                tests_failed=1
+                tests_failed=1,
             )
-            
+
             raise TestGenerationError(
                 f"LLM did not return valid test code for {entity} ({test_type}). Received type: {type(test_code)}"
             )
@@ -1438,7 +1465,7 @@ VALIDATION HELPERS FOR {entity.upper()}:
         test_changes = [f"Generated {test_type} for {entity}"]
         if validation.get("warnings"):
             test_changes.extend([f"Handled warning: {w}" for w in validation["warnings"]])
-            
+
         self.feedback_analytics.log_feedback_interaction(
             session_id=self.current_session_id,
             entity=entity,
@@ -1451,7 +1478,7 @@ VALIDATION HELPERS FOR {entity.upper()}:
             final_success=True,
             test_changes_made=test_changes,
             tests_passed=1,
-            tests_failed=0
+            tests_failed=0,
         )
 
         return test_code
@@ -1923,6 +1950,7 @@ VALIDATION HELPERS FOR {entity.upper()}:
 
         return self.create_success_response("generate_all_tests", results)
 
+
 # ---------------------------------------------------------------------------
 # Custom exception to enforce strict failures
 # ---------------------------------------------------------------------------
@@ -1930,4 +1958,5 @@ VALIDATION HELPERS FOR {entity.upper()}:
 
 class TestGenerationError(Exception):
     """Raised when test generation fails or returns invalid content."""
+
     pass

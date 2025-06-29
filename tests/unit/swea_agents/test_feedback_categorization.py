@@ -10,13 +10,14 @@ Tests TechLeadSWEA's ability to:
 
 import json
 import os
-import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
-from baes.swea_agents.techlead_swea import TechLeadSWEA
+import pytest
+
 from baes.swea_agents.backend_swea import BackendSWEA
-from baes.swea_agents.frontend_swea import FrontendSWEA
 from baes.swea_agents.database_swea import DatabaseSWEA
+from baes.swea_agents.frontend_swea import FrontendSWEA
+from baes.swea_agents.techlead_swea import TechLeadSWEA
 
 
 class TestFeedbackCategorization:
@@ -32,45 +33,49 @@ class TestFeedbackCategorization:
     def test_categorized_feedback_processing(self):
         """Test that TechLeadSWEA processes categorized feedback correctly"""
         # Mock LLM response with categorized feedback
-        mock_llm_response = json.dumps({
-            "is_valid": False,
-            "quality_score": 0.4,
-            "details": "Multiple issues found requiring fixes",
-            "issues": [
-                "Empty class definition found",
-                "Missing error handling in API routes",
-                "Code style inconsistencies"
-            ],
-            "suggestions": [
-                "Add field definitions to empty classes",
-                "Implement try/catch blocks",
-                "Follow PEP 8 naming conventions"
-            ],
-            "categorized_feedback": [
-                {
-                    "priority": "CRITICAL",
-                    "issue": "Empty class definition prevents system from working",
-                    "fix": "Add field definitions with proper types (e.g., name: str, age: int)"
-                },
-                {
-                    "priority": "REQUIRED",
-                    "issue": "Missing error handling affects functionality",
-                    "fix": "Add try/except blocks with HTTPException for all database operations"
-                },
-                {
-                    "priority": "OPTIONAL",
-                    "issue": "Code style inconsistencies",
-                    "fix": "Follow PEP 8 naming conventions for better readability"
-                }
-            ]
-        })
+        mock_llm_response = json.dumps(
+            {
+                "is_valid": False,
+                "quality_score": 0.4,
+                "details": "Multiple issues found requiring fixes",
+                "issues": [
+                    "Empty class definition found",
+                    "Missing error handling in API routes",
+                    "Code style inconsistencies",
+                ],
+                "suggestions": [
+                    "Add field definitions to empty classes",
+                    "Implement try/catch blocks",
+                    "Follow PEP 8 naming conventions",
+                ],
+                "categorized_feedback": [
+                    {
+                        "priority": "CRITICAL",
+                        "issue": "Empty class definition prevents system from working",
+                        "fix": "Add field definitions with proper types (e.g., name: str, age: int)",
+                    },
+                    {
+                        "priority": "REQUIRED",
+                        "issue": "Missing error handling affects functionality",
+                        "fix": "Add try/except blocks with HTTPException for all database operations",
+                    },
+                    {
+                        "priority": "OPTIONAL",
+                        "issue": "Code style inconsistencies",
+                        "fix": "Follow PEP 8 naming conventions for better readability",
+                    },
+                ],
+            }
+        )
 
-        with patch.object(self.techlead.llm_client, 'generate_response', return_value=mock_llm_response):
+        with patch.object(
+            self.techlead.llm_client, "generate_response", return_value=mock_llm_response
+        ):
             validation_result = self.techlead._validate_code_artifact(
                 entity="Student",
                 swea_agent="BackendSWEA",
                 task_type="generate_model",
-                result={"code": "class Student: pass", "file_path": "models/student.py"}
+                result={"code": "class Student: pass", "file_path": "models/student.py"},
             )
 
         # Verify categorized feedback was processed
@@ -105,13 +110,13 @@ class TestFeedbackCategorization:
             {
                 "priority": "CRITICAL",
                 "issue": "Security vulnerability in database connection handling",
-                "fix": "Implement proper connection security measures"
+                "fix": "Implement proper connection security measures",
             },
             {
                 "priority": "CRITICAL",
                 "issue": "Memory leak detected in data processing",
-                "fix": "Review memory management architecture"
-            }
+                "fix": "Review memory management architecture",
+            },
         ]
 
         escalation_needed = self.techlead._check_escalation_needed(critical_feedback)
@@ -123,7 +128,7 @@ class TestFeedbackCategorization:
             {
                 "priority": "CRITICAL",
                 "issue": "Empty class definition found",
-                "fix": "Add field definitions with proper types"
+                "fix": "Add field definitions with proper types",
             }
         ]
 
@@ -136,7 +141,7 @@ class TestFeedbackCategorization:
             {
                 "priority": "CRITICAL",
                 "issue": "System architecture conflict requiring manual intervention",
-                "fix": "Redesign data flow architecture with expert guidance"
+                "fix": "Redesign data flow architecture with expert guidance",
             }
         ]
 
@@ -170,37 +175,39 @@ class TestFeedbackCategorization:
                 {
                     "priority": "CRITICAL",
                     "issue": "System architecture conflict",
-                    "fix": "Redesign with expert guidance"
+                    "fix": "Redesign with expert guidance",
                 }
             ],
             "required_feedback": [],
             "optional_feedback": [],
-            "actionable_feedback": [
-                "[CRITICAL] Redesign with expert guidance"
-            ],
+            "actionable_feedback": ["[CRITICAL] Redesign with expert guidance"],
             "feedback_summary": {
                 "critical_count": 1,
                 "required_count": 0,
                 "optional_count": 0,
                 "actionable_count": 1,
                 "escalation_needed": True,
-                "routing_strategy": "handle_critical_and_required"
-            }
+                "routing_strategy": "handle_critical_and_required",
+            },
         }
 
-        with patch.object(self.techlead, '_validate_generated_artifact', return_value=mock_validation_result):
-            with patch.object(self.techlead, '_escalate_to_human_expert') as mock_escalate:
+        with patch.object(
+            self.techlead, "_validate_generated_artifact", return_value=mock_validation_result
+        ):
+            with patch.object(self.techlead, "_escalate_to_human_expert") as mock_escalate:
                 mock_escalate.return_value = {"escalation_type": "human_expert_required"}
 
                 # Set max retries to 3 and test with retry_count = 3
                 with patch.dict(os.environ, {"BAE_MAX_RETRIES": "3"}):
-                    result = self.techlead._review_and_approve({
-                        "entity": "Student",
-                        "swea_agent": "BackendSWEA",
-                        "task_type": "generate_model",
-                        "result": {"code": "class Student: pass"},
-                        "retry_count": 3  # Max retries reached
-                    })
+                    result = self.techlead._review_and_approve(
+                        {
+                            "entity": "Student",
+                            "swea_agent": "BackendSWEA",
+                            "task_type": "generate_model",
+                            "result": {"code": "class Student: pass"},
+                            "retry_count": 3,  # Max retries reached
+                        }
+                    )
 
                 # Verify escalation was triggered
                 assert result["escalation_required"] is True
@@ -214,30 +221,34 @@ class TestFeedbackCategorization:
         # Mock feedback with mixed priorities
         feedback = [
             "[CRITICAL] Empty class definition prevents system from working",
-            "[REQUIRED] Missing error handling affects functionality", 
-            "[OPTIONAL] Code style improvements for better readability"
+            "[REQUIRED] Missing error handling affects functionality",
+            "[OPTIONAL] Code style improvements for better readability",
         ]
 
         # Mock LLM response that processes priorities correctly
-        mock_llm_response = json.dumps({
-            "attributes": ["name:str", "email:str", "age:int"],
-            "additional_requirements": ["Add error handling", "Implement field validation"],
-            "code_improvements": ["Add try/catch blocks", "Implement proper types"],
-            "modifications": ["Fix empty class", "Add error handling"],
-            "explanation": "Processed CRITICAL and REQUIRED feedback, ignored OPTIONAL"
-        })
+        mock_llm_response = json.dumps(
+            {
+                "attributes": ["name:str", "email:str", "age:int"],
+                "additional_requirements": ["Add error handling", "Implement field validation"],
+                "code_improvements": ["Add try/catch blocks", "Implement proper types"],
+                "modifications": ["Fix empty class", "Add error handling"],
+                "explanation": "Processed CRITICAL and REQUIRED feedback, ignored OPTIONAL",
+            }
+        )
 
-        with patch.object(self.backend.llm_client, 'generate_response', return_value=mock_llm_response):
+        with patch.object(
+            self.backend.llm_client, "generate_response", return_value=mock_llm_response
+        ):
             interpretation = self.backend._interpret_feedback_for_backend_generation(
                 feedback=feedback,
                 entity="Student",
                 code_type="Pydantic Model",
-                original_attributes=["name:str"]
+                original_attributes=["name:str"],
             )
 
         # Verify interpretation focused on actionable feedback
         assert "name:str" in interpretation["attributes"]
-        assert "email:str" in interpretation["attributes"] 
+        assert "email:str" in interpretation["attributes"]
         assert "age:int" in interpretation["attributes"]
         assert len(interpretation["additional_requirements"]) > 0
         assert len(interpretation["code_improvements"]) > 0
@@ -247,23 +258,25 @@ class TestFeedbackCategorization:
         feedback = [
             "[CRITICAL] Missing main() function prevents UI from loading",
             "[REQUIRED] Add form validation for user input",
-            "[OPTIONAL] Improve color scheme for better aesthetics"
+            "[OPTIONAL] Improve color scheme for better aesthetics",
         ]
 
         # Mock LLM response
-        mock_llm_response = json.dumps({
-            "attributes": ["name:str", "email:str"],
-            "ui_improvements": ["Add main() function", "Implement form validation"],
-            "layout_changes": ["Add proper form structure"],
-            "modifications": ["Fix missing main function", "Add validation"],
-            "explanation": "Focused on CRITICAL and REQUIRED issues only"
-        })
+        mock_llm_response = json.dumps(
+            {
+                "attributes": ["name:str", "email:str"],
+                "ui_improvements": ["Add main() function", "Implement form validation"],
+                "layout_changes": ["Add proper form structure"],
+                "modifications": ["Fix missing main function", "Add validation"],
+                "explanation": "Focused on CRITICAL and REQUIRED issues only",
+            }
+        )
 
-        with patch.object(self.frontend.llm_client, 'generate_response', return_value=mock_llm_response):
+        with patch.object(
+            self.frontend.llm_client, "generate_response", return_value=mock_llm_response
+        ):
             interpretation = self.frontend._interpret_feedback_for_ui_generation(
-                feedback=feedback,
-                entity="Student",
-                original_attributes=["name:str"]
+                feedback=feedback, entity="Student", original_attributes=["name:str"]
             )
 
         # Verify interpretation handled priorities
@@ -276,23 +289,25 @@ class TestFeedbackCategorization:
         feedback = [
             "[CRITICAL] Missing primary key constraint causes data integrity issues",
             "[REQUIRED] Add NOT NULL constraints for required fields",
-            "[OPTIONAL] Consider adding indexes for better performance"
+            "[OPTIONAL] Consider adding indexes for better performance",
         ]
 
         # Mock LLM response
-        mock_llm_response = json.dumps({
-            "attributes": ["id:int", "name:str", "email:str"],
-            "additional_requirements": ["Add primary key", "Add NOT NULL constraints"],
-            "constraints": ["PRIMARY KEY", "NOT NULL"],
-            "modifications": ["Fix primary key", "Add constraints"],
-            "explanation": "Addressed CRITICAL and REQUIRED database issues"
-        })
+        mock_llm_response = json.dumps(
+            {
+                "attributes": ["id:int", "name:str", "email:str"],
+                "additional_requirements": ["Add primary key", "Add NOT NULL constraints"],
+                "constraints": ["PRIMARY KEY", "NOT NULL"],
+                "modifications": ["Fix primary key", "Add constraints"],
+                "explanation": "Addressed CRITICAL and REQUIRED database issues",
+            }
+        )
 
-        with patch.object(self.database.llm_client, 'generate_response', return_value=mock_llm_response):
+        with patch.object(
+            self.database.llm_client, "generate_response", return_value=mock_llm_response
+        ):
             interpretation = self.database._interpret_feedback_for_database_setup(
-                feedback=feedback,
-                entity="Student",
-                original_attributes=["name:str"]
+                feedback=feedback, entity="Student", original_attributes=["name:str"]
             )
 
         # Verify interpretation prioritized correctly
@@ -303,32 +318,28 @@ class TestFeedbackCategorization:
     def test_feedback_analytics_integration(self):
         """Test that feedback categorization integrates with analytics"""
         # This test verifies that the analytics system can track categorized feedback
-        mock_llm_response = json.dumps({
-            "is_valid": False,
-            "quality_score": 0.5,
-            "details": "Issues found",
-            "issues": ["Test issue"],
-            "suggestions": ["Test suggestion"],
-            "categorized_feedback": [
-                {
-                    "priority": "CRITICAL",
-                    "issue": "Critical test issue",
-                    "fix": "Critical fix"
-                },
-                {
-                    "priority": "REQUIRED", 
-                    "issue": "Required test issue",
-                    "fix": "Required fix"
-                }
-            ]
-        })
+        mock_llm_response = json.dumps(
+            {
+                "is_valid": False,
+                "quality_score": 0.5,
+                "details": "Issues found",
+                "issues": ["Test issue"],
+                "suggestions": ["Test suggestion"],
+                "categorized_feedback": [
+                    {"priority": "CRITICAL", "issue": "Critical test issue", "fix": "Critical fix"},
+                    {"priority": "REQUIRED", "issue": "Required test issue", "fix": "Required fix"},
+                ],
+            }
+        )
 
-        with patch.object(self.techlead.llm_client, 'generate_response', return_value=mock_llm_response):
+        with patch.object(
+            self.techlead.llm_client, "generate_response", return_value=mock_llm_response
+        ):
             validation_result = self.techlead._validate_code_artifact(
                 entity="Student",
-                swea_agent="BackendSWEA", 
+                swea_agent="BackendSWEA",
                 task_type="generate_model",
-                result={"code": "test code", "file_path": "test.py"}
+                result={"code": "test code", "file_path": "test.py"},
             )
 
         # Verify feedback summary is available for analytics
@@ -348,7 +359,7 @@ class TestFeedbackPriorityScenarios:
         """Test scenario with only CRITICAL feedback"""
         categorized_feedback = [
             {"priority": "CRITICAL", "issue": "Issue 1", "fix": "Fix 1"},
-            {"priority": "CRITICAL", "issue": "Issue 2", "fix": "Fix 2"}
+            {"priority": "CRITICAL", "issue": "Issue 2", "fix": "Fix 2"},
         ]
 
         validation_response = {"categorized_feedback": categorized_feedback}
@@ -363,7 +374,7 @@ class TestFeedbackPriorityScenarios:
         """Test scenario with only OPTIONAL feedback"""
         categorized_feedback = [
             {"priority": "OPTIONAL", "issue": "Style issue", "fix": "Style fix"},
-            {"priority": "OPTIONAL", "issue": "Enhancement", "fix": "Enhancement fix"}
+            {"priority": "OPTIONAL", "issue": "Enhancement", "fix": "Enhancement fix"},
         ]
 
         validation_response = {"categorized_feedback": categorized_feedback}
@@ -380,7 +391,7 @@ class TestFeedbackPriorityScenarios:
             {"priority": "CRITICAL", "issue": "Critical issue", "fix": "Critical fix"},
             {"priority": "REQUIRED", "issue": "Required issue", "fix": "Required fix"},
             {"priority": "OPTIONAL", "issue": "Optional issue", "fix": "Optional fix"},
-            {"priority": "REQUIRED", "issue": "Another required", "fix": "Another fix"}
+            {"priority": "REQUIRED", "issue": "Another required", "fix": "Another fix"},
         ]
 
         validation_response = {"categorized_feedback": categorized_feedback}
@@ -400,7 +411,7 @@ class TestFeedbackPriorityScenarios:
         """Test that invalid priority defaults to REQUIRED"""
         categorized_feedback = [
             {"priority": "INVALID", "issue": "Issue with invalid priority", "fix": "Fix"},
-            {"issue": "Issue without priority", "fix": "Fix"}  # Missing priority
+            {"issue": "Issue without priority", "fix": "Fix"},  # Missing priority
         ]
 
         validation_response = {"categorized_feedback": categorized_feedback}
@@ -413,4 +424,4 @@ class TestFeedbackPriorityScenarios:
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"]) 
+    pytest.main([__file__, "-v"])

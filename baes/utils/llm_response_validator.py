@@ -4,8 +4,10 @@ Provides centralized validation for LLM responses to prevent common errors like
 'dict' object has no attribute 'strip' and JSON parsing failures.
 """
 
-from typing import Any, Dict, List, Optional, Union
+import json
 import logging
+import re
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -16,34 +18,46 @@ class LLMResponseValidator:
     # Standard schemas for different SWEA response types
     SWEA_RESPONSE_SCHEMAS = {
         "database": {
-            "required_fields": ["attributes", "additional_requirements", "constraints", "modifications"],
+            "required_fields": [
+                "attributes",
+                "additional_requirements",
+                "constraints",
+                "modifications",
+            ],
             "optional_fields": ["explanation"],
-            "attribute_formats": ["string", "dict_with_name_type"]
+            "attribute_formats": ["string", "dict_with_name_type"],
         },
         "backend": {
-            "required_fields": ["attributes", "additional_requirements", "code_improvements", "modifications"],
+            "required_fields": [
+                "attributes",
+                "additional_requirements",
+                "code_improvements",
+                "modifications",
+            ],
             "optional_fields": ["explanation"],
-            "attribute_formats": ["string", "dict_with_name_type"]
+            "attribute_formats": ["string", "dict_with_name_type"],
         },
         "frontend": {
             "required_fields": ["attributes", "ui_improvements", "layout_changes", "modifications"],
             "optional_fields": ["explanation"],
-            "attribute_formats": ["string", "dict_with_name_type"]
-        }
+            "attribute_formats": ["string", "dict_with_name_type"],
+        },
     }
 
     @classmethod
-    def validate_response_structure(cls, response: Dict[str, Any], swea_type: str) -> Dict[str, Any]:
+    def validate_response_structure(
+        cls, response: Dict[str, Any], swea_type: str
+    ) -> Dict[str, Any]:
         """
         Validate and normalize LLM response structure
-        
+
         Args:
             response: Raw LLM response dictionary
             swea_type: Type of SWEA ("database", "backend", "frontend")
-            
+
         Returns:
             Validated and normalized response dictionary
-            
+
         Raises:
             ValueError: If response is invalid and cannot be normalized
         """
@@ -75,18 +89,20 @@ class LLMResponseValidator:
             if field in validated and field != "attributes":
                 validated[field] = cls._ensure_string_list(validated[field], field)
 
-        logger.debug(f"Validated {swea_type}SWEA response with {len(validated.get('attributes', []))} attributes")
+        logger.debug(
+            f"Validated {swea_type}SWEA response with {len(validated.get('attributes', []))} attributes"
+        )
         return validated
 
     @classmethod
     def _normalize_attributes(cls, attributes: Any, swea_type: str) -> List[str]:
         """
         Normalize attributes to consistent string format to prevent strip() errors
-        
+
         Args:
             attributes: Raw attributes from LLM (could be list of strings, dicts, or mixed)
             swea_type: Type of SWEA for logging context
-            
+
         Returns:
             List of normalized string attributes in "name:type" format
         """
@@ -103,23 +119,27 @@ class LLMResponseValidator:
                     attr_type = attr.get("type", "str")
                     normalized_attr = f"{name}:{attr_type}"
                     normalized.append(normalized_attr)
-                    logger.debug(f"{swea_type}SWEA: Converted dict attribute to string: {normalized_attr}")
-                    
+                    logger.debug(
+                        f"{swea_type}SWEA: Converted dict attribute to string: {normalized_attr}"
+                    )
+
                 elif isinstance(attr, str):
                     # Already in correct format
                     normalized.append(attr)
-                    
+
                 elif attr is None:
                     # Skip None values
                     logger.warning(f"{swea_type}SWEA: Skipping None attribute at index {i}")
                     continue
-                    
+
                 else:
                     # Convert unexpected types to string
                     str_attr = str(attr)
                     if str_attr and str_attr != "None":
                         normalized.append(str_attr)
-                        logger.warning(f"{swea_type}SWEA: Converted {type(attr)} attribute to string: {str_attr}")
+                        logger.warning(
+                            f"{swea_type}SWEA: Converted {type(attr)} attribute to string: {str_attr}"
+                        )
 
             except Exception as e:
                 logger.error(f"{swea_type}SWEA: Error processing attribute {i} ({attr}): {e}")
@@ -132,11 +152,11 @@ class LLMResponseValidator:
     def _ensure_string_list(cls, field_value: Any, field_name: str) -> List[str]:
         """
         Ensure field value is a list of strings
-        
+
         Args:
             field_value: Raw field value from LLM
             field_name: Name of the field for logging
-            
+
         Returns:
             List of strings
         """
@@ -162,24 +182,18 @@ class LLMResponseValidator:
     def validate_json_parseable(cls, response_text: str) -> Dict[str, Any]:
         """
         Validate that response text can be parsed as JSON
-        
+
         Args:
             response_text: Raw text response from LLM
-            
+
         Returns:
             Parsed JSON dictionary
-            
+
         Raises:
             ValueError: If response cannot be parsed as valid JSON
         """
-        import json
-        import re
-
-        # Try to clean common JSON formatting issues
-        cleaned_response = cls._clean_json_response(response_text)
-
         try:
-            return json.loads(cleaned_response)
+            return json.loads(response_text)
         except json.JSONDecodeError as e:
             logger.error(f"JSON parsing failed for response: {e}")
             logger.debug(f"Problematic response text: {response_text}")
@@ -189,15 +203,13 @@ class LLMResponseValidator:
     def _clean_json_response(cls, response: str) -> str:
         """
         Clean LLM response to extract JSON from markdown code blocks and fix common issues
-        
+
         Args:
             response: Raw response text from LLM
-            
+
         Returns:
             Cleaned JSON string
         """
-        import re
-
         # Remove markdown code blocks
         if "```json" in response:
             pattern = r"```json\s*(.*?)\s*```"
@@ -212,43 +224,49 @@ class LLMResponseValidator:
 
         # Fix common JSON issues
         response = response.strip()
-        
+
         # Remove any leading/trailing text that's not JSON
-        if response.startswith('{') and response.endswith('}'):
+        if response.startswith("{") and response.endswith("}"):
             pass  # Looks like pure JSON
         else:
             # Try to extract JSON object from text
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            json_match = re.search(r"\{.*\}", response, re.DOTALL)
             if json_match:
                 response = json_match.group(0)
 
         return response
 
     @classmethod
-    def create_fallback_response(cls, swea_type: str, original_attributes: List[str]) -> Dict[str, Any]:
+    def create_fallback_response(
+        cls, swea_type: str, original_attributes: List[str]
+    ) -> Dict[str, Any]:
         """
         Create a fallback response when LLM response is invalid
-        
+
         Args:
             swea_type: Type of SWEA ("database", "backend", "frontend")
             original_attributes: Original attributes to preserve
-            
+
         Returns:
             Valid fallback response dictionary
         """
-        schema = cls.SWEA_RESPONSE_SCHEMAS.get(swea_type.lower(), cls.SWEA_RESPONSE_SCHEMAS["database"])
-        
+        schema = cls.SWEA_RESPONSE_SCHEMAS.get(
+            swea_type.lower(), cls.SWEA_RESPONSE_SCHEMAS["database"]
+        )
+
         fallback = {
             "attributes": original_attributes or ["name:str", "created_at:str"],
-            "explanation": f"Fallback response due to LLM parsing error for {swea_type}SWEA"
+            "explanation": f"Fallback response due to LLM parsing error for {swea_type}SWEA",
         }
-        
+
         # Add empty lists for all required fields
         for field in schema["required_fields"]:
             if field not in fallback:
                 fallback[field] = []
 
-        logger.info(f"Created fallback response for {swea_type}SWEA with {len(fallback['attributes'])} attributes")
+        logger.info(
+            f"Created fallback response for {swea_type}SWEA with {len(fallback['attributes'])} attributes"
+        )
         return fallback
 
 
@@ -268,27 +286,29 @@ def validate_frontend_response(response: Dict[str, Any]) -> Dict[str, Any]:
     return LLMResponseValidator.validate_response_structure(response, "frontend")
 
 
-def parse_llm_json_response(response_text: str, swea_type: str, original_attributes: List[str] = None) -> Dict[str, Any]:
+def parse_llm_json_response(
+    response_text: str, swea_type: str, original_attributes: List[str] = None
+) -> Dict[str, Any]:
     """
     Parse and validate LLM JSON response with fallback handling
-    
+
     Args:
         response_text: Raw text response from LLM
         swea_type: Type of SWEA for validation
         original_attributes: Original attributes for fallback
-        
+
     Returns:
         Validated response dictionary
     """
     try:
         # Parse JSON
         parsed = LLMResponseValidator.validate_json_parseable(response_text)
-        
+
         # Validate structure
         validated = LLMResponseValidator.validate_response_structure(parsed, swea_type)
-        
+
         return validated
-        
+
     except (ValueError, KeyError, TypeError) as e:
         logger.warning(f"LLM response parsing failed for {swea_type}SWEA: {e}")
-        return LLMResponseValidator.create_fallback_response(swea_type, original_attributes or []) 
+        return LLMResponseValidator.create_fallback_response(swea_type, original_attributes or [])
