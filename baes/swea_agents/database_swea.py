@@ -2,6 +2,10 @@ import logging
 import os
 import sqlite3
 from typing import Any, Dict, List
+import json
+import csv
+from datetime import datetime
+from pathlib import Path
 
 from ..agents.base_agent import BaseAgent
 from ..core.managed_system_manager import ManagedSystemManager
@@ -11,6 +15,121 @@ from ..domain_entities.base_bae import is_debug_mode
 
 logger = logging.getLogger(__name__)
 
+# Stage 2 Improvement #8: Feedback Loop Analytics for DatabaseSWEA
+class FeedbackLoopAnalytics:
+    """
+    Stage 2 Improvement #8: Feedback Loop Logging and Analytics
+    Tracks all feedback interactions between TechLeadSWEA and DatabaseSWEA in CSV format.
+    """
+    
+    def __init__(self):
+        self.analytics_dir = Path("logs/feedback_analytics")
+        self.analytics_dir.mkdir(parents=True, exist_ok=True)
+        self.csv_file = self.analytics_dir / "database_feedback_analytics.csv"
+        self._ensure_csv_headers()
+    
+    def _ensure_csv_headers(self):
+        """Ensure CSV file exists with proper headers for pandas DataFrame compatibility"""
+        if not self.csv_file.exists():
+            headers = [
+                'timestamp',
+                'session_id', 
+                'entity',
+                'feedback_round',
+                'techlead_feedback_count',
+                'feedback_categories',
+                'database_response_time_seconds',
+                'feedback_addressed',
+                'retry_count',
+                'final_success',
+                'feedback_text_length',
+                'database_changes_made',
+                'improvement_areas'
+            ]
+            with open(self.csv_file, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+    
+    def log_feedback_interaction(self, session_id: str, entity: str, 
+                               feedback_round: int, techlead_feedback: List[str],
+                               database_response_time: float, feedback_addressed: bool,
+                               retry_count: int, final_success: bool, 
+                               database_changes_made: List[str] = None):
+        """Log feedback loop interaction to CSV for analytics"""
+        try:
+            # Categorize feedback for analytics
+            feedback_categories = self._categorize_feedback(techlead_feedback)
+            improvement_areas = self._extract_improvement_areas(techlead_feedback)
+            
+            row_data = [
+                datetime.now().isoformat(),
+                session_id,
+                entity,
+                feedback_round,
+                len(techlead_feedback),
+                ';'.join(feedback_categories),
+                round(database_response_time, 2),
+                feedback_addressed,
+                retry_count,
+                final_success,
+                sum(len(fb) for fb in techlead_feedback),
+                ';'.join(database_changes_made or []),
+                ';'.join(improvement_areas)
+            ]
+            
+            with open(self.csv_file, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(row_data)
+                
+            logger.info(f"📊 Database feedback analytics logged: {entity} round {feedback_round}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to log database feedback analytics: {e}")
+    
+    def _categorize_feedback(self, feedback_list: List[str]) -> List[str]:
+        """Categorize feedback for analytics purposes"""
+        categories = set()
+        feedback_text = ' '.join(feedback_list).lower()
+        
+        # Schema feedback
+        if any(term in feedback_text for term in ['schema', 'table', 'column', 'field', 'structure']):
+            categories.add('schema')
+        
+        # Performance feedback  
+        if any(term in feedback_text for term in ['performance', 'index', 'query', 'optimization', 'slow']):
+            categories.add('performance')
+            
+        # Integrity feedback
+        if any(term in feedback_text for term in ['constraint', 'foreign key', 'primary key', 'unique', 'integrity']):
+            categories.add('integrity')
+            
+        # Connection feedback
+        if any(term in feedback_text for term in ['connection', 'pool', 'timeout', 'session', 'context']):
+            categories.add('connection')
+            
+        # Migration feedback
+        if any(term in feedback_text for term in ['migration', 'alter', 'drop', 'create', 'modify']):
+            categories.add('migration')
+            
+        return list(categories) if categories else ['general']
+    
+    def _extract_improvement_areas(self, feedback_list: List[str]) -> List[str]:
+        """Extract specific improvement areas from feedback"""
+        areas = set()
+        feedback_text = ' '.join(feedback_list).lower()
+        
+        if 'scalability' in feedback_text:
+            areas.add('scalability')
+        if 'security' in feedback_text:
+            areas.add('security') 
+        if 'backup' in feedback_text:
+            areas.add('backup_recovery')
+        if 'transaction' in feedback_text:
+            areas.add('transaction_management')
+        if 'normalization' in feedback_text:
+            areas.add('normalization')
+            
+        return list(areas) if areas else ['data_management']
 
 class DatabaseSWEA(BaseAgent):
     """SWEA responsible for preparing SQLite database schemas based on entity attributes."""
@@ -19,6 +138,9 @@ class DatabaseSWEA(BaseAgent):
         super().__init__("DatabaseSWEA", "Database Provisioning Agent", "SWEA")
         self._managed_system_manager = None  # Lazy initialization
         self.llm_client = OpenAIClient()
+        # Stage 2 Improvement #8: Feedback Loop Analytics
+        self.feedback_analytics = FeedbackLoopAnalytics()
+        self.current_session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     @property
     def managed_system_manager(self):
@@ -124,16 +246,35 @@ Current attributes:
 
 Please provide the JSON response with database improvements."""
 
+        # Stage 2 Improvement #8: Track analytics timing
+        start_time = datetime.now()
+        
         try:
             response = self.llm_client.generate_response(user_prompt, system_prompt)
             logger.debug(f"DatabaseSWEA: Raw LLM response: {response}")
             
             # Try to parse JSON response
-            import json
             try:
                 interpretation = json.loads(response)
                 logger.info(f"DatabaseSWEA interpreted feedback: {interpretation.get('explanation', 'No explanation provided')}")
                 logger.debug(f"DatabaseSWEA: Parsed interpretation: {interpretation}")
+                
+                # Stage 2 Improvement #8: Log successful feedback interaction
+                response_time = (datetime.now() - start_time).total_seconds()
+                db_changes = interpretation.get("constraints", []) + interpretation.get("modifications", [])
+                
+                self.feedback_analytics.log_feedback_interaction(
+                    session_id=self.current_session_id,
+                    entity=entity,
+                    feedback_round=1,
+                    techlead_feedback=feedback,
+                    database_response_time=response_time,
+                    feedback_addressed=True,
+                    retry_count=0,
+                    final_success=True,
+                    database_changes_made=db_changes
+                )
+                
                 return interpretation
             except json.JSONDecodeError as json_error:
                 error_msg = (
@@ -141,10 +282,40 @@ Please provide the JSON response with database improvements."""
                     f"Raw response: {response}"
                 )
                 logger.error(error_msg)
+                
+                # Stage 2 Improvement #8: Log failed feedback interaction
+                response_time = (datetime.now() - start_time).total_seconds()
+                self.feedback_analytics.log_feedback_interaction(
+                    session_id=self.current_session_id,
+                    entity=entity,
+                    feedback_round=1,
+                    techlead_feedback=feedback,
+                    database_response_time=response_time,
+                    feedback_addressed=False,
+                    retry_count=0,
+                    final_success=False,
+                    database_changes_made=[]
+                )
+                
                 raise DatabaseGenerationError(error_msg) from json_error
                 
         except Exception as e:
             logger.error(f"DatabaseSWEA feedback interpretation failed: {e}")
+            
+            # Stage 2 Improvement #8: Log failed feedback interaction
+            response_time = (datetime.now() - start_time).total_seconds()
+            self.feedback_analytics.log_feedback_interaction(
+                session_id=self.current_session_id,
+                entity=entity,
+                feedback_round=1,
+                techlead_feedback=feedback,
+                database_response_time=response_time,
+                feedback_addressed=False,
+                retry_count=0,
+                final_success=False,
+                database_changes_made=[]
+            )
+            
             raise
 
     def _extract_attributes_from_text(self, response_text: str, original_attributes: List[str]) -> Dict[str, Any]:

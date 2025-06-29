@@ -1,6 +1,11 @@
 import logging
 import os
 from typing import Any, Dict, List, Union
+import json
+import re
+from datetime import datetime
+from pathlib import Path
+import csv
 
 from ..agents.base_agent import BaseAgent
 from ..core.managed_system_manager import ManagedSystemManager
@@ -10,6 +15,124 @@ from ..llm.openai_client import OpenAIClient
 from ..domain_entities.base_bae import is_debug_mode
 
 logger = logging.getLogger(__name__)
+
+# Add analytics tracking for feedback loops
+class FeedbackLoopAnalytics:
+    """
+    Stage 2 Improvement #8: Feedback Loop Logging and Analytics
+    Tracks all feedback interactions between TechLeadSWEA and BackendSWEA in CSV format.
+    """
+    
+    def __init__(self):
+        self.analytics_dir = Path("logs/feedback_analytics")
+        self.analytics_dir.mkdir(parents=True, exist_ok=True)
+        self.csv_file = self.analytics_dir / "feedback_loop_analytics.csv"
+        self._ensure_csv_headers()
+    
+    def _ensure_csv_headers(self):
+        """Ensure CSV file exists with proper headers for pandas DataFrame compatibility"""
+        if not self.csv_file.exists():
+            headers = [
+                'timestamp',
+                'session_id', 
+                'entity',
+                'code_type',
+                'feedback_round',
+                'techlead_feedback_count',
+                'feedback_categories',
+                'backend_response_time_seconds',
+                'feedback_addressed',
+                'retry_count',
+                'final_success',
+                'feedback_text_length',
+                'code_changes_made',
+                'improvement_areas'
+            ]
+            with open(self.csv_file, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+    
+    def log_feedback_interaction(self, session_id: str, entity: str, code_type: str, 
+                               feedback_round: int, techlead_feedback: List[str],
+                               backend_response_time: float, feedback_addressed: bool,
+                               retry_count: int, final_success: bool, 
+                               code_changes_made: List[str] = None):
+        """Log feedback loop interaction to CSV for analytics"""
+        try:
+            # Categorize feedback for analytics
+            feedback_categories = self._categorize_feedback(techlead_feedback)
+            improvement_areas = self._extract_improvement_areas(techlead_feedback)
+            
+            row_data = [
+                datetime.now().isoformat(),
+                session_id,
+                entity,
+                code_type,
+                feedback_round,
+                len(techlead_feedback),
+                ';'.join(feedback_categories),
+                round(backend_response_time, 2),
+                feedback_addressed,
+                retry_count,
+                final_success,
+                sum(len(fb) for fb in techlead_feedback),
+                ';'.join(code_changes_made or []),
+                ';'.join(improvement_areas)
+            ]
+            
+            with open(self.csv_file, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(row_data)
+                
+            logger.info(f"📊 Feedback analytics logged: {entity}.{code_type} round {feedback_round}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to log feedback analytics: {e}")
+    
+    def _categorize_feedback(self, feedback_list: List[str]) -> List[str]:
+        """Categorize feedback for analytics purposes"""
+        categories = set()
+        feedback_text = ' '.join(feedback_list).lower()
+        
+        # Database-related feedback
+        if any(term in feedback_text for term in ['database', 'connection', 'context manager', 'sqlite']):
+            categories.add('database')
+        
+        # API/Endpoint feedback  
+        if any(term in feedback_text for term in ['endpoint', 'api', 'route', 'http', 'status']):
+            categories.add('api')
+            
+        # Code structure feedback
+        if any(term in feedback_text for term in ['import', 'syntax', 'structure', 'class', 'function']):
+            categories.add('code_structure')
+            
+        # Error handling feedback
+        if any(term in feedback_text for term in ['error', 'exception', 'try', 'catch', 'handling']):
+            categories.add('error_handling')
+            
+        # Validation feedback
+        if any(term in feedback_text for term in ['validation', 'validate', 'check', 'verify']):
+            categories.add('validation')
+            
+        return list(categories) if categories else ['general']
+    
+    def _extract_improvement_areas(self, feedback_list: List[str]) -> List[str]:
+        """Extract specific improvement areas from feedback"""
+        areas = set()
+        feedback_text = ' '.join(feedback_list).lower()
+        
+        if 'performance' in feedback_text:
+            areas.add('performance')
+        if 'security' in feedback_text:
+            areas.add('security') 
+        if 'maintainability' in feedback_text:
+            areas.add('maintainability')
+        if 'documentation' in feedback_text:
+            areas.add('documentation')
+        if 'testing' in feedback_text:
+            areas.add('testing')
+            
+        return list(areas) if areas else ['code_quality']
 
 
 class BackendGenerationError(Exception):
@@ -27,6 +150,9 @@ class BackendSWEA(BaseAgent):
         super().__init__("BackendSWEA", "Backend Code Generation Agent", "SWEA")
         self.llm_client = OpenAIClient()
         self._managed_system_manager = None  # Lazy initialization
+        # Stage 2 Improvement #8: Feedback Loop Analytics
+        self.feedback_analytics = FeedbackLoopAnalytics()
+        self.current_session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     @property
     def managed_system_manager(self):
@@ -429,6 +555,9 @@ Current attributes:
 
 Please provide the JSON response with backend improvements, implementing the specific fixes suggested in the feedback."""
 
+        # Stage 2 Improvement #8: Track analytics timing
+        start_time = datetime.now()
+        
         try:
             response = self.llm_client.generate_response(user_prompt, system_prompt)
             logger.debug(f"BackendSWEA: Raw LLM response for {code_type}: {response}")
@@ -441,6 +570,24 @@ Please provide the JSON response with backend improvements, implementing the spe
                 logger.debug(
                     f"BackendSWEA: Parsed interpretation for {code_type}: {interpretation}"
                 )
+                
+                # Stage 2 Improvement #8: Log successful feedback interaction
+                response_time = (datetime.now() - start_time).total_seconds()
+                code_changes = interpretation.get("code_improvements", []) + interpretation.get("modifications", [])
+                
+                self.feedback_analytics.log_feedback_interaction(
+                    session_id=self.current_session_id,
+                    entity=entity,
+                    code_type=code_type,
+                    feedback_round=1,  # Default to 1, can be enhanced later
+                    techlead_feedback=feedback,
+                    backend_response_time=response_time,
+                    feedback_addressed=True,
+                    retry_count=0,  # Default to 0, can be enhanced later
+                    final_success=True,
+                    code_changes_made=code_changes
+                )
+                
                 return interpretation
             except json.JSONDecodeError as json_error:
                 # Raising explicit error instead of silent fallback to avoid masking issues
@@ -449,6 +596,22 @@ Please provide the JSON response with backend improvements, implementing the spe
                     f"Raw response: {response}"
                 )
                 logger.error(error_msg)
+                
+                # Stage 2 Improvement #8: Log failed feedback interaction
+                response_time = (datetime.now() - start_time).total_seconds()
+                self.feedback_analytics.log_feedback_interaction(
+                    session_id=self.current_session_id,
+                    entity=entity,
+                    code_type=code_type,
+                    feedback_round=1,
+                    techlead_feedback=feedback,
+                    backend_response_time=response_time,
+                    feedback_addressed=False,
+                    retry_count=0,
+                    final_success=False,
+                    code_changes_made=[]
+                )
+                
                 raise BackendGenerationError(error_msg) from json_error
 
         except Exception as e:
@@ -456,6 +619,22 @@ Please provide the JSON response with backend improvements, implementing the spe
             logger.error(
                 f"BackendSWEA: Failed to interpret feedback for {entity} {code_type}: {str(e)}"
             )
+            
+            # Stage 2 Improvement #8: Log failed feedback interaction
+            response_time = (datetime.now() - start_time).total_seconds()
+            self.feedback_analytics.log_feedback_interaction(
+                session_id=self.current_session_id,
+                entity=entity,
+                code_type=code_type,
+                feedback_round=1,
+                techlead_feedback=feedback,
+                backend_response_time=response_time,
+                feedback_addressed=False,
+                retry_count=0,
+                final_success=False,
+                code_changes_made=[]
+            )
+            
             raise
 
     # ------------------------------------------------------------------

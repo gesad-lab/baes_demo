@@ -1,14 +1,132 @@
 from typing import Any, Dict, List
+import csv
+import logging
+from datetime import datetime
+from pathlib import Path
 
 from ..agents.base_agent import BaseAgent
 from ..core.managed_system_manager import ManagedSystemManager
 from ..llm.openai_client import OpenAIClient
 # Utility for conditional debug logging
 from ..domain_entities.base_bae import is_debug_mode
-import logging
 
 logger = logging.getLogger(__name__)
 
+# Stage 2 Improvement #8: Feedback Loop Analytics for FrontendSWEA
+class FeedbackLoopAnalytics:
+    """
+    Stage 2 Improvement #8: Feedback Loop Logging and Analytics
+    Tracks all feedback interactions between TechLeadSWEA and FrontendSWEA in CSV format.
+    """
+    
+    def __init__(self):
+        self.analytics_dir = Path("logs/feedback_analytics")
+        self.analytics_dir.mkdir(parents=True, exist_ok=True)
+        self.csv_file = self.analytics_dir / "frontend_feedback_analytics.csv"
+        self._ensure_csv_headers()
+    
+    def _ensure_csv_headers(self):
+        """Ensure CSV file exists with proper headers for pandas DataFrame compatibility"""
+        if not self.csv_file.exists():
+            headers = [
+                'timestamp',
+                'session_id', 
+                'entity',
+                'feedback_round',
+                'techlead_feedback_count',
+                'feedback_categories',
+                'frontend_response_time_seconds',
+                'feedback_addressed',
+                'retry_count',
+                'final_success',
+                'feedback_text_length',
+                'ui_changes_made',
+                'improvement_areas'
+            ]
+            with open(self.csv_file, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+    
+    def log_feedback_interaction(self, session_id: str, entity: str, 
+                               feedback_round: int, techlead_feedback: List[str],
+                               frontend_response_time: float, feedback_addressed: bool,
+                               retry_count: int, final_success: bool, 
+                               ui_changes_made: List[str] = None):
+        """Log feedback loop interaction to CSV for analytics"""
+        try:
+            # Categorize feedback for analytics
+            feedback_categories = self._categorize_feedback(techlead_feedback)
+            improvement_areas = self._extract_improvement_areas(techlead_feedback)
+            
+            row_data = [
+                datetime.now().isoformat(),
+                session_id,
+                entity,
+                feedback_round,
+                len(techlead_feedback),
+                ';'.join(feedback_categories),
+                round(frontend_response_time, 2),
+                feedback_addressed,
+                retry_count,
+                final_success,
+                sum(len(fb) for fb in techlead_feedback),
+                ';'.join(ui_changes_made or []),
+                ';'.join(improvement_areas)
+            ]
+            
+            with open(self.csv_file, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(row_data)
+                
+            logger.info(f"📊 Frontend feedback analytics logged: {entity} round {feedback_round}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to log frontend feedback analytics: {e}")
+    
+    def _categorize_feedback(self, feedback_list: List[str]) -> List[str]:
+        """Categorize feedback for analytics purposes"""
+        categories = set()
+        feedback_text = ' '.join(feedback_list).lower()
+        
+        # UI/UX feedback
+        if any(term in feedback_text for term in ['ui', 'interface', 'user', 'streamlit', 'form']):
+            categories.add('ui_ux')
+        
+        # Data display feedback  
+        if any(term in feedback_text for term in ['dataframe', 'display', 'table', 'chart', 'visualization']):
+            categories.add('data_display')
+            
+        # Navigation feedback
+        if any(term in feedback_text for term in ['navigation', 'menu', 'sidebar', 'page', 'routing']):
+            categories.add('navigation')
+            
+        # Input/Form feedback
+        if any(term in feedback_text for term in ['input', 'form', 'validation', 'field', 'button']):
+            categories.add('input_forms')
+            
+        # Styling feedback
+        if any(term in feedback_text for term in ['style', 'color', 'layout', 'design', 'css']):
+            categories.add('styling')
+            
+        return list(categories) if categories else ['general']
+    
+    def _extract_improvement_areas(self, feedback_list: List[str]) -> List[str]:
+        """Extract specific improvement areas from feedback"""
+        areas = set()
+        feedback_text = ' '.join(feedback_list).lower()
+        
+        if 'usability' in feedback_text:
+            areas.add('usability')
+        if 'accessibility' in feedback_text:
+            areas.add('accessibility') 
+        if 'responsive' in feedback_text:
+            areas.add('responsive_design')
+        if 'performance' in feedback_text:
+            areas.add('performance')
+        if 'validation' in feedback_text:
+            areas.add('form_validation')
+            
+        return list(areas) if areas else ['user_experience']
 
 class FrontendSWEA(BaseAgent):
     """SWEA responsible for generating Streamlit UI code for domain entities."""
@@ -17,6 +135,9 @@ class FrontendSWEA(BaseAgent):
         super().__init__("FrontendSWEA", "UI Generation Agent", "SWEA")
         self.llm_client = OpenAIClient()
         self._managed_system_manager = None  # Lazy initialization
+        # Stage 2 Improvement #8: Feedback Loop Analytics
+        self.feedback_analytics = FeedbackLoopAnalytics()
+        self.current_session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     @property
     def managed_system_manager(self):
@@ -195,6 +316,9 @@ Current attributes:
 
 Please provide the JSON response with UI improvements."""
 
+        # Stage 2 Improvement #8: Track analytics timing
+        start_time = datetime.now()
+
         try:
             response = self.llm_client.generate_response(user_prompt, system_prompt)
             logger.debug(f"FrontendSWEA: Raw LLM response: {response}")
@@ -204,6 +328,23 @@ Please provide the JSON response with UI improvements."""
             try:
                 interpretation = json.loads(response)
                 logger.debug(f"FrontendSWEA: Parsed interpretation: {interpretation}")
+                
+                # Stage 2 Improvement #8: Log successful feedback interaction
+                response_time = (datetime.now() - start_time).total_seconds()
+                ui_changes = interpretation.get("ui_improvements", []) + interpretation.get("layout_changes", [])
+                
+                self.feedback_analytics.log_feedback_interaction(
+                    session_id=self.current_session_id,
+                    entity=entity,
+                    feedback_round=1,
+                    techlead_feedback=feedback,
+                    frontend_response_time=response_time,
+                    feedback_addressed=True,
+                    retry_count=0,
+                    final_success=True,
+                    ui_changes_made=ui_changes
+                )
+                
                 return interpretation
             except json.JSONDecodeError as json_error:
                 error_msg = (
@@ -211,10 +352,40 @@ Please provide the JSON response with UI improvements."""
                     f"Raw response: {response}"
                 )
                 logger.error(error_msg)
+                
+                # Stage 2 Improvement #8: Log failed feedback interaction
+                response_time = (datetime.now() - start_time).total_seconds()
+                self.feedback_analytics.log_feedback_interaction(
+                    session_id=self.current_session_id,
+                    entity=entity,
+                    feedback_round=1,
+                    techlead_feedback=feedback,
+                    frontend_response_time=response_time,
+                    feedback_addressed=False,
+                    retry_count=0,
+                    final_success=False,
+                    ui_changes_made=[]
+                )
+                
                 raise FrontendGenerationError(error_msg) from json_error
                 
         except Exception as e:
             logger.error(f"FrontendSWEA feedback interpretation failed: {e}")
+            
+            # Stage 2 Improvement #8: Log failed feedback interaction
+            response_time = (datetime.now() - start_time).total_seconds()
+            self.feedback_analytics.log_feedback_interaction(
+                session_id=self.current_session_id,
+                entity=entity,
+                feedback_round=1,
+                techlead_feedback=feedback,
+                frontend_response_time=response_time,
+                feedback_addressed=False,
+                retry_count=0,
+                final_success=False,
+                ui_changes_made=[]
+            )
+            
             raise
 
     def _extract_ui_improvements_from_text(self, response_text: str, original_attributes: List[str]) -> Dict[str, Any]:
