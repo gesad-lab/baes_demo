@@ -27,6 +27,8 @@ class TechLeadSWEA(BaseAgent):
     Acts as the technical governance layer between BAEs and implementation SWEAs.
     """
 
+    feedback_storage = {}  # Class-level storage for structured feedback
+
     def __init__(self):
         super().__init__("TechLeadSWEA", "Technical Leadership and Coordination Agent", "SWEA")
         self.llm_client = OpenAIClient()
@@ -1316,10 +1318,7 @@ class TechLeadSWEA(BaseAgent):
             storage_key = f"{entity}_{swea_agent}_{task_type}"
             
             # Store in memory for quick access during retry attempts
-            if not hasattr(self, 'feedback_storage'):
-                self.feedback_storage = {}
-            
-            self.feedback_storage[storage_key] = extracted_feedback
+            TechLeadSWEA.feedback_storage[storage_key] = extracted_feedback
             
             # Log storage for analytics
             logger.info(f"💾 Stage 4: Feedback stored for reuse: {storage_key}")
@@ -1336,10 +1335,7 @@ class TechLeadSWEA(BaseAgent):
         try:
             storage_key = f"{entity}_{swea_agent}_{task_type}"
             
-            if not hasattr(self, 'feedback_storage'):
-                return ""
-            
-            stored_feedback = self.feedback_storage.get(storage_key)
+            stored_feedback = TechLeadSWEA.feedback_storage.get(storage_key)
             if not stored_feedback:
                 return ""
             
@@ -1362,19 +1358,16 @@ class TechLeadSWEA(BaseAgent):
         Can clear specific feedback or all feedback.
         """
         try:
-            if not hasattr(self, 'feedback_storage'):
-                return
-            
             if entity and swea_agent and task_type:
                 # Clear specific feedback
                 storage_key = f"{entity}_{swea_agent}_{task_type}"
-                if storage_key in self.feedback_storage:
-                    del self.feedback_storage[storage_key]
+                if storage_key in TechLeadSWEA.feedback_storage:
+                    del TechLeadSWEA.feedback_storage[storage_key]
                     logger.info(f"🗑️  Stage 4: Cleared specific feedback: {storage_key}")
             else:
                 # Clear all feedback
-                cleared_count = len(self.feedback_storage)
-                self.feedback_storage.clear()
+                cleared_count = len(TechLeadSWEA.feedback_storage)
+                TechLeadSWEA.feedback_storage.clear()
                 logger.info(f"🗑️  Stage 4: Cleared all feedback storage ({cleared_count} entries)")
                 
         except Exception as e:
@@ -1550,7 +1543,7 @@ class TechLeadSWEA(BaseAgent):
         self, entity: str, attributes: List[str], context: str, is_evolution: bool
     ) -> Dict[str, Any]:
         """Analyze technical requirements for system generation"""
-        return {
+            return {
             "complexity_level": "medium" if len(attributes) <= 5 else "high",
             "database_requirements": {
                 "tables_needed": 1,
@@ -1585,7 +1578,7 @@ class TechLeadSWEA(BaseAgent):
         self, business_requirements: Dict[str, Any], is_evolution: bool
     ) -> Dict[str, Any]:
         """Define quality gates based on business requirements"""
-        return {
+            return {
             "code_quality": {
                 "min_score": 8.0,
                 "linting": "strict",
