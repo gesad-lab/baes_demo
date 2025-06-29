@@ -13,10 +13,10 @@ from typing import Optional
 from datetime import datetime
 import re
 
-class <EntityName>Base(BaseModel):
-    """Base model for <EntityName> entity with common attributes"""
-    name: str = Field(..., min_length=1, max_length=100, description="<EntityName> name")
-    email: str = Field(..., description="<EntityName> email address")
+class {Entity}Base(BaseModel):
+    """Base model for {Entity} entity with common attributes"""
+    name: str = Field(..., min_length=1, max_length=100, description="{Entity} name")
+    email: str = Field(..., description="{Entity} email address")
     created_at: datetime = Field(default_factory=datetime.now, description="Creation timestamp")
 
     @validator('email')
@@ -25,12 +25,12 @@ class <EntityName>Base(BaseModel):
             raise ValueError('Invalid email format')
         return v.lower()
 
-class <EntityName>Create(<EntityName>Base):
-    """Model for creating new <EntityName>"""
+class {Entity}Create({Entity}Base):
+    """Model for creating new {Entity}"""
     pass
 
-class <EntityName>Update(BaseModel):
-    """Model for updating existing <EntityName>"""
+class {Entity}Update(BaseModel):
+    """Model for updating existing {Entity}"""
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     email: Optional[str] = Field(None)
 
@@ -40,8 +40,8 @@ class <EntityName>Update(BaseModel):
             raise ValueError('Invalid email format')
         return v.lower() if v else v
 
-class <EntityName>(<EntityName>Base):
-    """Complete <EntityName> model with ID"""
+class {Entity}({Entity}Base):
+    """Complete {Entity} model with ID"""
     id: int = Field(..., description="Unique identifier")
 
     class Config:
@@ -53,97 +53,97 @@ class <EntityName>(<EntityName>Base):
 from fastapi import APIRouter, HTTPException, Depends, status
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from .models import <EntityName>, <EntityName>Create, <EntityName>Update
+from .models import {Entity}, {Entity}Create, {Entity}Update
 from .database import get_db
 
-router = APIRouter(prefix="/api/<entity_name_lower>s", tags=["<EntityName>s"])
+router = APIRouter(prefix="/api/{entity_lower}s", tags=["{Entity}s"])
 
-@router.post("/", response_model=<EntityName>, status_code=status.HTTP_201_CREATED)
-def create_<entity_name_lower>(<entity_name_lower>_data: <EntityName>Create, db: Session = Depends(get_db)):
-    """Create a new <EntityName>"""
+@router.post("/", response_model={Entity}, status_code=status.HTTP_201_CREATED)
+def create_{entity_lower}({entity_name_lower_data}: {Entity}Create, db: Session = Depends(get_db)):
+    """Create a new {Entity}"""
     try:
-        # Check if <entity_name_lower> with same email already exists
-        existing_<entity_name_lower> = db.query(<EntityName>).filter(<EntityName>.email == <entity_name_lower>_data.email).first()
-        if existing_<entity_name_lower>:
+        # Check if {entity_lower} with same email already exists
+        existing_{entity_lower} = db.query({Entity}).filter({Entity}.email == {entity_name_lower_data}.email).first()
+        if existing_{entity_lower}:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"<EntityName> with email {<entity_name_lower>_data.email} already exists"
+                detail=f"{Entity} with email {{{entity_name_lower_data}.email}} already exists"
             )
 
-        # Create new <EntityName>
-        db_<entity_name_lower> = <EntityName>(**<entity_name_lower>_data.dict())
-        db.add(db_<entity_name_lower>)
+        # Create new {Entity}
+        db_{entity_lower} = {Entity}(**{entity_name_lower_data}.dict())
+        db.add(db_{entity_lower})
         db.commit()
-        db.refresh(db_<entity_name_lower>)
-        return db_<entity_name_lower>
+        db.refresh(db_{entity_lower})
+        return db_{entity_lower}
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create <EntityName>: {str(e)}"
+            detail=f"Failed to create {Entity}: {{str(e)}}"
         )
 
-@router.get("/", response_model=List[<EntityName>])
-def get_<entity_name_lower>s(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get all <EntityName>s with pagination"""
-    <entity_name_lower>s = db.query(<EntityName>).offset(skip).limit(limit).all()
-    return <entity_name_lower>s
+@router.get("/", response_model=List[{Entity}])
+def get_{entity_lower}s(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """Get all {Entity}s with pagination"""
+    {entity_lower}s = db.query({Entity}).offset(skip).limit(limit).all()
+    return {entity_lower}s
 
-@router.get("/{<entity_name_lower>_id}", response_model=<EntityName>)
-def get_<entity_name_lower>(<entity_name_lower>_id: int, db: Session = Depends(get_db)):
-    """Get a specific <EntityName> by ID"""
-    <entity_name_lower> = db.query(<EntityName>).filter(<EntityName>.id == <entity_name_lower>_id).first()
-    if not <entity_name_lower>:
+@router.get("/{{{entity_name_lower}_id}}", response_model={Entity})
+def get_{entity_name_lower}({entity_name_lower}_id: int, db: Session = Depends(get_db)):
+    """Get a specific {Entity} by ID"""
+    {entity_name_lower} = db.query({Entity}).filter({Entity}.id == {entity_name_lower}_id).first()
+    if not {entity_name_lower}:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"<EntityName> with ID {<entity_name_lower>_id} not found"
+            detail=f"{Entity} with ID {{{entity_name_lower}_id}} not found"
         )
-    return <entity_name_lower>
+    return {entity_name_lower}
 
-@router.put("/{<entity_name_lower>_id}", response_model=<EntityName>)
-def update_<entity_name_lower>(<entity_name_lower>_id: int, <entity_name_lower>_data: <EntityName>Update, db: Session = Depends(get_db)):
-    """Update an existing <EntityName>"""
-    <entity_name_lower> = db.query(<EntityName>).filter(<EntityName>.id == <entity_name_lower>_id).first()
-    if not <entity_name_lower>:
+@router.put("/{{{entity_name_lower}_id}}", response_model={Entity})
+def update_{entity_name_lower}({entity_name_lower}_id: int, {entity_name_lower_data}: {Entity}Update, db: Session = Depends(get_db)):
+    """Update an existing {Entity}"""
+    {entity_name_lower} = db.query({Entity}).filter({Entity}.id == {entity_name_lower}_id).first()
+    if not {entity_name_lower}:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"<EntityName> with ID {<entity_name_lower>_id} not found"
+            detail=f"{Entity} with ID {{{entity_name_lower}_id}} not found"
         )
 
     # Update only provided fields
-    update_data = <entity_name_lower>_data.dict(exclude_unset=True)
+    update_data = {entity_name_lower_data}.dict(exclude_unset=True)
     for field, value in update_data.items():
-        setattr(<entity_name_lower>, field, value)
+        setattr({entity_name_lower}, field, value)
 
     try:
         db.commit()
-        db.refresh(<entity_name_lower>)
-        return <entity_name_lower>
+        db.refresh({entity_name_lower})
+        return {entity_name_lower}
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update <EntityName>: {str(e)}"
+            detail=f"Failed to update {Entity}: {{str(e)}}"
         )
 
-@router.delete("/{<entity_name_lower>_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_<entity_name_lower>(<entity_name_lower>_id: int, db: Session = Depends(get_db)):
-    """Delete a <EntityName>"""
-    <entity_name_lower> = db.query(<EntityName>).filter(<EntityName>.id == <entity_name_lower>_id).first()
-    if not <entity_name_lower>:
+@router.delete("/{{{entity_name_lower}_id}}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_{entity_name_lower}({entity_name_lower}_id: int, db: Session = Depends(get_db)):
+    """Delete a {Entity}"""
+    {entity_name_lower} = db.query({Entity}).filter({Entity}.id == {entity_name_lower}_id).first()
+    if not {entity_name_lower}:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"<EntityName> with ID {<entity_name_lower>_id} not found"
+            detail=f"{Entity} with ID {{{entity_name_lower}_id}} not found"
         )
 
     try:
-        db.delete(<entity_name_lower>)
+        db.delete({entity_name_lower})
         db.commit()
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete <EntityName>: {str(e)}"
+            detail=f"Failed to delete {Entity}: {{str(e)}}"
         )
 ```
 

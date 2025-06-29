@@ -1,5 +1,4 @@
 import csv
-import json
 import logging
 import os
 from datetime import datetime
@@ -9,6 +8,7 @@ from typing import Any, Dict, List
 from baes.core.managed_system_manager import ManagedSystemManager
 from baes.domain_entities.base_bae import BaseAgent
 from baes.llm.openai_client import OpenAIClient
+from baes.utils.llm_response_validator import parse_llm_json_response
 from config import Config
 
 # Utility for conditional debug logging
@@ -366,6 +366,8 @@ class BackendSWEA(BaseAgent):
             return template.format(
                 entity=safe_entity,
                 entity_lower=safe_entity_lower,
+                entity_name_lower=safe_entity_lower,
+                entity_name_lower_data=f"{safe_entity_lower}_data",
                 Entity=safe_Entity,
                 attributes=safe_attributes,
                 code_type=safe_code_type,
@@ -585,9 +587,9 @@ GUIDELINES:
         try:
             response = self.llm_client.generate_response(user_prompt, system_prompt)
             logger.debug(f"BackendSWEA: Raw LLM response for {code_type}: {response}")
-            # Try to parse JSON response
+            # Use utility to parse JSON response with markdown code block handling
             try:
-                interpretation = json.loads(response)
+                interpretation = parse_llm_json_response(response, "backend", original_attributes)
                 logger.debug(
                     f"BackendSWEA: Parsed interpretation for {code_type}: {interpretation}"
                 )
@@ -609,7 +611,7 @@ GUIDELINES:
                     code_changes_made=code_changes,
                 )
                 return interpretation
-            except json.JSONDecodeError as json_error:
+            except Exception as json_error:
                 # Raising explicit error instead of silent fallback to avoid masking issues
                 error_msg = (
                     f"LLM response for feedback interpretation is not valid JSON: {json_error}. "
