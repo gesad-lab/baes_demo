@@ -490,6 +490,9 @@ class BackendSWEA(BaseAgent):
             f"BackendSWEA: Interpreting feedback for {entity} {code_type}: {feedback_text}"
         )
 
+        # Stage 4 Improvement #1: Get structured feedback for injection
+        structured_feedback = self._get_structured_feedback_injection(entity, "BackendSWEA", code_type)
+        
         system_prompt = f"""You are a backend development expert helping to interpret TechLeadSWEA feedback for improving {code_type} generation.
 
 {self._get_do_not_ignore_warning()}
@@ -499,6 +502,8 @@ CONTEXT:
 - Code Type: {code_type}
 - Original attributes: {original_attributes}
 - TechLeadSWEA Feedback: {feedback_text}
+
+{structured_feedback}
 
 STAGE 3 IMPROVEMENT #4: PRIORITY-BASED FEEDBACK HANDLING
 TechLeadSWEA now provides categorized feedback with priority levels:
@@ -664,6 +669,30 @@ Please provide the JSON response with backend improvements, implementing the spe
             )
             
             raise
+
+    def _get_structured_feedback_injection(self, entity: str, swea_agent: str, task_type: str) -> str:
+        """
+        Stage 4 Improvement #1: Get structured feedback injection from TechLeadSWEA.
+        Returns formatted feedback instructions for prompt injection.
+        """
+        try:
+            # Import TechLeadSWEA to access feedback storage
+            from baes.swea_agents.techlead_swea import TechLeadSWEA
+            
+            # Create temporary TechLeadSWEA instance to access feedback storage
+            techlead = TechLeadSWEA()
+            structured_instructions = techlead._retrieve_feedback_for_injection(entity, swea_agent, task_type)
+            
+            if structured_instructions:
+                logger.info(f"📤 BackendSWEA: Retrieved structured feedback for {entity}.{swea_agent}.{task_type}")
+                return structured_instructions
+            else:
+                logger.debug(f"📤 BackendSWEA: No structured feedback available for {entity}.{swea_agent}.{task_type}")
+                return ""
+                
+        except Exception as e:
+            logger.warning(f"BackendSWEA: Failed to get structured feedback injection: {str(e)}")
+            return ""
 
     # ------------------------------------------------------------------
     # Task implementations

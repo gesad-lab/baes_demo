@@ -505,6 +505,10 @@ class TechLeadSWEA(BaseAgent):
 
         if validation_result["is_valid"]:
             logger.info(f"✅ TechLeadSWEA (as reviewer) APPROVED task '{task_type}' from {swea_agent} (author) for entity '{entity}'")
+            
+            # Stage 4 Improvement #1: Clear stored feedback on successful approval
+            self._clear_feedback_storage(entity, swea_agent, task_type)
+            
             return {
                 "approved": True,
                 "success": True,
@@ -520,6 +524,10 @@ class TechLeadSWEA(BaseAgent):
                 "feedback": validation_result["suggestions"],
             }
         else:
+            # Stage 4 Improvement #1: Extract and store structured feedback for reuse
+            extracted_feedback = self._extract_structured_feedback(validation_result, entity, swea_agent, task_type)
+            self._store_feedback_for_reuse(extracted_feedback)
+            
             # Stage 3 Improvement #4: Check for escalation needed for CRITICAL issues
             feedback_summary = validation_result.get("feedback_summary", {})
             escalation_needed = feedback_summary.get("escalation_needed", False)
@@ -1176,6 +1184,201 @@ class TechLeadSWEA(BaseAgent):
             logger.warning(f"Failed to process categorized feedback: {str(e)}")
             # Return original response if processing fails
             return validation_response
+
+    def _extract_structured_feedback(self, validation_result: Dict[str, Any], entity: str, swea_agent: str, task_type: str) -> Dict[str, Any]:
+        """
+        Stage 4 Improvement #1: Extract structured feedback for prompt injection.
+        Extracts ALL suggestions with original reasoning and context for reuse across retry attempts.
+        """
+        try:
+            extracted_feedback = {
+                'entity': entity,
+                'swea_agent': swea_agent,
+                'task_type': task_type,
+                'extraction_timestamp': self._get_timestamp(),
+                'all_suggestions': [],
+                'original_reasoning': '',
+                'structured_instructions': '',
+                'feedback_context': {}
+            }
+            
+            # Extract original reasoning from validation result
+            original_reasoning = validation_result.get('details', '')
+            extracted_feedback['original_reasoning'] = original_reasoning
+            
+            # Extract ALL suggestions from various sources
+            all_suggestions = []
+            
+            # From categorized feedback (Stage 3)
+            categorized_feedback = validation_result.get('categorized_feedback', [])
+            for feedback_item in categorized_feedback:
+                suggestion = {
+                    'priority': feedback_item.get('priority', 'REQUIRED'),
+                    'issue': feedback_item.get('issue', ''),
+                    'fix': feedback_item.get('fix', ''),
+                    'source': 'categorized_feedback'
+                }
+                all_suggestions.append(suggestion)
+            
+            # From traditional suggestions array
+            suggestions = validation_result.get('suggestions', [])
+            for suggestion in suggestions:
+                all_suggestions.append({
+                    'priority': 'REQUIRED',
+                    'issue': '',
+                    'fix': suggestion,
+                    'source': 'suggestions_array'
+                })
+            
+            # From fix instructions
+            fix_instructions = validation_result.get('fix_instructions', [])
+            for instruction in fix_instructions:
+                all_suggestions.append({
+                    'priority': 'REQUIRED',
+                    'issue': '',
+                    'fix': instruction,
+                    'source': 'fix_instructions'
+                })
+            
+            # From issues array (convert issues to suggestions)
+            issues = validation_result.get('issues', [])
+            for issue in issues:
+                all_suggestions.append({
+                    'priority': 'CRITICAL',
+                    'issue': issue,
+                    'fix': f"Fix: {issue}",
+                    'source': 'issues_array'
+                })
+            
+            extracted_feedback['all_suggestions'] = all_suggestions
+            
+            # Create structured instructions for prompt injection
+            structured_instructions = []
+            
+            if original_reasoning:
+                structured_instructions.append(f"TECHLEAD REASONING: {original_reasoning}")
+                structured_instructions.append("")
+            
+            if all_suggestions:
+                structured_instructions.append("PREVIOUS FEEDBACK TO ADDRESS:")
+                for i, suggestion in enumerate(all_suggestions, 1):
+                    priority_emoji = "🚨" if suggestion['priority'] == 'CRITICAL' else "⚠️" if suggestion['priority'] == 'REQUIRED' else "💡"
+                    structured_instructions.append(f"{i}. {priority_emoji} [{suggestion['priority']}] {suggestion['fix']}")
+                    if suggestion['issue']:
+                        structured_instructions.append(f"   Issue: {suggestion['issue']}")
+                structured_instructions.append("")
+                structured_instructions.append("MANDATORY: You MUST address ALL the above feedback in your response.")
+            
+            extracted_feedback['structured_instructions'] = "\n".join(structured_instructions)
+            
+            # Store feedback context for analytics
+            extracted_feedback['feedback_context'] = {
+                'total_suggestions': len(all_suggestions),
+                'critical_count': len([s for s in all_suggestions if s['priority'] == 'CRITICAL']),
+                'required_count': len([s for s in all_suggestions if s['priority'] == 'REQUIRED']),
+                'optional_count': len([s for s in all_suggestions if s['priority'] == 'OPTIONAL']),
+                'sources_used': list(set(s['source'] for s in all_suggestions))
+            }
+            
+            # Log extraction for analytics
+            logger.info(f"📋 Stage 4: Structured feedback extracted for {entity}.{swea_agent}.{task_type}")
+            logger.info(f"   📝 Total suggestions: {len(all_suggestions)}")
+            logger.info(f"   🚨 Critical: {extracted_feedback['feedback_context']['critical_count']}")
+            logger.info(f"   ⚠️  Required: {extracted_feedback['feedback_context']['required_count']}")
+            logger.info(f"   💡 Optional: {extracted_feedback['feedback_context']['optional_count']}")
+            
+            return extracted_feedback
+            
+        except Exception as e:
+            logger.warning(f"Failed to extract structured feedback: {str(e)}")
+            # Return minimal structure if extraction fails
+            return {
+                'entity': entity,
+                'swea_agent': swea_agent,
+                'task_type': task_type,
+                'extraction_timestamp': self._get_timestamp(),
+                'all_suggestions': [],
+                'original_reasoning': validation_result.get('details', ''),
+                'structured_instructions': 'PREVIOUS FEEDBACK TO ADDRESS:\nNo structured feedback available.',
+                'feedback_context': {'total_suggestions': 0}
+            }
+
+    def _store_feedback_for_reuse(self, extracted_feedback: Dict[str, Any]) -> None:
+        """
+        Stage 4 Improvement #1: Store extracted feedback for reuse across retry attempts.
+        """
+        try:
+            entity = extracted_feedback.get('entity', 'unknown')
+            swea_agent = extracted_feedback.get('swea_agent', 'unknown')
+            task_type = extracted_feedback.get('task_type', 'unknown')
+            
+            # Create storage key for this specific task
+            storage_key = f"{entity}_{swea_agent}_{task_type}"
+            
+            # Store in memory for quick access during retry attempts
+            if not hasattr(self, 'feedback_storage'):
+                self.feedback_storage = {}
+            
+            self.feedback_storage[storage_key] = extracted_feedback
+            
+            # Log storage for analytics
+            logger.info(f"💾 Stage 4: Feedback stored for reuse: {storage_key}")
+            logger.info(f"   📝 Suggestions stored: {extracted_feedback.get('feedback_context', {}).get('total_suggestions', 0)}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to store feedback for reuse: {str(e)}")
+
+    def _retrieve_feedback_for_injection(self, entity: str, swea_agent: str, task_type: str) -> str:
+        """
+        Stage 4 Improvement #1: Retrieve stored feedback for prompt injection.
+        Returns structured instructions ready for prompt injection.
+        """
+        try:
+            storage_key = f"{entity}_{swea_agent}_{task_type}"
+            
+            if not hasattr(self, 'feedback_storage'):
+                return ""
+            
+            stored_feedback = self.feedback_storage.get(storage_key)
+            if not stored_feedback:
+                return ""
+            
+            # Return the structured instructions for prompt injection
+            structured_instructions = stored_feedback.get('structured_instructions', '')
+            
+            if structured_instructions:
+                logger.info(f"📤 Stage 4: Feedback retrieved for injection: {storage_key}")
+                logger.info(f"   📝 Instructions length: {len(structured_instructions)} characters")
+            
+            return structured_instructions
+            
+        except Exception as e:
+            logger.warning(f"Failed to retrieve feedback for injection: {str(e)}")
+            return ""
+
+    def _clear_feedback_storage(self, entity: str = None, swea_agent: str = None, task_type: str = None) -> None:
+        """
+        Stage 4 Improvement #1: Clear stored feedback when no longer needed.
+        Can clear specific feedback or all feedback.
+        """
+        try:
+            if not hasattr(self, 'feedback_storage'):
+                return
+            
+            if entity and swea_agent and task_type:
+                # Clear specific feedback
+                storage_key = f"{entity}_{swea_agent}_{task_type}"
+                if storage_key in self.feedback_storage:
+                    del self.feedback_storage[storage_key]
+                    logger.info(f"🗑️  Stage 4: Cleared specific feedback: {storage_key}")
+            else:
+                # Clear all feedback
+                cleared_count = len(self.feedback_storage)
+                self.feedback_storage.clear()
+                logger.info(f"🗑️  Stage 4: Cleared all feedback storage ({cleared_count} entries)")
+                
+        except Exception as e:
+            logger.warning(f"Failed to clear feedback storage: {str(e)}")
 
     def _check_escalation_needed(self, critical_feedback: List[Dict[str, Any]]) -> bool:
         """
