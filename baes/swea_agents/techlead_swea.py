@@ -520,14 +520,56 @@ class TechLeadSWEA(BaseAgent):
                 "feedback": validation_result["suggestions"],
             }
         else:
-            # Get the primary reason for rejection and specific suggestions
-            primary_reason = validation_result.get("issues", ["Quality standards not met"])[0]
-            specific_suggestions = validation_result.get("suggestions", ["Review the generated code manually"])
+            # Stage 3 Improvement #4: Check for escalation needed for CRITICAL issues
+            feedback_summary = validation_result.get("feedback_summary", {})
+            escalation_needed = feedback_summary.get("escalation_needed", False)
+            critical_feedback = validation_result.get("critical_feedback", [])
             
-            # Create a comprehensive rejection message with specific suggestions
-            rejection_message = f"{primary_reason}. Specific fixes needed: {'; '.join(specific_suggestions[:3])}"  # Limit to first 3 suggestions
+            # Check if we've reached max retries with CRITICAL issues
+            max_retries = int(os.getenv("BAE_MAX_RETRIES", "3"))
+            if retry_count >= max_retries and critical_feedback and escalation_needed:
+                logger.error(f"🚨 Max retries reached with CRITICAL issues - escalating to Human Expert")
+                escalation_report = self._escalate_to_human_expert(entity, critical_feedback, retry_count)
+                
+                return {
+                    "approved": False,
+                    "success": False,
+                    "escalation_required": True,
+                    "escalation_report": escalation_report,
+                    "data": {
+                        "overall_approval": False,
+                        "quality_score": validation_result["quality_score"],
+                        "validation_details": validation_result["details"],
+                        "feedback": validation_result.get("actionable_feedback", validation_result["suggestions"]),
+                        "technical_feedback": validation_result.get("actionable_feedback", validation_result["suggestions"]),
+                        "retry_required": False,  # No more retries, escalation needed
+                        "escalation_reason": f"CRITICAL issues unresolved after {retry_count} attempts",
+                        "human_expert_required": True,
+                    },
+                    "quality_score": validation_result["quality_score"],
+                    "validation_details": validation_result["details"],
+                    "feedback": validation_result.get("actionable_feedback", validation_result["suggestions"]),
+                }
+            
+            # Normal rejection with categorized feedback
+            actionable_feedback = validation_result.get("actionable_feedback", validation_result.get("suggestions", []))
+            primary_reason = validation_result.get("issues", ["Quality standards not met"])[0]
+            
+            # Create rejection message with prioritized feedback
+            if actionable_feedback:
+                priority_fixes = [f for f in actionable_feedback if f.startswith('[CRITICAL]')][:2]
+                if not priority_fixes:
+                    priority_fixes = actionable_feedback[:3]  # First 3 actionable items
+                rejection_message = f"{primary_reason}. Priority fixes needed: {'; '.join(priority_fixes)}"
+            else:
+                rejection_message = primary_reason
             
             logger.warning(f"❌ TechLeadSWEA (as reviewer) REJECTED task '{task_type}' from {swea_agent} (author) for entity '{entity}' - Reason: {rejection_message}")
+            
+            # Log feedback categorization if available
+            if feedback_summary:
+                logger.info(f"📊 Feedback Summary: {feedback_summary.get('critical_count', 0)} CRITICAL, {feedback_summary.get('required_count', 0)} REQUIRED, {feedback_summary.get('optional_count', 0)} OPTIONAL")
+            
             return {
                 "approved": False,
                 "success": False,
@@ -535,14 +577,15 @@ class TechLeadSWEA(BaseAgent):
                     "overall_approval": False,
                     "quality_score": validation_result["quality_score"],
                     "validation_details": validation_result["details"],
-                    "feedback": validation_result["suggestions"],  # Use suggestions instead of issues
-                    "technical_feedback": validation_result["suggestions"],  # Use suggestions instead of issues
+                    "feedback": actionable_feedback,  # Use actionable feedback (CRITICAL + REQUIRED)
+                    "technical_feedback": actionable_feedback,
                     "retry_required": True,
                     "rejection_reason": rejection_message,
+                    "feedback_summary": feedback_summary,
                 },
                 "quality_score": validation_result["quality_score"],
                 "validation_details": validation_result["details"],
-                "feedback": validation_result["suggestions"],  # Use suggestions instead of issues
+                "feedback": actionable_feedback,
                 "retry_required": True,
             }
 
@@ -973,6 +1016,23 @@ class TechLeadSWEA(BaseAgent):
             "fix_instructions": [
                 "Step-by-step instruction 1 for the SWEA to follow",
                 "Step-by-step instruction 2 for the SWEA to follow"
+            ],
+            "categorized_feedback": [
+                {{
+                    "priority": "CRITICAL",
+                    "issue": "Specific critical issue that prevents system from working",
+                    "fix": "Exact fix instruction with code pattern"
+                }},
+                {{
+                    "priority": "REQUIRED", 
+                    "issue": "Important issue that affects functionality",
+                    "fix": "Exact fix instruction with code pattern"
+                }},
+                {{
+                    "priority": "OPTIONAL",
+                    "issue": "Nice-to-have improvement",
+                    "fix": "Suggested enhancement"
+                }}
             ]
         }}
         ```
@@ -990,11 +1050,34 @@ class TechLeadSWEA(BaseAgent):
         - "Add actual database operations: cursor.execute('SELECT * FROM table')"
         - "Add proper return statements with response models"
         
+        PRIORITY CATEGORIZATION GUIDELINES:
+        
+        **CRITICAL** - Issues that prevent the system from working at all:
+        - Empty classes, functions, or missing core implementation
+        - Syntax errors, import errors, or runtime failures
+        - Security vulnerabilities or data corruption risks
+        - Database connection leaks or transaction failures
+        
+        **REQUIRED** - Issues that affect functionality but don't prevent basic operation:
+        - Missing error handling or incomplete CRUD operations
+        - Incorrect HTTP status codes or response formats
+        - Missing validation or improper data handling
+        - Performance issues or resource management problems
+        
+        **OPTIONAL** - Improvements that enhance quality but aren't essential:
+        - Code style improvements or better naming conventions
+        - Additional logging or documentation
+        - Performance optimizations or UX enhancements
+        - Non-essential features or convenience methods
+        
+        STAGE 3 IMPROVEMENT #4: You MUST categorize ALL feedback with explicit priority levels.
+        SWEAs will handle CRITICAL and REQUIRED issues together, ignoring OPTIONAL ones.
+        
         Be thorough and critical. If the code has empty classes, placeholder comments, or incomplete implementations, mark it as invalid and provide specific fix instructions.
         """
 
     def _parse_validation_response(self, validation_response: str) -> Dict[str, Any]:
-        """Parse LLM validation response into structured format."""
+        """Parse LLM validation response into structured format with categorized feedback."""
         try:
             # Try to extract JSON from the response
             import re
@@ -1002,12 +1085,24 @@ class TechLeadSWEA(BaseAgent):
             json_match = re.search(r"```json\s*(\{.*?\})\s*```", validation_response, re.DOTALL)
             if json_match:
                 json_str = json_match.group(1)
-                return json.loads(json_str)
+                parsed_response = json.loads(json_str)
+                
+                # Stage 3 Improvement #4: Process categorized feedback
+                if 'categorized_feedback' in parsed_response:
+                    parsed_response = self._process_categorized_feedback(parsed_response)
+                
+                return parsed_response
 
             # Fallback: try to find JSON without markdown
             json_match = re.search(r"\{.*\}", validation_response, re.DOTALL)
             if json_match:
-                return json.loads(json_match.group(0))
+                parsed_response = json.loads(json_match.group(0))
+                
+                # Stage 3 Improvement #4: Process categorized feedback
+                if 'categorized_feedback' in parsed_response:
+                    parsed_response = self._process_categorized_feedback(parsed_response)
+                
+                return parsed_response
 
             # If no JSON found, parse manually
             return self._parse_manual_validation_response(validation_response)
@@ -1015,6 +1110,145 @@ class TechLeadSWEA(BaseAgent):
         except Exception as e:
             logger.warning(f"Failed to parse validation response as JSON: {str(e)}")
             return self._parse_manual_validation_response(validation_response)
+
+    def _process_categorized_feedback(self, validation_response: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Stage 3 Improvement #4: Process categorized feedback with priority routing.
+        Handle CRITICAL and REQUIRED together, ignore OPTIONAL.
+        Escalate unresolvable CRITICAL issues to Human Expert.
+        """
+        try:
+            categorized_feedback = validation_response.get('categorized_feedback', [])
+            
+            # Separate feedback by priority
+            critical_feedback = []
+            required_feedback = []
+            optional_feedback = []
+            
+            for feedback_item in categorized_feedback:
+                priority = feedback_item.get('priority', 'REQUIRED').upper()
+                if priority == 'CRITICAL':
+                    critical_feedback.append(feedback_item)
+                elif priority == 'REQUIRED':
+                    required_feedback.append(feedback_item)
+                elif priority == 'OPTIONAL':
+                    optional_feedback.append(feedback_item)
+            
+            # Stage 3 Improvement #4: Handle CRITICAL + REQUIRED together, ignore OPTIONAL
+            actionable_feedback = critical_feedback + required_feedback
+            
+            # Log feedback categorization for analytics
+            logger.info(f"📊 TechLeadSWEA Feedback Categorization:")
+            logger.info(f"   🚨 CRITICAL: {len(critical_feedback)} issues")
+            logger.info(f"   ⚠️  REQUIRED: {len(required_feedback)} issues") 
+            logger.info(f"   💡 OPTIONAL: {len(optional_feedback)} issues (ignored)")
+            logger.info(f"   🎯 ACTIONABLE: {len(actionable_feedback)} issues to address")
+            
+            # Update validation response with processed feedback
+            validation_response.update({
+                'critical_feedback': critical_feedback,
+                'required_feedback': required_feedback,
+                'optional_feedback': optional_feedback,
+                'actionable_feedback': actionable_feedback,
+                'feedback_summary': {
+                    'critical_count': len(critical_feedback),
+                    'required_count': len(required_feedback),
+                    'optional_count': len(optional_feedback),
+                    'actionable_count': len(actionable_feedback),
+                    'escalation_needed': self._check_escalation_needed(critical_feedback),
+                    'routing_strategy': 'handle_critical_and_required'
+                }
+            })
+            
+            # Create consolidated fix instructions from actionable feedback
+            consolidated_fix_instructions = []
+            for feedback_item in actionable_feedback:
+                fix_instruction = f"[{feedback_item.get('priority', 'REQUIRED')}] {feedback_item.get('fix', feedback_item.get('issue', 'Unknown issue'))}"
+                consolidated_fix_instructions.append(fix_instruction)
+            
+            # Update fix_instructions with prioritized feedback
+            if consolidated_fix_instructions:
+                validation_response['fix_instructions'] = consolidated_fix_instructions
+            
+            return validation_response
+            
+        except Exception as e:
+            logger.warning(f"Failed to process categorized feedback: {str(e)}")
+            # Return original response if processing fails
+            return validation_response
+
+    def _check_escalation_needed(self, critical_feedback: List[Dict[str, Any]]) -> bool:
+        """
+        Stage 3 Improvement #4: Check if CRITICAL issues need Human Expert escalation.
+        Based on issue complexity and retry history.
+        """
+        if not critical_feedback:
+            return False
+        
+        # Escalation criteria for CRITICAL issues
+        escalation_patterns = [
+            'security vulnerability',
+            'data corruption',
+            'system architecture',
+            'infrastructure',
+            'deployment',
+            'performance critical',
+            'memory leak',
+            'deadlock',
+            'race condition'
+        ]
+        
+        for feedback_item in critical_feedback:
+            issue_text = feedback_item.get('issue', '').lower()
+            if any(pattern in issue_text for pattern in escalation_patterns):
+                logger.warning(f"🚨 CRITICAL issue may need Human Expert escalation: {issue_text[:100]}")
+                return True
+        
+        return False
+
+    def _escalate_to_human_expert(self, entity: str, critical_issues: List[Dict[str, Any]], retry_count: int) -> Dict[str, Any]:
+        """
+        Stage 3 Improvement #4: Option A - Human Expert Escalation for unresolvable CRITICAL issues.
+        """
+        escalation_report = {
+            'escalation_type': 'human_expert_required',
+            'entity': entity,
+            'critical_issues_count': len(critical_issues),
+            'retry_attempts': retry_count,
+            'max_retries_reached': True,
+            'escalation_timestamp': self._get_timestamp(),
+            'critical_issues': critical_issues,
+            'recommended_actions': [],
+            'human_expert_guidance_needed': True,
+            'system_generation_paused': True
+        }
+        
+        # Generate specific recommendations for human expert
+        for issue in critical_issues:
+            escalation_report['recommended_actions'].append({
+                'issue': issue.get('issue', 'Unknown critical issue'),
+                'suggested_fix': issue.get('fix', 'Manual intervention required'),
+                'complexity': 'high',
+                'requires_architecture_decision': True
+            })
+        
+        # Log escalation for human expert attention
+        logger.error(f"🚨 ESCALATION TO HUMAN EXPERT REQUIRED:")
+        logger.error(f"   📋 Entity: {entity}")
+        logger.error(f"   🔄 Retry attempts: {retry_count}")
+        logger.error(f"   🚨 Critical issues: {len(critical_issues)}")
+        logger.error(f"   ⏸️  System generation PAUSED - Human Expert intervention needed")
+        
+        # Create detailed escalation log
+        escalation_log = []
+        for i, issue in enumerate(critical_issues, 1):
+            escalation_log.append(f"CRITICAL ISSUE {i}: {issue.get('issue', 'Unknown')}")
+            escalation_log.append(f"SUGGESTED FIX: {issue.get('fix', 'Manual intervention required')}")
+            escalation_log.append("---")
+        
+        logger.error(f"📋 ESCALATION DETAILS:\n" + "\n".join(escalation_log))
+        
+        return escalation_report
 
     def _parse_manual_validation_response(self, response: str) -> Dict[str, Any]:
         """Parse validation response manually when JSON parsing fails."""

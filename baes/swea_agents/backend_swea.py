@@ -500,6 +500,14 @@ CONTEXT:
 - Original attributes: {original_attributes}
 - TechLeadSWEA Feedback: {feedback_text}
 
+STAGE 3 IMPROVEMENT #4: PRIORITY-BASED FEEDBACK HANDLING
+TechLeadSWEA now provides categorized feedback with priority levels:
+- CRITICAL: Issues that prevent system from working (MUST fix immediately)
+- REQUIRED: Important functionality issues (MUST fix before approval)  
+- OPTIONAL: Nice-to-have improvements (can ignore for now)
+
+You MUST focus on CRITICAL and REQUIRED feedback only. Ignore OPTIONAL suggestions.
+
 TASK:
 Interpret the TechLeadSWEA feedback and provide specific backend code improvements in JSON format. TechLeadSWEA provides detailed, actionable suggestions that you must implement precisely.
 
@@ -514,11 +522,31 @@ RESPONSE FORMAT (JSON only):
 }}
 
 FEEDBACK ANALYSIS GUIDELINES:
-1. **Database Connection Issues**: If feedback mentions "context manager", "connection leaks", or "proper connection handling", add database connection management improvements
-2. **Error Handling Issues**: If feedback mentions "error handling", "HTTP status codes", or "validation errors", add comprehensive error handling requirements
-3. **Code Structure Issues**: If feedback mentions "missing endpoints", "naming conventions", or "import statements", add structural improvements
-4. **Data Validation Issues**: If feedback mentions "field validation", "type hints", or "data conversion", add validation requirements
-5. **API Design Issues**: If feedback mentions "RESTful design", "response models", or "request validation", add API design improvements
+PRIORITY-BASED PROCESSING:
+1. **CRITICAL Issues** (Handle Immediately):
+   - "[CRITICAL]" tagged feedback items
+   - Database connection leaks, security vulnerabilities
+   - Syntax errors, import failures, runtime crashes
+   - Empty classes/functions, missing core implementation
+
+2. **REQUIRED Issues** (Handle Before Approval):
+   - "[REQUIRED]" tagged feedback items  
+   - Missing error handling, incomplete CRUD operations
+   - Incorrect HTTP status codes, missing validation
+   - Performance issues, resource management problems
+
+3. **OPTIONAL Issues** (IGNORE for now):
+   - "[OPTIONAL]" tagged feedback items
+   - Code style improvements, additional logging
+   - Performance optimizations, UX enhancements
+   - Non-essential features, convenience methods
+
+SPECIFIC ISSUE PATTERNS:
+- **Database Connection Issues**: If feedback mentions "context manager", "connection leaks", or "proper connection handling", add database connection management improvements
+- **Error Handling Issues**: If feedback mentions "error handling", "HTTP status codes", or "validation errors", add comprehensive error handling requirements
+- **Code Structure Issues**: If feedback mentions "missing endpoints", "naming conventions", or "import statements", add structural improvements
+- **Data Validation Issues**: If feedback mentions "field validation", "type hints", or "data conversion", add validation requirements
+- **API Design Issues**: If feedback mentions "RESTful design", "response models", or "request validation", add API design improvements
 
 FEEDBACK_SECTION FORMAT:
 Create a structured feedback section that includes:

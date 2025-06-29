@@ -213,6 +213,14 @@ CONTEXT:
 - Original attributes: {original_attributes}
 - Feedback received: {feedback_text}
 
+STAGE 3 IMPROVEMENT #4: PRIORITY-BASED FEEDBACK HANDLING
+TechLeadSWEA now provides categorized feedback with priority levels:
+- CRITICAL: Issues that prevent system from working (MUST fix immediately)
+- REQUIRED: Important functionality issues (MUST fix before approval)  
+- OPTIONAL: Nice-to-have improvements (can ignore for now)
+
+You MUST focus on CRITICAL and REQUIRED feedback only. Ignore OPTIONAL suggestions.
+
 TASK:
 Interpret the feedback and provide specific database setup improvements in JSON format.
 
