@@ -1359,8 +1359,7 @@ numpy==1.24.3
         feedback_section = interpretation.get("feedback_section", "")
         if not feedback_section:
             # Create a basic feedback section if none provided
-            feedback_section = "Generate complete,
-                 working FastAPI routes with proper error handling and database integration."
+            feedback_section = "Generate complete, working FastAPI routes with proper error handling and database integration."
         # Extract attributes from interpretation
         attributes = interpretation.get("attributes", [])
         if not isinstance(attributes, list):
