@@ -524,7 +524,9 @@ class BaseBae(BaseAgent):
 
         For example:
         - "change age from int to str" -> {{"old": "age: int", "new": "age: str", "change": "type_change"}}
-        - "rename registration_number to student_id" -> {{"old": "registration_number: str", "new": "student_id: str", "change": "rename"}}
+        - "rename registration_number to student_id" -> {{"old": "registration_number: str",
+             "new": "student_id: str",
+             "change": "rename"}}
         """
 
         response = self.llm.generate_domain_entity_response(prompt, self.entity_name)
@@ -959,7 +961,8 @@ class BaseBae(BaseAgent):
         artifact_type = payload.get("artifact_type", "")
 
         prompt = f"""
-        As the {self.entity_name} BAE (Business Autonomous Entity), validate this {artifact_type} artifact for domain rule compliance.
+        As the {self.entity_name} BAE (
+            Business Autonomous Entity), validate this {artifact_type} artifact for domain rule compliance.
 
         VALIDATION CONTEXT:
         Entity Focus: {self.entity_name}

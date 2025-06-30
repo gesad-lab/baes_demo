@@ -505,7 +505,8 @@ class BackendSWEA(BaseAgent):
         )
         # Stage 4 Improvement #1: Get structured feedback for injection
         # structured_feedback = self._get_structured_feedback_injection(entity, "BackendSWEA", code_type)
-        system_prompt = """You are a BackendSWEA (Software Engineering Autonomous Agent) specializing in backend code generation.
+        system_prompt = """You are a BackendSWEA (
+            Software Engineering Autonomous Agent) specializing in backend code generation.
 You MUST focus on CRITICAL and REQUIRED feedback only. Ignore OPTIONAL suggestions.
 
 TASK:
@@ -543,11 +544,26 @@ PRIORITY-BASED PROCESSING:
    - Non-essential features, convenience methods
 
 SPECIFIC ISSUE PATTERNS:
-- **Database Connection Issues**: If feedback mentions "context manager", "connection leaks", or "proper connection handling", add database connection management improvements
-- **Error Handling Issues**: If feedback mentions "error handling", "HTTP status codes", or "validation errors", add comprehensive error handling requirements
-- **Code Structure Issues**: If feedback mentions "missing endpoints", "naming conventions", or "import statements", add structural improvements
-- **Data Validation Issues**: If feedback mentions "field validation", "type hints", or "data conversion", add validation requirements
-- **API Design Issues**: If feedback mentions "RESTful design", "response models", or "request validation", add API design improvements
+- **Database Connection Issues**: If feedback mentions "context manager",
+     "connection leaks",
+     or "proper connection handling",
+     add database connection management improvements
+- **Error Handling Issues**: If feedback mentions "error handling",
+     "HTTP status codes",
+     or "validation errors",
+     add comprehensive error handling requirements
+- **Code Structure Issues**: If feedback mentions "missing endpoints",
+     "naming conventions",
+     or "import statements",
+     add structural improvements
+- **Data Validation Issues**: If feedback mentions "field validation",
+     "type hints",
+     or "data conversion",
+     add validation requirements
+- **API Design Issues**: If feedback mentions "RESTful design",
+     "response models",
+     or "request validation",
+     add API design improvements
 
 FEEDBACK_SECTION FORMAT:
 Create a structured feedback section that includes:
@@ -939,7 +955,10 @@ Generate the complete implementation now:"""
         return True
 
     def _generate_template_api_code(self, entity: str, attributes: List[str]) -> str:
-        """Generate hardcoded template API code as absolute fallback"""
+        """Generate standards-compliant template API code using BackendStandards"""
+        # Import the standards
+        from baes.standards.backend_standards import BackendStandards
+
         # CRITICAL FIX: Use centralized validation to prevent 'str' object has no attribute 'lower()' error
         try:
             entity = self._validate_entity_parameter(entity)
@@ -949,8 +968,10 @@ Generate the complete implementation now:"""
                 f"BackendSWEA: Parameter validation failed in _generate_template_api_code: {e}"
             )
             raise
+
         entity_lower = entity.lower()
         entity_plural = f"{entity_lower}s"
+
         # Parse attributes to create model fields
         model_fields = []
         for attr in attributes:
@@ -963,133 +984,217 @@ Generate the complete implementation now:"""
                 # Fallback for malformed attributes
                 model_fields.append(f"    {attr.strip()}: str")
         fields_str = "\n".join(model_fields)
-        template_code = f'''from fastapi import APIRouter, HTTPException, Depends, status
-from pydantic import BaseModel
-from typing import List, Optional
-import sqlite3
-from pathlib import Path
-import logging
-logger = logging.getLogger(__name__)
-# Database dependency
+
+        # Get standards-compliant imports
+        standards = BackendStandards()
+        required_imports = [
+            standards.REQUIRED_IMPORTS["fastapi_core"],
+            standards.REQUIRED_IMPORTS["pydantic"],
+            standards.REQUIRED_IMPORTS["typing"],
+            standards.REQUIRED_IMPORTS["database"],
+            standards.REQUIRED_IMPORTS["pathlib"],
+            standards.REQUIRED_IMPORTS["context_manager"],
+            standards.REQUIRED_IMPORTS["logging"],
+        ]
+        imports_section = "\n".join(required_imports)
+
+        # Generate standards-compliant database connection patterns
+        db_patterns = standards.DATABASE_PATTERNS
+        context_manager_code = f"""
+# Database connection with context manager pattern (BackendStandards compliant)
+{db_patterns['context_manager_decorator']}
+def get_db_connection():
+    \"\"\"Database connection context manager for proper resource management\"\"\"
+    {db_patterns['connection_setup'][0]}
+    {db_patterns['connection_setup'][1]}
+    {db_patterns['connection_setup'][2]}
+    {db_patterns['connection_setup'][3]}
+    {db_patterns['exception_handling'][0]}
+        {db_patterns['exception_handling'][1]}
+    {db_patterns['exception_handling'][2]}
+        {db_patterns['exception_handling'][3]}
+        {db_patterns['exception_handling'][4]}
+    {db_patterns['exception_handling'][5]}
+        {db_patterns['exception_handling'][6]}
+
+# Database dependency for FastAPI
 def get_db():
-    """Get database connection"""
-    db_path = Path("app/database/academic.db")
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
-# Pydantic Models
+    \"\"\"FastAPI dependency for database connection\"\"\"
+    {db_patterns['dependency_function'][1]}
+        {db_patterns['dependency_function'][2]}
+"""
+
+        # Generate standards-compliant HTTP status codes
+        status_codes = standards.HTTP_STATUS_CODES
+        delete_decorator = status_codes["DELETE"]["usage"]
+        delete_return = status_codes["DELETE"]["return_pattern"]
+
+        # Generate standards-compliant error handling
+        error_patterns = standards.ERROR_HANDLING["database_operations"]["pattern"]
+        error_handling_create = f"""
+        {error_patterns[0]}
+            cursor = db.cursor()
+            # Extract fields for insertion
+            fields = {entity_lower}_data.dict()
+            field_names = ', '.join(fields.keys())
+            placeholders = ', '.join(['?' for _ in fields])
+            values = list(fields.values())
+            
+            cursor.execute(
+                f"INSERT INTO {entity_plural} (" + field_names + ") VALUES (" + placeholders + ")",
+                values
+            )
+            {error_patterns[2]}
+            
+            # Get the created record
+            {entity_lower}_id = cursor.lastrowid
+            cursor.execute(f"SELECT * FROM {entity_plural} WHERE id = ?", ({entity_lower}_id,))
+            row = cursor.fetchone()
+            
+            return {entity}Response(id={entity_lower}_id, **dict(row))
+            
+        {error_patterns[3]}
+            {error_patterns[4]}
+        {error_patterns[5]}
+            {error_patterns[6]}
+            {error_patterns[7]}
+            {error_patterns[8]}"""
+
+        # Generate complete standards-compliant code
+        template_code = f'''{imports_section}
+
+logger = logging.getLogger(__name__)
+{context_manager_code}
+
+# Pydantic Models (BackendStandards compliant)
 class {entity}Base(BaseModel):
 {fields_str}
+
 class {entity}Create({entity}Base):
     pass
+
 class {entity}Update(BaseModel):
 {fields_str}
+
 class {entity}Response({entity}Base):
     id: int
+    
     class Config:
         from_attributes = True
+
 # Router
 router = APIRouter(prefix="/{entity_plural}", tags=["{entity_plural}"])
+
 @router.post("/", response_model={entity}Response, status_code=status.HTTP_201_CREATED)
-async def create_{entity_lower}({entity_lower}_data: {entity}Create, db: sqlite3.Connection = Depends(get_db)):
+async def create_{entity_lower}(
+    {entity_lower}_data: {entity}Create, db: sqlite3.Connection = Depends(get_db)) -> {entity}Response:
     """Create a new {entity_lower}"""
-    try:
-        cursor = db.cursor()
-        # Extract fields for insertion
-        fields = {entity_lower}_data.dict()
-        field_names = ', '.join(fields.keys())
-        placeholders = ', '.join(['?' for _ in fields])
-        values = list(fields.values())
-        cursor.execute(
-            f"INSERT INTO {entity_plural} (" + field_names + ") VALUES (" + placeholders + ")",
-            values
-        )
-        db.commit()
-        # Get the created record
-        {entity_lower}_id = cursor.lastrowid
-        cursor.execute(f"SELECT * FROM {entity_plural} WHERE id = ?", ({entity_lower}_id,))
-        row = cursor.fetchone()
-        return {entity}Response(id={entity_lower}_id, **dict(row))
-    except Exception as e:
-        logger.error(f"Error creating {entity_lower}: {{e}}")
-        raise HTTPException(status_code=500, detail=f"Failed to create {entity_lower}")
+{error_handling_create}
+
 @router.get("/", response_model=List[{entity}Response])
-async def list_{entity_plural}(db: sqlite3.Connection = Depends(get_db)):
+async def list_{entity_plural}(db: sqlite3.Connection = Depends(get_db)) -> List[{entity}Response]:
     """List all {entity_plural}"""
     try:
         cursor = db.cursor()
         cursor.execute(f"SELECT * FROM {entity_plural}")
         rows = cursor.fetchall()
         return [{entity}Response(**dict(row)) for row in rows]
+        
     except Exception as e:
         logger.error(f"Error listing {entity_plural}: {{e}}")
         raise HTTPException(status_code=500, detail=f"Failed to list {entity_plural}")
+
 @router.get("/{{id}}", response_model={entity}Response)
-async def get_{entity_lower}(id: int, db: sqlite3.Connection = Depends(get_db)):
+async def get_{entity_lower}(id: int, db: sqlite3.Connection = Depends(get_db)) -> {entity}Response:
     """Get a specific {entity_lower} by ID"""
     try:
         cursor = db.cursor()
         cursor.execute(f"SELECT * FROM {entity_plural} WHERE id = ?", (id,))
         row = cursor.fetchone()
+        
         if not row:
             raise HTTPException(status_code=404, detail=f"{entity} not found")
+            
         return {entity}Response(**dict(row))
+        
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error getting {entity_lower} {{id}}: {{e}}")
         raise HTTPException(status_code=500, detail=f"Failed to get {entity_lower}")
+
 @router.put("/{{id}}", response_model={entity}Response)
-async def update_{entity_lower}(id: int, {entity_lower}_data: {entity}Update, db: sqlite3.Connection = Depends(get_db)):
+async def update_{entity_lower}(
+    id: int, {entity_lower}_data: {entity}Update, db: sqlite3.Connection = Depends(get_db)) -> {entity}Response:
     """Update a {entity_lower}"""
     try:
         cursor = db.cursor()
+        
         # Check if {entity_lower} exists
         cursor.execute(f"SELECT * FROM {entity_plural} WHERE id = ?", (id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail=f"{entity} not found")
+        
         # Update fields
         fields = {entity_lower}_data.dict(exclude_unset=True)
         if not fields:
             raise HTTPException(status_code=400, detail="No fields to update")
+        
         set_clause = ", ".join([f"{{field}} = ?" for field in fields.keys()])
         values = list(fields.values()) + [id]
+        
         cursor.execute(
             f"UPDATE {entity_plural} SET {{set_clause}} WHERE id = ?",
             values
         )
         db.commit()
+        
         # Get updated record
         cursor.execute(f"SELECT * FROM {entity_plural} WHERE id = ?", (id,))
         row = cursor.fetchone()
+        
         return {entity}Response(**dict(row))
+        
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
         logger.error(f"Error updating {entity_lower} {{id}}: {{e}}")
         raise HTTPException(status_code=500, detail=f"Failed to update {entity_lower}")
-@router.delete("/{{id}}")
-async def delete_{entity_lower}(id: int, db: sqlite3.Connection = Depends(get_db)):
+
+{delete_decorator}
+async def delete_{entity_lower}(id: int, db: sqlite3.Connection = Depends(get_db)) -> Response:
     """Delete a {entity_lower}"""
     try:
         cursor = db.cursor()
+        
         # Check if {entity_lower} exists
         cursor.execute(f"SELECT * FROM {entity_plural} WHERE id = ?", (id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail=f"{entity} not found")
+        
         cursor.execute(f"DELETE FROM {entity_plural} WHERE id = ?", (id,))
         db.commit()
-        return {{"message": f"{entity} deleted successfully"}}
+        
+        # Return 204 No Content status (BackendStandards requirement)
+        {delete_return}
+        
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
         logger.error(f"Error deleting {entity_lower} {{id}}: {{e}}")
         raise HTTPException(status_code=500, detail=f"Failed to delete {entity_lower}")
 '''
+
+        # Validate generated code against standards before returning
+        validation_result = BackendStandards.get_backend_validation(template_code, entity)
+        if not validation_result["is_valid"]:
+            logger.error(f"Generated template code for {entity} failed standards validation:")
+            for issue in validation_result["issues"]:
+                logger.error(f"  - {issue}")
+            # Still return the code, but log the issues for debugging
+
         return template_code
 
     # ------------------------------------------------------------------
@@ -1254,7 +1359,8 @@ numpy==1.24.3
         feedback_section = interpretation.get("feedback_section", "")
         if not feedback_section:
             # Create a basic feedback section if none provided
-            feedback_section = "Generate complete, working FastAPI routes with proper error handling and database integration."
+            feedback_section = "Generate complete,
+                 working FastAPI routes with proper error handling and database integration."
         # Extract attributes from interpretation
         attributes = interpretation.get("attributes", [])
         if not isinstance(attributes, list):
@@ -1329,7 +1435,8 @@ numpy==1.24.3
         Stage 1 Improvement #10: Explicit warnings to prevent LLM from ignoring instructions.
         """
         return """
-🚨 CRITICAL WARNING: If you ignore ANY of the following instructions, your output will be REJECTED and you will be required to regenerate it. You MUST address EVERY requirement listed below. Failure to comply will result in immediate rejection.
+🚨 CRITICAL WARNING: If you ignore ANY of the following instructions,
+     your output will be REJECTED and you will be required to regenerate it. You MUST address EVERY requirement listed below. Failure to comply will result in immediate rejection.
 ⚠️  DO NOT IGNORE ANY INSTRUCTIONS - Your response will be validated against ALL requirements.
 ⚠️  DO NOT SKIP ANY STEPS - Every instruction must be implemented exactly as specified.
 ⚠️  DO NOT USE PLACEHOLDERS - Generate complete, working code with no TODO comments.

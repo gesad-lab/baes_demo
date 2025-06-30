@@ -201,7 +201,8 @@ class TestSWEA(BaseAgent):
         Stage 1 Improvement #10: Explicit warnings to prevent LLM from ignoring instructions.
         """
         return """
-🚨 CRITICAL WARNING: If you ignore ANY of the following instructions, your output will be REJECTED and you will be required to regenerate it. You MUST address EVERY requirement listed below. Failure to comply will result in immediate rejection.
+🚨 CRITICAL WARNING: If you ignore ANY of the following instructions,
+     your output will be REJECTED and you will be required to regenerate it. You MUST address EVERY requirement listed below. Failure to comply will result in immediate rejection.
 
 ⚠️  DO NOT IGNORE ANY INSTRUCTIONS - Your response will be validated against ALL requirements.
 ⚠️  DO NOT SKIP ANY STEPS - Every instruction must be implemented exactly as specified.

@@ -810,33 +810,26 @@ class TechLeadSWEA(BaseAgent):
         self, entity: str, swea_agent: str, task_type: str, result: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        LLM-based validation for code artifacts (BackendSWEA, FrontendSWEA, etc.).
+        Standards-based validation for code artifacts (BackendSWEA, FrontendSWEA, etc.).
+        Now uses the same standards that SWEAs use for generation to ensure perfect alignment.
         """
         try:
             # Extract artifact information - handle nested data structure from SWEAs
             data = result.get("data", {})
             code = data.get("code", "") if data else result.get("code", "")
             file_path = data.get("file_path", "") if data else result.get("file_path", "")
+
             # Log what we found for debugging
             logger.info(f"🔍 TechLeadSWEA: Extracted code length: {len(code)} characters")
             logger.info(f"🔍 TechLeadSWEA: File path: {file_path}")
-            # Determine validation type based on SWEA and task
-            validation_type = self._determine_validation_type(swea_agent, task_type)
-            # Perform LLM-based validation
-            validation_prompt = self._build_validation_prompt(
-                entity, swea_agent, task_type, validation_type, code, file_path
-            )
-            validation_response = self.llm_client.generate_response(
-                validation_prompt,
-                system_prompt="You are a TechLeadSWEA performing code quality validation. Be thorough and critical.",
-            )
-            # Parse validation response
-            validation_result = self._parse_validation_response(validation_response)
-            # Add context-specific checks
-            validation_result.update(
-                self._perform_context_checks(entity, swea_agent, task_type, code, file_path)
-            )
-            return validation_result
+
+            # Use standards-based validation for BackendSWEA
+            if swea_agent == "BackendSWEA":
+                return self._validate_backend_with_standards(entity, code, task_type)
+
+            # For other SWEAs, use existing LLM-based validation until their standards are implemented
+            return self._validate_with_llm(entity, swea_agent, task_type, code, file_path)
+
         except Exception as e:
             logger.error(
                 f"❌ TechLeadSWEA: Code validation failed for {swea_agent}.{task_type}: {str(e)}"
@@ -846,6 +839,107 @@ class TechLeadSWEA(BaseAgent):
                 "quality_score": 0.0,
                 "details": f"Code validation error: {str(e)}",
                 "issues": [f"Code validation process failed: {str(e)}"],
+                "suggestions": ["Retry the code validation process"],
+            }
+
+    def _validate_backend_with_standards(
+        self, entity: str, code: str, task_type: str
+    ) -> Dict[str, Any]:
+        """
+        Validate BackendSWEA code using the same BackendStandards used for generation.
+
+        This ensures perfect alignment between generation and validation,
+        directly addressing the max_retries issue.
+        """
+        try:
+            # Import standards - same ones used by BackendSWEA for generation
+            from baes.standards.backend_standards import BackendStandards
+
+            # Use comprehensive standards-based validation
+            validation_result = BackendStandards.get_backend_validation(code, entity)
+
+            # Convert standards validation result to TechLeadSWEA format
+            techlead_result = {
+                "is_valid": validation_result["is_valid"],
+                "quality_score": validation_result["quality_score"],
+                "details": f"Standards-based validation for {entity} backend code",
+                "issues": validation_result["issues"],
+                "suggestions": validation_result["suggestions"],
+                "actionable_feedback": validation_result["suggestions"],  # TechLeadSWEA format
+                "validation_method": "BackendStandards",
+                "entity": entity,
+                "task_type": task_type,
+            }
+
+            # Log validation result
+            if validation_result["is_valid"]:
+                logger.info(
+                    f"✅ TechLeadSWEA: Backend code for {entity} passed standards validation"
+                )
+            else:
+                logger.warning(
+                    f"❌ TechLeadSWEA: Backend code for {entity} failed standards validation:"
+                )
+                for issue in validation_result["issues"][:3]:  # Log first 3 issues
+                    logger.warning(f"  - {issue}")
+
+            return techlead_result
+
+        except ImportError as e:
+            logger.error(f"❌ Failed to import BackendStandards: {e}")
+            # Fallback to LLM validation if standards are not available
+            return self._validate_with_llm(entity, "BackendSWEA", task_type, code, "")
+        except Exception as e:
+            logger.error(f"❌ Standards-based validation failed: {e}")
+            return {
+                "is_valid": False,
+                "quality_score": 0.0,
+                "details": f"Standards validation error: {str(e)}",
+                "issues": [f"Standards validation failed: {str(e)}"],
+                "suggestions": ["Check BackendStandards implementation"],
+            }
+
+    def _validate_with_llm(
+        self, entity: str, swea_agent: str, task_type: str, code: str, file_path: str
+    ) -> Dict[str, Any]:
+        """
+        LLM-based validation for non-backend code or when standards validation fails.
+
+        This is the original validation method, kept for other SWEAs and as fallback.
+        """
+        try:
+            # Determine validation type based on SWEA and task
+            validation_type = self._determine_validation_type(swea_agent, task_type)
+
+            # Perform LLM-based validation
+            validation_prompt = self._build_validation_prompt(
+                entity, swea_agent, task_type, validation_type, code, file_path
+            )
+
+            validation_response = self.llm_client.generate_response(
+                validation_prompt,
+                system_prompt="You are a TechLeadSWEA performing code quality validation. Be thorough and critical.",
+            )
+
+            # Parse validation response
+            validation_result = self._parse_validation_response(validation_response)
+
+            # Add context-specific checks
+            validation_result.update(
+                self._perform_context_checks(entity, swea_agent, task_type, code, file_path)
+            )
+
+            return validation_result
+
+        except Exception as e:
+            logger.error(
+                f"❌ TechLeadSWEA: LLM validation failed for {swea_agent}.{task_type}: {str(e)}"
+            )
+            return {
+                "is_valid": False,
+                "quality_score": 0.0,
+                "details": f"LLM validation error: {str(e)}",
+                "issues": [f"LLM validation process failed: {str(e)}"],
                 "suggestions": ["Retry the code validation process"],
             }
 
@@ -902,7 +996,8 @@ class TechLeadSWEA(BaseAgent):
             SPECIFIC FIX SUGGESTIONS:
             - If missing endpoints: "Add missing CRUD endpoints: POST /, GET /, GET /{id}, PUT /{id}, DELETE /{id}"
             - If wrong status codes: "Use correct status codes: 201 for POST, 200 for GET/PUT, 404 for not found"
-            - If database issues: "Use context manager pattern: @contextmanager def get_db_connection(): try: yield conn; finally: conn.close()"
+            - If database issues: "Use context manager pattern: @contextmanager def get_db_connection(
+                ): try: yield conn; finally: conn.close()"
             - If missing error handling: "Add try/except blocks with HTTPException for all database operations"
             - If empty functions: "Implement function bodies with actual database operations and error handling"
             """,
@@ -942,7 +1037,10 @@ class TechLeadSWEA(BaseAgent):
             5. No placeholder tests or TODO items
             6. Proper import statements
             SPECIFIC FIX SUGGESTIONS:
-            - If missing tests: "Add test functions for each CRUD operation: test_create, test_read, test_update, test_delete"
+            - If missing tests: "Add test functions for each CRUD operation: test_create,
+                 test_read,
+                 test_update,
+                 test_delete"
             - If no assertions: "Add assert statements to verify response status codes and data"
             - If wrong URLs: "Use correct API endpoints: POST /api/students/, GET /api/students/, etc."
             - If missing error tests: "Add tests for error cases: 404 for not found, 400 for bad request"
@@ -963,7 +1061,10 @@ class TechLeadSWEA(BaseAgent):
         }
         return f"""
         You are a TechLeadSWEA performing comprehensive code quality validation with detailed, actionable feedback.
-        TASK: Validate generated artifact for quality, completeness, and adherence to requirements. Provide specific, actionable feedback that tells the SWEA exactly what to fix and how.
+        TASK: Validate generated artifact for quality,
+             completeness,
+             and adherence to requirements. Provide specific,
+             actionable feedback that tells the SWEA exactly what to fix and how.
         CONTEXT:
         - Entity: {entity}
         - SWEA Agent: {swea_agent}
@@ -1046,7 +1147,10 @@ class TechLeadSWEA(BaseAgent):
         - Non-essential features or convenience methods
         STAGE 3 IMPROVEMENT #4: You MUST categorize ALL feedback with explicit priority levels.
         SWEAs will handle CRITICAL and REQUIRED issues together, ignoring OPTIONAL ones.
-        Be thorough and critical. If the code has empty classes, placeholder comments, or incomplete implementations, mark it as invalid and provide specific fix instructions.
+        Be thorough and critical. If the code has empty classes,
+             placeholder comments,
+             or incomplete implementations,
+             mark it as invalid and provide specific fix instructions.
         """
 
     def _parse_validation_response(self, validation_response: str) -> Dict[str, Any]:

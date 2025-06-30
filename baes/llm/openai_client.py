@@ -185,7 +185,8 @@ class OpenAIClient:
             - Use SAFE attribute access with .get() method for all data fields to avoid KeyError
             - Handle missing or differently named fields gracefully (e.g., 'name' vs 'Name')
             - Implement working edit functionality using session state and forms
-            - Implement working delete functionality using session state for confirmation (do NOT use st.confirm which doesn't exist)
+            - Implement working delete functionality using session state for confirmation (
+                do NOT use st.confirm which doesn't exist)
             - For delete confirmation, use st.button() with session state to show/hide confirmation buttons
             - Delete confirmation pattern: First button shows "Are you sure?", second button performs actual delete
             - Include proper error handling and success messages
