@@ -1,3 +1,10 @@
+# Ignore all files in the logs directory
+logs/
+FrontendSWEA/requests/
+BackendSWEA/requests/
+DatabaseSWEA/requests/
+TestSWEA/requests/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

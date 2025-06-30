@@ -264,17 +264,30 @@ COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and 
                 validation_rules.append("        return")
 
         # Build data dictionary
-        # Removed unused variable data_dict
+        data_dict_parts = []
+        for attr in parsed_attributes:
+            field_name = attr["name"]
+            data_dict_parts.append(f'"{field_name}": {field_name}')
+        data_dict = "{" + ", ".join(data_dict_parts) + "}"
 
         # Build display columns
-        # Removed unused variable display_columns
+        display_columns = []
+        for attr in parsed_attributes:
+            field_name = attr["name"]
+            display_columns.append(f'st.write(f"**{field_name.title()}:** {{{field_name}}}")')
 
-        # Removed unused variable entity_lower
+        # Entity lowercase for API endpoints
+        entity_lower = entity.lower()
 
-        prompt = """
+        # Stage 4 Improvement #1: Get structured feedback injection
+        structured_feedback = self._get_structured_feedback_injection(entity, "FrontendSWEA", "generate_ui")
+
+        prompt = f"""
 {self._get_do_not_ignore_warning()}
 
 You are a FrontendSWEA agent specialized in generating Streamlit UI code for domain entity management.
+
+{structured_feedback}
 
 CRITICAL REQUIREMENTS - Your code MUST include ALL of the following:
 
@@ -383,12 +396,12 @@ def main():
         st.header("Add New {entity}")
 
         with st.form("add_{entity_lower}_form"):
-{form_fields}
+{chr(10).join(form_fields)}
 
             submitted = st.form_submit_button("➕ Add {entity}")
 
             if submitted:
-{validation_rules}
+{chr(10).join(validation_rules)}
 
                 # Create data dictionary
                 data = {data_dict}
@@ -416,12 +429,12 @@ def main():
                 st.write(f"Editing {entity} ID: {{st.session_state.edit_{entity_lower}_id}}")
 
                 # Pre-populate form fields with existing data
-{form_fields.replace('key="', 'value=edit_data.get("').replace('_input"', '", ""), key="').replace('_input")', '_edit_input")')}
+                {chr(10).join([field.replace('key="', 'value=edit_data.get("').replace('_input"', '", ""), key="').replace('_input")', '_edit_input")') for field in form_fields])}
 
                 submitted = st.form_submit_button("💾 Update {entity}")
 
                 if submitted:
-{validation_rules.replace('_input', '_edit_input')}
+                    {chr(10).join([rule.replace('_input', '_edit_input') for rule in validation_rules])}
 
                     # Create data dictionary
                     data = {data_dict.replace('_input', '_edit_input')}
@@ -461,9 +474,8 @@ if __name__ == "__main__":
     main()
 ```
 
-CRITICAL: Generate ONLY the Python code above, with actual field names and validation logic based on the provided attributes. Do not include any markdown formatting, code block markers, or explanations.
+CRITICAL: Return ONLY the complete Python code, no markdown formatting or explanations.
 """
-
         return prompt
 
     def _write_to_managed_system(self, entity: str, code: str) -> str:
@@ -650,23 +662,32 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
     def _get_structured_feedback_injection(
         self, entity: str, swea_agent: str, task_type: str
     ) -> str:
-        """Get structured feedback injection for LLM prompts"""
-        return """
-CRITICAL FEEDBACK CONTEXT:
-- Entity: {entity}
-- Reviewing Agent: {swea_agent}
-- Task Type: {task_type}
-- Validation Standards: FrontendStandards compliance required
-- Quality Gate: TechLeadSWEA approval mandatory
+        """
+        Stage 4 Improvement #1: Get structured feedback injection from TechLeadSWEA.
+        Returns formatted feedback instructions for prompt injection.
+        """
+        try:
+            # Import TechLeadSWEA to access feedback storage
+            from baes.swea_agents.techlead_swea import TechLeadSWEA
 
-MANDATORY REQUIREMENTS:
-1. st.set_page_config() must be the first Streamlit call
-2. API_BASE_URL must be defined as "http://localhost:8000"
-3. All API calls must use response.raise_for_status()
-4. All forms must have proper validation
-5. All input fields must have unique keys
-6. Error handling must be comprehensive
-"""
+            # Create temporary TechLeadSWEA instance to access feedback storage
+            techlead = TechLeadSWEA()
+            structured_instructions = techlead._retrieve_feedback_for_injection(
+                entity, swea_agent, task_type
+            )
+            if structured_instructions:
+                logger.info(
+                    f"📤 FrontendSWEA: Retrieved structured feedback for {entity}.{swea_agent}.{task_type}"
+                )
+                return structured_instructions
+            else:
+                logger.debug(
+                    f"📤 FrontendSWEA: No structured feedback available for {entity}.{swea_agent}.{task_type}"
+                )
+                return ""
+        except Exception as e:
+            logger.warning(f"FrontendSWEA: Failed to get structured feedback injection: {str(e)}")
+            return ""
 
     def _extract_ui_improvements_from_text(
         self, response_text: str, original_attributes: List[str]

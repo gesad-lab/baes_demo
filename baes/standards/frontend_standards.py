@@ -269,6 +269,10 @@ class FrontendStandards(BaseStandards):
         
         This method performs all the validations that TechLeadSWEA should use
         to ensure consistency between generation and validation.
+        
+        NOTE: Frontend code does NOT use base standards (backend-specific requirements
+        like logger.error(), docstrings, return type hints) as these are not applicable
+        to Streamlit frontend applications.
         """
         # Run all frontend-specific validations
         structure_validation = cls.validate_streamlit_structure(code)
@@ -276,24 +280,23 @@ class FrontendStandards(BaseStandards):
         form_validation = cls.validate_form_handling(code)
         ui_validation = cls.validate_ui_completeness(code, entity)
         
-        # Run base validations
-        base_validation = cls.get_comprehensive_validation(code)
+        # Frontend code does NOT use base standards (backend-specific requirements)
+        # Base standards include logger.error(), docstrings, return type hints
+        # which are not applicable to Streamlit frontend applications
         
-        # Combine all issues and suggestions
+        # Combine all issues and suggestions from frontend-specific validations only
         all_issues = (
             structure_validation["issues"] +
             api_validation["issues"] +
             form_validation["issues"] +
-            ui_validation["issues"] +
-            base_validation["issues"]
+            ui_validation["issues"]
         )
         
         all_suggestions = (
             structure_validation["suggestions"] +
             api_validation["suggestions"] + 
             form_validation["suggestions"] +
-            ui_validation["suggestions"] +
-            base_validation["suggestions"]
+            ui_validation["suggestions"]
         )
         
         # Calculate overall validity
@@ -310,7 +313,7 @@ class FrontendStandards(BaseStandards):
                 "api_integration": api_validation,
                 "form_handling": form_validation,
                 "ui_completeness": ui_validation,
-                "base_standards": base_validation
+                "base_standards": "Not applicable to frontend code"
             },
             "entity": entity
         } 
