@@ -1,14 +1,17 @@
 import csv
 import logging
 import os
+import re
+import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from baes.core.managed_system_manager import ManagedSystemManager
 from baes.domain_entities.base_bae import BaseAgent
 from baes.llm.openai_client import OpenAIClient
 from baes.utils.llm_response_validator import parse_llm_json_response
+from baes.utils.llm_request_logger import llm_logger, RequestType
 from config import Config
 
 # Utility for conditional debug logging
@@ -746,12 +749,38 @@ GUIDELINES:
         # 1) Main generation pipeline
         # ------------------------------------------------------------------
         try:
+            # Log the LLM request for debugging and research
+            request_id = llm_logger.log_request(
+                agent_name="BackendSWEA",
+                request_type=RequestType.INTERPRETATION,
+                entity=entity,
+                task="interpret_feedback",
+                prompt=f"Interpret feedback for {entity} backend generation",
+                context={
+                    "attributes": attributes,
+                    "feedback": all_feedback,
+                    "code_type": "Complete FastAPI Routes with Pydantic Models",
+                },
+                retry_count=0,
+                session_id=self.current_session_id,
+            )
+            
             interpretation = self._interpret_feedback_for_backend_generation(
                 all_feedback,
                 entity,
                 "Complete FastAPI Routes with Pydantic Models",
                 attributes,
             )
+            
+            # Log the interpretation response
+            llm_logger.log_response(
+                request_id=request_id,
+                response_text=str(interpretation),
+                success=True,
+                response_time_ms=0.0,  # TODO: Add actual timing
+                model_used="gpt-4o-mini",
+            )
+            
             interpretation = self._validate_interpretation_structure(interpretation)
             # Always validate attributes from interpretation
             attributes = interpretation.get("attributes", [])
@@ -761,24 +790,59 @@ GUIDELINES:
                 )
                 attributes = []
             attributes = self._validate_attributes_parameter(attributes)
+            
+            # Log the code generation request
+            code_request_id = llm_logger.log_request(
+                agent_name="BackendSWEA",
+                request_type=RequestType.CODE_GENERATION,
+                entity=entity,
+                task="generate_api_code",
+                prompt=f"Generate FastAPI code for {entity} with attributes: {attributes}",
+                context={
+                    "interpretation": interpretation,
+                    "attributes": attributes,
+                    "code_type": "Complete FastAPI Routes with Pydantic Models",
+                },
+                retry_count=0,
+                session_id=self.current_session_id,
+            )
+            
             code = self._apply_backend_improvements(
                 interpretation,
                 entity,
                 "Complete FastAPI Routes with Pydantic Models",
                 context,
             )
+            
+            # Log the code generation response
+            llm_logger.log_response(
+                request_id=code_request_id,
+                response_text=code,
+                success=True,
+                response_time_ms=0.0,  # TODO: Add actual timing
+                model_used="gpt-4o-mini",
+            )
+            
         except Exception as e:
             # Early failure – either interpretation or LLM call broke
             logger.error("❌ BackendSWEA.main_pipeline failure for %s: %s", entity, str(e))
-            if os.getenv("BAE_ALLOW_FALLBACK", "1").lower() in ("1", "true", "yes", "on"):
-                logger.info("🔄 BackendSWEA: Falling back due to BAE_ALLOW_FALLBACK flag")
-                code = self._generate_fallback_api_code(entity, attributes, context, all_feedback)
-            else:
-                raise BackendGenerationError(
-                    f"Main backend generation pipeline failed for {entity}: {e}"
-                ) from e
+            
+            # Log the failure
+            if 'request_id' in locals():
+                llm_logger.log_response(
+                    request_id=request_id,
+                    response_text="",
+                    success=False,
+                    error_message=str(e),
+                    response_time_ms=0.0,
+                    model_used="gpt-4o-mini",
+                )
+            
+            # Use fallback generation (no templates - pure LLM)
+            logger.info("🔄 BackendSWEA: Falling back to LLM fallback generation")
+            code = self._generate_fallback_api_code(entity, attributes, context, all_feedback)
         # ------------------------------------------------------------------
-        # 2) Sanity check of produced code
+        # 2) Sanity check of produced code (NO FALLBACKS - expose real issues)
         # ------------------------------------------------------------------
         if (
             not code
@@ -786,18 +850,8 @@ GUIDELINES:
             or not self._verify_api_code_completeness(code, entity)
         ):
             msg = f"Generated API code for {entity} failed sanity check (missing CRUD endpoints or too short)"
-            if os.getenv("BAE_ALLOW_FALLBACK", "1").lower() in ("1", "true", "yes", "on"):
-                logger.warning("🚨 %s – falling back due to flag", msg)
-                code = self._generate_fallback_api_code(entity, attributes, context, all_feedback)
-                if (
-                    not code
-                    or len(code.strip()) < 200
-                    or not self._verify_api_code_completeness(code, entity)
-                ):
-                    # Even fallback failed → raise
-                    raise BackendGenerationError(msg + " – fallback also failed")
-            else:
-                raise BackendGenerationError(msg)
+            logger.error(f"❌ {msg} - LLM generation quality issue exposed")
+            raise BackendGenerationError(msg + " - LLM generation needs improvement")
         # Write to routes file (this is the single source of truth)
         file_path = self._write_to_managed_system(entity, "routes", code)
         logger.info(
@@ -833,92 +887,291 @@ GUIDELINES:
                 f"BackendSWEA: Parameter validation failed in _generate_fallback_api_code: {e}"
             )
             raise
-        try:
-            # Build a simple, direct prompt for reliable code generation
-            simple_prompt = f"""Generate a complete FastAPI routes file for {entity} entity with these requirements:
+        
+        # Build comprehensive prompt with explicit standards requirements
+        detailed_prompt = f"""Generate a complete FastAPI routes file for {entity} entity that MUST pass TechLeadSWEA validation.
+
 ENTITY: {entity}
 ATTRIBUTES: {', '.join(attributes)}
 CONTEXT: {context}
-REQUIRED COMPONENTS:
-1. Pydantic models (Base, Create, Update, Response)
-2. Complete CRUD endpoints (POST, GET, PUT, DELETE, LIST)
-3. Proper error handling with HTTPException
-4. Database integration with dependency injection
-5. Proper HTTP status codes (201, 200, 404, 500)
-FEEDBACK TO ADDRESS: {'; '.join(feedback) if feedback else 'Generate complete working CRUD API'}
-Generate ONLY Python code for a complete FastAPI router file with:
-- All imports at the top
-- Pydantic models embedded in same file
-- All 5 CRUD endpoints implemented
-- Proper error handling
-- Database dependency injection
-- No TODO comments or placeholders
-Example structure for {entity}:
+PREVIOUS FEEDBACK: {'; '.join(feedback) if feedback else 'None'}
+
+CRITICAL REQUIREMENTS (MUST INCLUDE ALL):
+1. Database Connection Management (USE SQLITE, NOT SQLALCHEMY):
+   - Use @contextmanager decorator for get_db_connection function
+   - Include try/yield/except/finally pattern
+   - Add conn.rollback() in except block
+   - Add conn.close() in finally block
+   - Use sqlite3.connect() NOT SQLAlchemy
+
+2. HTTP Status Codes:
+   - POST: status_code=status.HTTP_201_CREATED
+   - DELETE: status_code=status.HTTP_204_NO_CONTENT
+   - DELETE must return: return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+3. Error Handling:
+   - All database operations in try/except blocks
+   - Use HTTPException with proper status codes
+   - Include logger.error() calls in exception handlers
+   - Add db.rollback() in except blocks
+
+4. Complete CRUD Endpoints (EXACT FUNCTION NAMES REQUIRED):
+   - create_{entity.lower()}: POST /{entity.lower()}s/
+   - list_{entity.lower()}s: GET /{entity.lower()}s/ (NOT get_students, MUST be list_students)
+   - get_{entity.lower()}: GET /{entity.lower()}s/{{id}}
+   - update_{entity.lower()}: PUT /{entity.lower()}s/{{id}}
+   - delete_{entity.lower()}: DELETE /{entity.lower()}s/{{id}}
+
+5. Pydantic Models:
+   - {entity}Base, {entity}Create, {entity}Update, {entity}Response
+   - Response model must include id: int field
+   - Use from_attributes = True in Config
+
+6. Required Imports (USE SQLITE, NOT SQLALCHEMY):
+   - from fastapi import APIRouter, HTTPException, Depends, status, Response
+   - from pydantic import BaseModel
+   - from typing import List, Optional
+   - import sqlite3 (NOT sqlalchemy)
+   - from pathlib import Path
+   - from contextlib import contextmanager
+   - import logging
+
+7. TECHNOLOGY STACK (CRITICAL):
+   - Use SQLite with sqlite3.connect() 
+   - DO NOT use SQLAlchemy or Session
+   - Use direct SQL queries with cursor.execute()
+   - Use parameterized queries with ? placeholders
+
+Generate ONLY the complete Python code with NO placeholders, TODOs, or comments explaining what to do. The code must be immediately executable and pass all validation checks.
+
+Example structure (adapt for {entity}):
 ```python
-from fastapi import APIRouter, HTTPException, Depends, status
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, HTTPException, Depends, status, Response
+from pydantic import BaseModel
 from typing import List, Optional
 import sqlite3
 from pathlib import Path
-# Database dependency
+from contextlib import contextmanager
+import logging
+
+logger = logging.getLogger(__name__)
+
+@contextmanager
+def get_db_connection():
+    db_path = Path("app/database/academic.db")
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
 def get_db():
-    ...
-# Pydantic Models
+    with get_db_connection() as conn:
+        yield conn
+
 class {entity}Base(BaseModel):
-    ...
+    name: str
+    email: str
+
 class {entity}Create({entity}Base):
     pass
+
 class {entity}Update(BaseModel):
-    ...
+    name: Optional[str] = None
+    email: Optional[str] = None
+
 class {entity}Response({entity}Base):
     id: int
     class Config:
         from_attributes = True
-# Router
+
 router = APIRouter(prefix="/{entity.lower()}s", tags=["{entity.lower()}s"])
+
 @router.post("/", response_model={entity}Response, status_code=status.HTTP_201_CREATED)
-async def create_{entity.lower()}(...):
-    ...
+async def create_{entity.lower()}({entity.lower()}_data: {entity}Create, db: sqlite3.Connection = Depends(get_db)) -> {entity}Response:
+    try:
+        cursor = db.cursor()
+        fields = {entity.lower()}_data.dict()
+        field_names = ', '.join(fields.keys())
+        placeholders = ', '.join(['?' for _ in fields])
+        values = list(fields.values())
+        
+        cursor.execute(f"INSERT INTO {entity.lower()}s (" + field_names + ") VALUES (" + placeholders + ")", values)
+        db.commit()
+        
+        {entity.lower()}_id = cursor.lastrowid
+        cursor.execute(f"SELECT * FROM {entity.lower()}s WHERE id = ?", ({entity.lower()}_id,))
+        row = cursor.fetchone()
+        
+        return {entity}Response(id={entity.lower()}_id, **dict(row))
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating {entity.lower()}: {{e}}")
+        raise HTTPException(status_code=500, detail=f"Failed to create {entity.lower()}")
+
 @router.get("/", response_model=List[{entity}Response])
-async def list_{entity.lower()}s(...):
-    ...
+async def list_{entity.lower()}s(db: sqlite3.Connection = Depends(get_db)) -> List[{entity}Response]:
+    try:
+        cursor = db.cursor()
+        cursor.execute(f"SELECT * FROM {entity.lower()}s")
+        rows = cursor.fetchall()
+        return [{entity}Response(**dict(row)) for row in rows]
+    except Exception as e:
+        logger.error(f"Error listing {entity.lower()}s: {{e}}")
+        raise HTTPException(status_code=500, detail=f"Failed to list {entity.lower()}s")
+
 @router.get("/{{id}}", response_model={entity}Response)
-async def get_{entity.lower()}(...):
-    ...
+async def get_{entity.lower()}(id: int, db: sqlite3.Connection = Depends(get_db)) -> {entity}Response:
+    try:
+        cursor = db.cursor()
+        cursor.execute(f"SELECT * FROM {entity.lower()}s WHERE id = ?", (id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail=f"{entity} not found")
+            
+        return {entity}Response(**dict(row))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting {entity.lower()} {{id}}: {{e}}")
+        raise HTTPException(status_code=500, detail=f"Failed to get {entity.lower()}")
+
 @router.put("/{{id}}", response_model={entity}Response)
-async def update_{entity.lower()}(...):
-    ...
-@router.delete("/{{id}}")
-async def delete_{entity.lower()}(...):
-    ...
+async def update_{entity.lower()}(id: int, {entity.lower()}_data: {entity}Update, db: sqlite3.Connection = Depends(get_db)) -> {entity}Response:
+    try:
+        cursor = db.cursor()
+        cursor.execute(f"SELECT * FROM {entity.lower()}s WHERE id = ?", (id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail=f"{entity} not found")
+        
+        fields = {entity.lower()}_data.dict(exclude_unset=True)
+        if not fields:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        
+        set_clause = ", ".join([f"{{field}} = ?" for field in fields.keys()])
+        values = list(fields.values()) + [id]
+        
+        cursor.execute(f"UPDATE {entity.lower()}s SET {{set_clause}} WHERE id = ?", values)
+        db.commit()
+        
+        cursor.execute(f"SELECT * FROM {entity.lower()}s WHERE id = ?", (id,))
+        row = cursor.fetchone()
+        
+        return {entity}Response(**dict(row))
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating {entity.lower()} {{id}}: {{e}}")
+        raise HTTPException(status_code=500, detail=f"Failed to update {entity.lower()}")
+
+@router.delete("/{{id}}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_{entity.lower()}(id: int, db: sqlite3.Connection = Depends(get_db)) -> Response:
+    try:
+        cursor = db.cursor()
+        cursor.execute(f"SELECT * FROM {entity.lower()}s WHERE id = ?", (id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail=f"{entity} not found")
+        
+        cursor.execute(f"DELETE FROM {entity.lower()}s WHERE id = ?", (id,))
+        db.commit()
+        
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting {entity.lower()} {{id}}: {{e}}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete {entity.lower()}")
 ```
-Generate the complete implementation now:"""
-            # Use direct LLM generation without complex interpretation
+
+Generate the complete implementation for {entity} with the provided attributes: {', '.join(attributes)}"""
+        
+        try:
+            # Log the fallback LLM request
+            fallback_request_id = llm_logger.log_request(
+                agent_name="BackendSWEA",
+                request_type=RequestType.FALLBACK_GENERATION,
+                entity=entity,
+                task="fallback_api_generation",
+                prompt=detailed_prompt,
+                context={
+                    "attributes": attributes,
+                    "context": context,
+                    "feedback": feedback,
+                    "fallback_reason": "Main pipeline failed",
+                },
+                retry_count=0,
+                session_id=self.current_session_id,
+            )
+            
+            # Use LLM generation with comprehensive prompt
             code = self.llm_client.generate_code_with_domain_focus(
-                simple_prompt,
+                detailed_prompt,
                 code_type="Complete FastAPI Routes with Pydantic Models",
                 entity_context={
                     "entity": entity,
                     "attributes": attributes,
                     "fallback_generation": True,
+                    "validation_requirements": "strict",
                 },
             )
+            
+            # Log the fallback response
+            llm_logger.log_response(
+                request_id=fallback_request_id,
+                response_text=code,
+                success=True,
+                response_time_ms=0.0,  # TODO: Add actual timing
+                model_used="gpt-4o-mini",
+            )
+            
             # Validate generated code
             if not isinstance(code, str):
                 raise BackendGenerationError(
                     f"Fallback code generation failed: expected string, got {type(code)}"
                 )
+            
             # Verify the fallback code has basic requirements
             if not self._verify_api_code_completeness(code, entity):
-                logger.warning(
-                    f"🚨 BackendSWEA: Fallback code incomplete for {entity}, using template"
+                logger.error(f"🚨 BackendSWEA: LLM fallback code incomplete for {entity}")
+                
+                # Log the validation failure
+                llm_logger.log_response(
+                    request_id=fallback_request_id,
+                    response_text=code,
+                    success=False,
+                    error_message="Generated code failed completeness check",
+                    response_time_ms=0.0,
+                    model_used="gpt-4o-mini",
                 )
-                code = self._generate_template_api_code(entity, attributes)
+                
+                raise BackendGenerationError(f"LLM fallback generation failed completeness check for {entity}")
+            
             return code
         except Exception as e:
-            logger.error(f"❌ BackendSWEA: Fallback generation failed for {entity}: {str(e)}")
-            # Last resort: use hardcoded template
-            return self._generate_template_api_code(entity, attributes)
+            logger.error(f"❌ BackendSWEA: LLM fallback generation failed for {entity}: {str(e)}")
+            
+            # Log the failure
+            if 'fallback_request_id' in locals():
+                llm_logger.log_response(
+                    request_id=fallback_request_id,
+                    response_text="",
+                    success=False,
+                    error_message=str(e),
+                    response_time_ms=0.0,
+                    model_used="gpt-4o-mini",
+                )
+            
+            raise BackendGenerationError(f"LLM fallback generation failed for {entity}: {str(e)}")
 
     def _verify_api_code_completeness(self, code: str, entity: str) -> bool:
         """Verify that generated API code has minimum required components"""
@@ -934,24 +1187,53 @@ Generate the complete implementation now:"""
             return False
         if not code or len(code.strip()) < 200:
             return False
-        required_patterns = [
+        
+        # Check for required imports
+        required_imports = [
             "from fastapi import",
             "APIRouter",
-            f"class {entity}",
-            "def create_",
-            "def get_",
-            "def update_",
-            "def delete_",
-            "def list_",
+        ]
+        for import_pattern in required_imports:
+            if import_pattern not in code:
+                logger.debug(f"Missing required import pattern: {import_pattern}")
+                return False
+        
+        # Check for entity class definition
+        if f"class {entity}" not in code:
+            logger.debug(f"Missing entity class definition: class {entity}")
+            return False
+        
+        # Check for CRUD endpoints with flexible naming
+        entity_lower = entity.lower()
+        entity_plural = f"{entity_lower}s"
+        
+        # Define acceptable function name patterns for each CRUD operation
+        crud_patterns = {
+            "create": [f"def create_{entity_lower}", f"def create"],
+            "list": [f"def list_{entity_plural}", f"def get_{entity_plural}", f"def get_all_{entity_lower}"],
+            "get": [f"def get_{entity_lower}", f"def get_by_id"],
+            "update": [f"def update_{entity_lower}", f"def update"],
+            "delete": [f"def delete_{entity_lower}", f"def delete"],
+        }
+        
+        # Check that at least one pattern for each CRUD operation exists
+        for operation, patterns in crud_patterns.items():
+            if not any(pattern in code for pattern in patterns):
+                logger.debug(f"Missing {operation} operation. Expected patterns: {patterns}")
+                return False
+        
+        # Check for router decorators
+        router_patterns = [
             "@router.post",
-            "@router.get",
+            "@router.get", 
             "@router.put",
             "@router.delete",
         ]
-        for pattern in required_patterns:
+        for pattern in router_patterns:
             if pattern not in code:
-                logger.debug(f"Missing required pattern in API code: {pattern}")
+                logger.debug(f"Missing router decorator: {pattern}")
                 return False
+        
         return True
 
     def _generate_template_api_code(self, entity: str, attributes: List[str]) -> str:
@@ -985,86 +1267,38 @@ Generate the complete implementation now:"""
                 model_fields.append(f"    {attr.strip()}: str")
         fields_str = "\n".join(model_fields)
 
-        # Get standards-compliant imports
-        standards = BackendStandards()
-        required_imports = [
-            standards.REQUIRED_IMPORTS["fastapi_core"],
-            standards.REQUIRED_IMPORTS["pydantic"],
-            standards.REQUIRED_IMPORTS["typing"],
-            standards.REQUIRED_IMPORTS["database"],
-            standards.REQUIRED_IMPORTS["pathlib"],
-            standards.REQUIRED_IMPORTS["context_manager"],
-            standards.REQUIRED_IMPORTS["logging"],
-        ]
-        imports_section = "\n".join(required_imports)
+        # Generate complete standards-compliant code directly
+        template_code = f'''from fastapi import APIRouter, HTTPException, Depends, status, Response
+from pydantic import BaseModel
+from typing import List, Optional
+import sqlite3
+from pathlib import Path
+from contextlib import contextmanager
+import logging
 
-        # Generate standards-compliant database connection patterns
-        db_patterns = standards.DATABASE_PATTERNS
-        context_manager_code = f"""
+logger = logging.getLogger(__name__)
+
 # Database connection with context manager pattern (BackendStandards compliant)
-{db_patterns['context_manager_decorator']}
+@contextmanager
 def get_db_connection():
-    \"\"\"Database connection context manager for proper resource management\"\"\"
-    {db_patterns['connection_setup'][0]}
-    {db_patterns['connection_setup'][1]}
-    {db_patterns['connection_setup'][2]}
-    {db_patterns['connection_setup'][3]}
-    {db_patterns['exception_handling'][0]}
-        {db_patterns['exception_handling'][1]}
-    {db_patterns['exception_handling'][2]}
-        {db_patterns['exception_handling'][3]}
-        {db_patterns['exception_handling'][4]}
-    {db_patterns['exception_handling'][5]}
-        {db_patterns['exception_handling'][6]}
+    """Database connection context manager for proper resource management"""
+    db_path = Path("app/database/academic.db")
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 # Database dependency for FastAPI
 def get_db():
-    \"\"\"FastAPI dependency for database connection\"\"\"
-    {db_patterns['dependency_function'][1]}
-        {db_patterns['dependency_function'][2]}
-"""
-
-        # Generate standards-compliant HTTP status codes
-        status_codes = standards.HTTP_STATUS_CODES
-        delete_decorator = status_codes["DELETE"]["usage"]
-        delete_return = status_codes["DELETE"]["return_pattern"]
-
-        # Generate standards-compliant error handling
-        error_patterns = standards.ERROR_HANDLING["database_operations"]["pattern"]
-        error_handling_create = f"""
-        {error_patterns[0]}
-            cursor = db.cursor()
-            # Extract fields for insertion
-            fields = {entity_lower}_data.dict()
-            field_names = ', '.join(fields.keys())
-            placeholders = ', '.join(['?' for _ in fields])
-            values = list(fields.values())
-            
-            cursor.execute(
-                f"INSERT INTO {entity_plural} (" + field_names + ") VALUES (" + placeholders + ")",
-                values
-            )
-            {error_patterns[2]}
-            
-            # Get the created record
-            {entity_lower}_id = cursor.lastrowid
-            cursor.execute(f"SELECT * FROM {entity_plural} WHERE id = ?", ({entity_lower}_id,))
-            row = cursor.fetchone()
-            
-            return {entity}Response(id={entity_lower}_id, **dict(row))
-            
-        {error_patterns[3]}
-            {error_patterns[4]}
-        {error_patterns[5]}
-            {error_patterns[6]}
-            {error_patterns[7]}
-            {error_patterns[8]}"""
-
-        # Generate complete standards-compliant code
-        template_code = f'''{imports_section}
-
-logger = logging.getLogger(__name__)
-{context_manager_code}
+    """FastAPI dependency for database connection"""
+    with get_db_connection() as conn:
+        yield conn
 
 # Pydantic Models (BackendStandards compliant)
 class {entity}Base(BaseModel):
@@ -1089,7 +1323,33 @@ router = APIRouter(prefix="/{entity_plural}", tags=["{entity_plural}"])
 async def create_{entity_lower}(
     {entity_lower}_data: {entity}Create, db: sqlite3.Connection = Depends(get_db)) -> {entity}Response:
     """Create a new {entity_lower}"""
-{error_handling_create}
+    try:
+        cursor = db.cursor()
+        # Extract fields for insertion
+        fields = {entity_lower}_data.dict()
+        field_names = ', '.join(fields.keys())
+        placeholders = ', '.join(['?' for _ in fields])
+        values = list(fields.values())
+        
+        cursor.execute(
+            f"INSERT INTO {entity_plural} (" + field_names + ") VALUES (" + placeholders + ")",
+            values
+        )
+        db.commit()
+        
+        # Get the created record
+        {entity_lower}_id = cursor.lastrowid
+        cursor.execute(f"SELECT * FROM {entity_plural} WHERE id = ?", ({entity_lower}_id,))
+        row = cursor.fetchone()
+        
+        return {entity}Response(id={entity_lower}_id, **dict(row))
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating {entity_lower}: {{e}}")
+        raise HTTPException(status_code=500, detail=f"Failed to create {entity_lower}")
 
 @router.get("/", response_model=List[{entity}Response])
 async def list_{entity_plural}(db: sqlite3.Connection = Depends(get_db)) -> List[{entity}Response]:
@@ -1162,7 +1422,7 @@ async def update_{entity_lower}(
         logger.error(f"Error updating {entity_lower} {{id}}: {{e}}")
         raise HTTPException(status_code=500, detail=f"Failed to update {entity_lower}")
 
-{delete_decorator}
+@router.delete("/{{id}}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_{entity_lower}(id: int, db: sqlite3.Connection = Depends(get_db)) -> Response:
     """Delete a {entity_lower}"""
     try:
@@ -1176,8 +1436,7 @@ async def delete_{entity_lower}(id: int, db: sqlite3.Connection = Depends(get_db
         cursor.execute(f"DELETE FROM {entity_plural} WHERE id = ?", (id,))
         db.commit()
         
-        # Return 204 No Content status (BackendStandards requirement)
-        {delete_return}
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
         
     except HTTPException:
         raise
@@ -1339,67 +1598,252 @@ numpy==1.24.3
     def _apply_backend_improvements(
         self, interpretation: Dict[str, Any], entity: str, code_type: str, context: str
     ) -> str:
-        """Apply the interpreted improvements to the backend code generation"""
-        # CRITICAL FIX: Ensure entity is a valid string before any operations
+        """
+        Apply backend improvements based on interpretation.
+        Now includes explicit SQLite requirements to prevent SQLAlchemy usage.
+        """
         try:
-            entity = self._validate_entity_parameter(entity)
-        except BackendGenerationError as e:
-            logger.error(
-                f"BackendSWEA: Entity validation failed in _apply_backend_improvements: {e}"
+            # Extract information from interpretation
+            attributes = interpretation.get("attributes", [])
+            additional_requirements = interpretation.get("additional_requirements", [])
+            code_improvements = interpretation.get("code_improvements", [])
+            modifications = interpretation.get("modifications", [])
+            explanation = interpretation.get("explanation", "")
+
+            # Build comprehensive prompt with explicit technology requirements
+            prompt = f"""Generate complete FastAPI code for {entity} entity that MUST pass TechLeadSWEA validation.
+
+ENTITY: {entity}
+ATTRIBUTES: {', '.join(attributes)}
+CONTEXT: {context}
+
+INTERPRETATION:
+- Additional Requirements: {'; '.join(additional_requirements)}
+- Code Improvements: {'; '.join(code_improvements)}
+- Modifications: {'; '.join(modifications)}
+- Explanation: {explanation}
+
+CRITICAL REQUIREMENTS (MUST INCLUDE ALL):
+1. Database Connection Management (USE SQLITE, NOT SQLALCHEMY):
+   - Use @contextmanager decorator for get_db_connection function
+   - Include try/yield/except/finally pattern
+   - Add conn.rollback() in except block
+   - Add conn.close() in finally block
+   - Use sqlite3.connect() NOT SQLAlchemy
+
+2. HTTP Status Codes:
+   - POST: status_code=status.HTTP_201_CREATED
+   - DELETE: status_code=status.HTTP_204_NO_CONTENT
+   - DELETE must return: return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+3. Error Handling:
+   - All database operations in try/except blocks
+   - Use HTTPException with proper status codes
+   - Include logger.error() calls in exception handlers
+   - Add db.rollback() in except blocks
+
+4. Complete CRUD Endpoints (EXACT FUNCTION NAMES REQUIRED):
+   - create_{entity.lower()}: POST /{entity.lower()}s/
+   - list_{entity.lower()}s: GET /{entity.lower()}s/ (NOT get_students, MUST be list_students)
+   - get_{entity.lower()}: GET /{entity.lower()}s/{{id}}
+   - update_{entity.lower()}: PUT /{entity.lower()}s/{{id}}
+   - delete_{entity.lower()}: DELETE /{entity.lower()}s/{{id}}
+
+5. Function Documentation:
+   - ALL functions must have docstrings
+   - Use triple quotes for docstrings
+   - Include brief description of what the function does
+   - Example: \"\"\"Create a new {entity.lower()}.\"\"\"
+
+6. Pydantic Models:
+   - {entity}Base, {entity}Create, {entity}Update, {entity}Response
+   - Response model must include id: int field
+   - Use from_attributes = True in Config
+
+7. Required Imports (USE SQLITE, NOT SQLALCHEMY):
+   - from fastapi import APIRouter, HTTPException, Depends, status, Response
+   - from pydantic import BaseModel
+   - from typing import List, Optional
+   - import sqlite3 (NOT sqlalchemy)
+   - from pathlib import Path
+   - from contextlib import contextmanager
+   - import logging
+
+8. TECHNOLOGY STACK (CRITICAL):
+   - Use SQLite with sqlite3.connect() 
+   - DO NOT use SQLAlchemy or Session
+   - Use direct SQL queries with cursor.execute()
+   - Use parameterized queries with ? placeholders
+
+Generate ONLY the complete Python code with NO placeholders, TODOs, or comments explaining what to do. The code must be immediately executable and pass all validation checks.
+
+Example structure (adapt for {entity}):
+```python
+from fastapi import APIRouter, HTTPException, Depends, status, Response
+from pydantic import BaseModel
+from typing import List, Optional
+import sqlite3
+from pathlib import Path
+from contextlib import contextmanager
+import logging
+
+logger = logging.getLogger(__name__)
+
+@contextmanager
+def get_db_connection():
+    db_path = Path("app/database/academic.db")
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+def get_db():
+    with get_db_connection() as conn:
+        yield conn
+
+class {entity}Base(BaseModel):
+    name: str
+    email: str
+
+class {entity}Create({entity}Base):
+    pass
+
+class {entity}Update(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+
+class {entity}Response({entity}Base):
+    id: int
+    class Config:
+        from_attributes = True
+
+router = APIRouter(prefix="/{entity.lower()}s", tags=["{entity.lower()}s"])
+
+@router.post("/", response_model={entity}Response, status_code=status.HTTP_201_CREATED)
+async def create_{entity.lower()}({entity.lower()}_data: {entity}Create, db: sqlite3.Connection = Depends(get_db)) -> {entity}Response:
+    try:
+        cursor = db.cursor()
+        fields = {entity.lower()}_data.dict()
+        field_names = ', '.join(fields.keys())
+        placeholders = ', '.join(['?' for _ in fields])
+        values = list(fields.values())
+        
+        cursor.execute(f"INSERT INTO {entity.lower()}s (" + field_names + ") VALUES (" + placeholders + ")", values)
+        db.commit()
+        
+        {entity.lower()}_id = cursor.lastrowid
+        cursor.execute(f"SELECT * FROM {entity.lower()}s WHERE id = ?", ({entity.lower()}_id,))
+        row = cursor.fetchone()
+        
+        return {entity}Response(id={entity.lower()}_id, **dict(row))
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating {entity.lower()}: {{e}}")
+        raise HTTPException(status_code=500, detail=f"Failed to create {entity.lower()}")
+
+@router.get("/", response_model=List[{entity}Response])
+async def list_{entity.lower()}s(db: sqlite3.Connection = Depends(get_db)) -> List[{entity}Response]:
+    try:
+        cursor = db.cursor()
+        cursor.execute(f"SELECT * FROM {entity.lower()}s")
+        rows = cursor.fetchall()
+        return [{entity}Response(**dict(row)) for row in rows]
+    except Exception as e:
+        logger.error(f"Error listing {entity.lower()}s: {{e}}")
+        raise HTTPException(status_code=500, detail=f"Failed to list {entity.lower()}s")
+
+@router.get("/{{id}}", response_model={entity}Response)
+async def get_{entity.lower()}(id: int, db: sqlite3.Connection = Depends(get_db)) -> {entity}Response:
+    try:
+        cursor = db.cursor()
+        cursor.execute(f"SELECT * FROM {entity.lower()}s WHERE id = ?", (id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail=f"{entity} not found")
+            
+        return {entity}Response(**dict(row))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting {entity.lower()} {{id}}: {{e}}")
+        raise HTTPException(status_code=500, detail=f"Failed to get {entity.lower()}")
+
+@router.put("/{{id}}", response_model={entity}Response)
+async def update_{entity.lower()}(id: int, {entity.lower()}_data: {entity}Update, db: sqlite3.Connection = Depends(get_db)) -> {entity}Response:
+    try:
+        cursor = db.cursor()
+        cursor.execute(f"SELECT * FROM {entity.lower()}s WHERE id = ?", (id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail=f"{entity} not found")
+        
+        fields = {entity.lower()}_data.dict(exclude_unset=True)
+        if not fields:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        
+        set_clause = ", ".join([f"{{field}} = ?" for field in fields.keys()])
+        values = list(fields.values()) + [id]
+        
+        cursor.execute(f"UPDATE {entity.lower()}s SET {{set_clause}} WHERE id = ?", values)
+        db.commit()
+        
+        cursor.execute(f"SELECT * FROM {entity.lower()}s WHERE id = ?", (id,))
+        row = cursor.fetchone()
+        
+        return {entity}Response(**dict(row))
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating {entity.lower()} {{id}}: {{e}}")
+        raise HTTPException(status_code=500, detail=f"Failed to update {entity.lower()}")
+
+@router.delete("/{{id}}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_{entity.lower()}(id: int, db: sqlite3.Connection = Depends(get_db)) -> Response:
+    try:
+        cursor = db.cursor()
+        cursor.execute(f"SELECT * FROM {entity.lower()}s WHERE id = ?", (id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail=f"{entity} not found")
+        
+        cursor.execute(f"DELETE FROM {entity.lower()}s WHERE id = ?", (id,))
+        db.commit()
+        
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting {entity.lower()} {{id}}: {{e}}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete {entity.lower()}")
+```
+
+Generate the complete implementation for {entity} with the provided attributes: {', '.join(attributes)}"""
+
+            # Generate code using LLM
+            code = self.llm_client.generate_code_with_domain_focus(
+                prompt,
+                code_type=code_type,
+                entity_context={
+                    "entity": entity,
+                    "attributes": attributes,
+                    "interpretation": interpretation,
+                    "technology_stack": "sqlite_only",
+                },
             )
-            raise BackendGenerationError(f"Invalid entity parameter: {e}")
-        code_type = str(code_type).strip()
-        context = str(context).strip()
-        if not isinstance(interpretation, dict):
-            logger.error(
-                f"BackendSWEA: Interpretation must be a dictionary, received {type(interpretation)}"
-            )
-            raise BackendGenerationError(f"Invalid interpretation type: {type(interpretation)}")
-        # Extract feedback section for prompt template
-        feedback_section = interpretation.get("feedback_section", "")
-        if not feedback_section:
-            # Create a basic feedback section if none provided
-            feedback_section = "Generate complete, working FastAPI routes with proper error handling and database integration."
-        # Extract attributes from interpretation
-        attributes = interpretation.get("attributes", [])
-        if not isinstance(attributes, list):
-            logger.error(f"BackendSWEA: attributes must be a list, received {type(attributes)}")
-            attributes = []
-        # Validate attributes
-        try:
-            attributes = self._validate_attributes_parameter(attributes)
-        except BackendGenerationError as e:
-            logger.error(f"BackendSWEA: Attribute validation failed: {e}")
-            raise
-        # Build enhanced prompt with structured feedback
-        prompt = self._build_prompt(
-            entity=entity,
-            attributes=attributes,
-            code_type=code_type,
-            context=context,
-            feedback_section=feedback_section,
-        )
-        logger.debug(
-            f"BackendSWEA: Generating {code_type} for {entity} with {len(attributes)} attributes and feedback integration"
-        )
-        try:
-            # Generate code using LLM with enhanced prompt
-            response = self.llm_client.generate_response(
-                prompt=prompt,
-                system_prompt=f"You are a BackendSWEA agent generating {code_type} for {entity}. Implement ALL TechLeadSWEA feedback exactly as specified.\n\n{self._get_do_not_ignore_warning()}",
-            )
-            if not response or len(response.strip()) < 100:
-                raise BackendGenerationError(f"Generated code too short or empty for {entity}")
-            # Extract code from response (remove any markdown formatting)
-            code = self._extract_code_from_response(response)
-            if not code or len(code.strip()) < 100:
-                raise BackendGenerationError(f"Extracted code too short for {entity}")
-            logger.info(
-                f"✅ BackendSWEA: Successfully generated {code_type} for {entity} with feedback integration"
-            )
+
             return code
+
         except Exception as e:
-            logger.error(f"❌ BackendSWEA: Failed to generate {code_type} for {entity}: {str(e)}")
+            logger.error(f"❌ BackendSWEA: Code generation failed for {entity}: {str(e)}")
             raise BackendGenerationError(f"Code generation failed for {entity}: {str(e)}") from e
 
     def _extract_code_from_response(self, response: str) -> str:
