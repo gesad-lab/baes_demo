@@ -702,6 +702,245 @@ Please provide the JSON response with UI improvements."""
             logger.error("❌ FrontendSWEA fix_issues failed: %s", str(e))
             return self.create_error_response("fix_issues", str(e), "fix_error")
 
+    def _generate_template_ui_code(self, entity: str, attributes: List[str]) -> str:
+        """
+        Generate standards-compliant Streamlit UI code using FrontendStandards.
+        
+        This ensures the generated code follows the same patterns that TechLeadSWEA
+        validates against, reducing validation failures and max_retries issues.
+        """
+        try:
+            from baes.standards.frontend_standards import FrontendStandards
+            
+            # Get standards for template generation
+            standards = FrontendStandards()
+            
+            # Parse attributes to handle different formats
+            parsed_attributes = []
+            for attr in attributes:
+                if isinstance(attr, str):
+                    if ":" in attr:
+                        name, attr_type = attr.split(":", 1)
+                        parsed_attributes.append({"name": name.strip(), "type": attr_type.strip()})
+                    else:
+                        parsed_attributes.append({"name": attr.strip(), "type": "str"})
+                elif isinstance(attr, dict):
+                    parsed_attributes.append(attr)
+                else:
+                    parsed_attributes.append({"name": str(attr), "type": "str"})
+            
+            # Generate imports section
+            imports_section = "\n".join(standards.REQUIRED_IMPORTS.values())
+            
+            # Generate page config
+            page_config = standards.UI_PATTERNS["page_config"]["pattern"].replace(
+                "Entity Management", f"{entity} Management"
+            )
+            
+            # Generate API base URL
+            api_base_url = standards.API_PATTERNS["base_url"]
+            
+            # Generate form fields
+            form_fields = []
+            for attr in parsed_attributes:
+                field_name = attr["name"]
+                field_type = attr["type"].lower()
+                
+                if field_type in ["email"]:
+                    form_fields.append(f'    {field_name} = st.text_input("{field_name.title()}", key="{field_name}_input")')
+                elif field_type in ["int", "integer"]:
+                    form_fields.append(f'    {field_name} = st.number_input("{field_name.title()}", min_value=0, key="{field_name}_input")')
+                elif field_type in ["date"]:
+                    form_fields.append(f'    {field_name} = st.date_input("{field_name.title()}", key="{field_name}_input")')
+                else:
+                    form_fields.append(f'    {field_name} = st.text_input("{field_name.title()}", key="{field_name}_input")')
+            
+            form_fields_str = "\n".join(form_fields)
+            
+            # Generate validation logic
+            validation_rules = []
+            for attr in parsed_attributes:
+                field_name = attr["name"]
+                field_type = attr["type"].lower()
+                
+                if field_type == "email":
+                    validation_rules.append(f'    if {field_name} and "@" not in {field_name}:')
+                    validation_rules.append(f'        st.error("Please enter a valid email address")')
+                    validation_rules.append(f'        return')
+                else:
+                    validation_rules.append(f'    if not {field_name}:')
+                    validation_rules.append(f'        st.error("{field_name.title()} is required")')
+                    validation_rules.append(f'        return')
+            
+            validation_str = "\n".join(validation_rules)
+            
+            # Generate data dictionary
+            data_fields = [f'"{attr["name"]}": {attr["name"]}' for attr in parsed_attributes]
+            data_dict = "{\n        " + ",\n        ".join(data_fields) + "\n    }"
+            
+            # Generate display columns
+            display_columns = [f'"{attr["name"].title()}"' for attr in parsed_attributes]
+            columns_str = "[" + ", ".join(display_columns) + "]"
+            
+            entity_lower = entity.lower()
+            entity_plural = f"{entity_lower}s"
+            
+            # Generate complete Streamlit UI code
+            template_code = f'''
+{imports_section}
+
+{page_config}
+
+{api_base_url}
+
+def main():
+    st.title("{entity} Management System")
+    
+    # Create tabs for different operations
+    tab1, tab2, tab3 = st.tabs(["📋 List {entity}s", "➕ Add {entity}", "✏️ Edit {entity}"])
+    
+    with tab1:
+        st.header("All {entity}s")
+        
+        # Refresh button
+        if st.button("🔄 Refresh", key="refresh_list"):
+            st.rerun()
+        
+        try:
+            response = requests.get(f"{{API_BASE_URL}}/api/{entity_plural}/")
+            response.raise_for_status()
+            {entity_lower}s = response.json()
+            
+            if {entity_lower}s:
+                # Convert to DataFrame for better display
+                import pandas as pd
+                df = pd.DataFrame({entity_lower}s)
+                
+                # Display with edit/delete buttons
+                for idx, {entity_lower} in enumerate({entity_lower}s):
+                    with st.expander(f"{entity} ID: {{{entity_lower}['id']}}"):
+                        col1, col2, col3 = st.columns([3, 1, 1])
+                        
+                        with col1:
+                            for key, value in {entity_lower}.items():
+                                if key != 'id':
+                                    st.write(f"**{{key.title()}}:** {{value}}")
+                        
+                        with col2:
+                            if st.button("✏️ Edit", key=f"edit_{{{entity_lower}['id']}}"):
+                                st.session_state.edit_{entity_lower}_id = {entity_lower}['id']
+                                st.session_state.edit_{entity_lower}_data = {entity_lower}
+                                st.rerun()
+                        
+                        with col3:
+                            if st.button("🗑️ Delete", key=f"delete_{{{entity_lower}['id']}}"):
+                                try:
+                                    delete_response = requests.delete(f"{{API_BASE_URL}}/api/{entity_plural}/{{{entity_lower}['id']}}")
+                                    if delete_response.status_code == 204:
+                                        st.success(f"{entity} deleted successfully!")
+                                        st.rerun()
+                                    else:
+                                        st.error("Failed to delete {entity_lower}")
+                                except requests.exceptions.RequestException as e:
+                                    st.error(f"Error deleting {entity_lower}: {{e}}")
+            else:
+                st.info("No {entity_lower}s found.")
+                
+        except requests.exceptions.RequestException as e:
+            st.error(f"Error fetching {entity_lower}s: {{e}}")
+    
+    with tab2:
+        st.header("Add New {entity}")
+        
+        with st.form("add_{entity_lower}_form"):
+{form_fields_str}
+            
+            submitted = st.form_submit_button("➕ Add {entity}")
+            
+            if submitted:
+{validation_str}
+                
+                # Create data dictionary
+                data = {data_dict}
+                
+                try:
+                    response = requests.post(f"{{API_BASE_URL}}/api/{entity_plural}/", json=data)
+                    response.raise_for_status()
+                    
+                    if response.status_code == 201:
+                        st.success(f"{entity} added successfully!")
+                        st.rerun()
+                    else:
+                        st.error("Failed to add {entity_lower}")
+                        
+                except requests.exceptions.RequestException as e:
+                    st.error(f"Error adding {entity_lower}: {{e}}")
+    
+    with tab3:
+        st.header("Edit {entity}")
+        
+        if f"edit_{entity_lower}_id" in st.session_state:
+            edit_data = st.session_state.get(f"edit_{entity_lower}_data", {{}})
+            
+            with st.form("edit_{entity_lower}_form"):
+                st.write(f"Editing {entity} ID: {{st.session_state.edit_{entity_lower}_id}}")
+                
+                # Pre-populate form fields with existing data
+{form_fields_str.replace('key="', 'value=edit_data.get("').replace('_input"', '", ""), key="').replace('_input")', '_edit_input")')}
+                
+                submitted = st.form_submit_button("💾 Update {entity}")
+                
+                if submitted:
+{validation_str.replace('_input', '_edit_input')}
+                    
+                    # Create data dictionary
+                    data = {data_dict.replace('_input', '_edit_input')}
+                    
+                    try:
+                        response = requests.put(
+                            f"{{API_BASE_URL}}/api/{entity_plural}/{{st.session_state.edit_{entity_lower}_id}}", 
+                            json=data
+                        )
+                        response.raise_for_status()
+                        
+                        if response.status_code == 200:
+                            st.success(f"{entity} updated successfully!")
+                            # Clear edit state
+                            if f"edit_{entity_lower}_id" in st.session_state:
+                                del st.session_state[f"edit_{entity_lower}_id"]
+                            if f"edit_{entity_lower}_data" in st.session_state:
+                                del st.session_state[f"edit_{entity_lower}_data"]
+                            st.rerun()
+                        else:
+                            st.error("Failed to update {entity_lower}")
+                            
+                    except requests.exceptions.RequestException as e:
+                        st.error(f"Error updating {entity_lower}: {{e}}")
+            
+            if st.button("❌ Cancel Edit"):
+                if f"edit_{entity_lower}_id" in st.session_state:
+                    del st.session_state[f"edit_{entity_lower}_id"]
+                if f"edit_{entity_lower}_data" in st.session_state:
+                    del st.session_state[f"edit_{entity_lower}_data"]
+                st.rerun()
+        
+        else:
+            st.info("Select a {entity_lower} from the list to edit.")
+
+if __name__ == "__main__":
+    main()
+'''.strip()
+            
+            return template_code
+            
+        except ImportError:
+            logger.warning("FrontendStandards not available, using fallback code generation")
+            # Fallback to basic template if standards not available
+            return self._generate_basic_ui_code(entity, attributes)
+        except Exception as e:
+            logger.error(f"FrontendSWEA template generation failed: {e}")
+            raise
+
 
 # ---------------------------------------------------------------------------
 # Custom exception to make failures explicit (no silent fallback)

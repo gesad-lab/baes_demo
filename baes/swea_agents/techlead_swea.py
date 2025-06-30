@@ -811,25 +811,32 @@ class TechLeadSWEA(BaseAgent):
     ) -> Dict[str, Any]:
         """
         Standards-based validation for code artifacts (BackendSWEA, FrontendSWEA, etc.).
-        Now uses the same standards that SWEAs use for generation to ensure perfect alignment.
+        Now uses the appropriate standards for each SWEA type to ensure perfect alignment.
         """
         try:
             # Extract artifact information - handle nested data structure from SWEAs
             data = result.get("data", {})
             code = data.get("code", "") if data else result.get("code", "")
             file_path = data.get("file_path", "") if data else result.get("file_path", "")
-
+            
             # Log what we found for debugging
             logger.info(f"🔍 TechLeadSWEA: Extracted code length: {len(code)} characters")
             logger.info(f"🔍 TechLeadSWEA: File path: {file_path}")
-
-            # Use standards-based validation for BackendSWEA
+            
+            # Use standards-based validation for each SWEA type
             if swea_agent == "BackendSWEA":
                 return self._validate_backend_with_standards(entity, code, task_type)
-
-            # For other SWEAs, use existing LLM-based validation until their standards are implemented
-            return self._validate_with_llm(entity, swea_agent, task_type, code, file_path)
-
+            elif swea_agent == "FrontendSWEA":
+                return self._validate_frontend_with_standards(entity, code, task_type)
+            elif swea_agent == "DatabaseSWEA":
+                return self._validate_database_with_standards(entity, code, task_type)
+            elif swea_agent == "TestSWEA":
+                return self._validate_test_with_standards(entity, code, task_type)
+            else:
+                # For other SWEAs or unknown types, use LLM-based validation as fallback
+                logger.info(f"🔍 TechLeadSWEA: Using LLM validation for {swea_agent} (no specific standards yet)")
+                return self._validate_with_llm(entity, swea_agent, task_type, code, file_path)
+            
         except Exception as e:
             logger.error(
                 f"❌ TechLeadSWEA: Code validation failed for {swea_agent}.{task_type}: {str(e)}"
@@ -842,22 +849,20 @@ class TechLeadSWEA(BaseAgent):
                 "suggestions": ["Retry the code validation process"],
             }
 
-    def _validate_backend_with_standards(
-        self, entity: str, code: str, task_type: str
-    ) -> Dict[str, Any]:
+    def _validate_backend_with_standards(self, entity: str, code: str, task_type: str) -> Dict[str, Any]:
         """
         Validate BackendSWEA code using the same BackendStandards used for generation.
-
-        This ensures perfect alignment between generation and validation,
+        
+        This ensures perfect alignment between generation and validation, 
         directly addressing the max_retries issue.
         """
         try:
             # Import standards - same ones used by BackendSWEA for generation
             from baes.standards.backend_standards import BackendStandards
-
+            
             # Use comprehensive standards-based validation
             validation_result = BackendStandards.get_backend_validation(code, entity)
-
+            
             # Convert standards validation result to TechLeadSWEA format
             techlead_result = {
                 "is_valid": validation_result["is_valid"],
@@ -868,23 +873,19 @@ class TechLeadSWEA(BaseAgent):
                 "actionable_feedback": validation_result["suggestions"],  # TechLeadSWEA format
                 "validation_method": "BackendStandards",
                 "entity": entity,
-                "task_type": task_type,
+                "task_type": task_type
             }
-
+            
             # Log validation result
             if validation_result["is_valid"]:
-                logger.info(
-                    f"✅ TechLeadSWEA: Backend code for {entity} passed standards validation"
-                )
+                logger.info(f"✅ TechLeadSWEA: Backend code for {entity} passed standards validation")
             else:
-                logger.warning(
-                    f"❌ TechLeadSWEA: Backend code for {entity} failed standards validation:"
-                )
+                logger.warning(f"❌ TechLeadSWEA: Backend code for {entity} failed standards validation:")
                 for issue in validation_result["issues"][:3]:  # Log first 3 issues
                     logger.warning(f"  - {issue}")
-
+                    
             return techlead_result
-
+            
         except ImportError as e:
             logger.error(f"❌ Failed to import BackendStandards: {e}")
             # Fallback to LLM validation if standards are not available
@@ -897,6 +898,135 @@ class TechLeadSWEA(BaseAgent):
                 "details": f"Standards validation error: {str(e)}",
                 "issues": [f"Standards validation failed: {str(e)}"],
                 "suggestions": ["Check BackendStandards implementation"],
+            }
+
+    def _validate_frontend_with_standards(self, entity: str, code: str, task_type: str) -> Dict[str, Any]:
+        """
+        Validate FrontendSWEA code using FrontendStandards.
+        """
+        try:
+            from baes.standards.frontend_standards import FrontendStandards
+            
+            validation_result = FrontendStandards.get_frontend_validation(code, entity)
+            
+            techlead_result = {
+                "is_valid": validation_result["is_valid"],
+                "quality_score": validation_result["quality_score"],
+                "details": f"Standards-based validation for {entity} frontend code",
+                "issues": validation_result["issues"],
+                "suggestions": validation_result["suggestions"],
+                "actionable_feedback": validation_result["suggestions"],
+                "validation_method": "FrontendStandards",
+                "entity": entity,
+                "task_type": task_type
+            }
+            
+            if validation_result["is_valid"]:
+                logger.info(f"✅ TechLeadSWEA: Frontend code for {entity} passed standards validation")
+            else:
+                logger.warning(f"❌ TechLeadSWEA: Frontend code for {entity} failed standards validation:")
+                for issue in validation_result["issues"][:3]:
+                    logger.warning(f"  - {issue}")
+                    
+            return techlead_result
+            
+        except ImportError as e:
+            logger.error(f"❌ Failed to import FrontendStandards: {e}")
+            return self._validate_with_llm(entity, "FrontendSWEA", task_type, code, "")
+        except Exception as e:
+            logger.error(f"❌ Frontend standards validation failed: {e}")
+            return {
+                "is_valid": False,
+                "quality_score": 0.0,
+                "details": f"Frontend validation error: {str(e)}",
+                "issues": [f"Frontend validation failed: {str(e)}"],
+                "suggestions": ["Check FrontendStandards implementation"],
+            }
+
+    def _validate_database_with_standards(self, entity: str, code: str, task_type: str) -> Dict[str, Any]:
+        """
+        Validate DatabaseSWEA code using DatabaseStandards.
+        """
+        try:
+            from baes.standards.database_standards import DatabaseStandards
+            
+            validation_result = DatabaseStandards.get_database_validation(code, entity)
+            
+            techlead_result = {
+                "is_valid": validation_result["is_valid"],
+                "quality_score": validation_result["quality_score"],
+                "details": f"Standards-based validation for {entity} database code",
+                "issues": validation_result["issues"],
+                "suggestions": validation_result["suggestions"],
+                "actionable_feedback": validation_result["suggestions"],
+                "validation_method": "DatabaseStandards",
+                "entity": entity,
+                "task_type": task_type
+            }
+            
+            if validation_result["is_valid"]:
+                logger.info(f"✅ TechLeadSWEA: Database code for {entity} passed standards validation")
+            else:
+                logger.warning(f"❌ TechLeadSWEA: Database code for {entity} failed standards validation:")
+                for issue in validation_result["issues"][:3]:
+                    logger.warning(f"  - {issue}")
+                    
+            return techlead_result
+            
+        except ImportError as e:
+            logger.error(f"❌ Failed to import DatabaseStandards: {e}")
+            return self._validate_with_llm(entity, "DatabaseSWEA", task_type, code, "")
+        except Exception as e:
+            logger.error(f"❌ Database standards validation failed: {e}")
+            return {
+                "is_valid": False,
+                "quality_score": 0.0,
+                "details": f"Database validation error: {str(e)}",
+                "issues": [f"Database validation failed: {str(e)}"],
+                "suggestions": ["Check DatabaseStandards implementation"],
+            }
+
+    def _validate_test_with_standards(self, entity: str, code: str, task_type: str) -> Dict[str, Any]:
+        """
+        Validate TestSWEA code using TestStandards.
+        """
+        try:
+            from baes.standards.test_standards import TestStandards
+            
+            validation_result = TestStandards.get_test_validation(code, entity)
+            
+            techlead_result = {
+                "is_valid": validation_result["is_valid"],
+                "quality_score": validation_result["quality_score"],
+                "details": f"Standards-based validation for {entity} test code",
+                "issues": validation_result["issues"],
+                "suggestions": validation_result["suggestions"],
+                "actionable_feedback": validation_result["suggestions"],
+                "validation_method": "TestStandards",
+                "entity": entity,
+                "task_type": task_type
+            }
+            
+            if validation_result["is_valid"]:
+                logger.info(f"✅ TechLeadSWEA: Test code for {entity} passed standards validation")
+            else:
+                logger.warning(f"❌ TechLeadSWEA: Test code for {entity} failed standards validation:")
+                for issue in validation_result["issues"][:3]:
+                    logger.warning(f"  - {issue}")
+                    
+            return techlead_result
+            
+        except ImportError as e:
+            logger.error(f"❌ Failed to import TestStandards: {e}")
+            return self._validate_with_llm(entity, "TestSWEA", task_type, code, "")
+        except Exception as e:
+            logger.error(f"❌ Test standards validation failed: {e}")
+            return {
+                "is_valid": False,
+                "quality_score": 0.0,
+                "details": f"Test validation error: {str(e)}",
+                "issues": [f"Test validation failed: {str(e)}"],
+                "suggestions": ["Check TestStandards implementation"],
             }
 
     def _validate_with_llm(

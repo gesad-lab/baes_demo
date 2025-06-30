@@ -8,7 +8,16 @@ The standards follow validation rules format with moderate granularity,
 organized by functionality for clear separation of concerns.
 """
 
-from .backend_standards import BackendStandards
 from .base_standards import BaseStandards
+from .backend_standards import BackendStandards
+from .frontend_standards import FrontendStandards
+from .database_standards import DatabaseStandards
+from .test_standards import TestStandards
 
-__all__ = ["BaseStandards", "BackendStandards"]
+__all__ = [
+    "BaseStandards", 
+    "BackendStandards", 
+    "FrontendStandards", 
+    "DatabaseStandards", 
+    "TestStandards"
+]
