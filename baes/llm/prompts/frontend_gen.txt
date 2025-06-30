@@ -8,6 +8,47 @@ Attributes: {attributes}
 Context: {context}
 FastAPI base URL: http://localhost:8000
 
+CRITICAL REQUIREMENTS - Your code MUST include ALL of the following:
+
+1. **MANDATORY: st.set_page_config() at the beginning of the file**
+   - Must be the first Streamlit call in the file
+   - Use: st.set_page_config(page_title="{entity} Management", page_icon="📊", layout="wide")
+
+2. **MANDATORY: API_BASE_URL configuration**
+   - Define: API_BASE_URL = "http://localhost:8000"
+   - Use this constant for all API calls
+
+3. **MANDATORY: Proper error handling with response.raise_for_status()**
+   - Add response.raise_for_status() after every API call
+   - Wrap all API calls in try/except blocks
+   - **CRITICAL: Add logger.error() in ALL except blocks**
+   - Example: except Exception as e: logger.error(f"Error: {{e}}")
+
+4. **MANDATORY: Complete CRUD functionality**
+   - Create: POST to /api/{entity_lower}s/
+   - Read: GET from /api/{entity_lower}s/
+   - Update: PUT to /api/{entity_lower}s/{{id}}
+   - Delete: DELETE to /api/{entity_lower}s/{{id}}
+
+5. **MANDATORY: Form validation and error messages**
+   - Validate all required fields
+   - Show st.error() messages for validation failures
+
+6. **MANDATORY: Proper imports**
+   - import streamlit as st
+   - import requests
+   - from typing import List, Dict, Any, Optional
+   - import logging
+
+7. **MANDATORY: Function documentation and type hints**
+   - Add docstrings to ALL functions: """Function description."""
+   - Add return type hints to ALL functions: def function_name() -> None:
+   - Example: def main() -> None: """Main application function."""
+
+8. **MANDATORY: Logging setup**
+   - Add: logger = logging.getLogger(__name__)
+   - Use logger.error() in ALL exception handlers
+
 Requirements:
 1. Use Streamlit best practices with proper table display and functional edit/delete.
 2. Call the REST endpoints exposed at /api/{entity_lower}s (note the /api prefix).
@@ -28,14 +69,22 @@ EXAMPLE STRUCTURE (generate actual working code based on the attributes provided
 
 import streamlit as st
 import requests
-import pandas as pd
-from datetime import datetime
+import logging
+from typing import List, Dict, Any, Optional
 
-def main():
+# Setup logging
+logger = logging.getLogger(__name__)
+
+# MANDATORY: Page configuration (must be first)
+st.set_page_config(page_title="{entity} Management", page_icon="📊", layout="wide")
+
+# MANDATORY: API base URL
+API_BASE_URL = "http://localhost:8000"
+
+def main() -> None:
+    """Main application function for {entity} management system."""
     st.title("{entity} Management System")
     st.markdown("Auto-generated system for managing multiple business entities")
-
-    API_BASE = "http://localhost:8000/api/{entity_lower}s"
 
     if 'editing_item' not in st.session_state:
         st.session_state.editing_item = None
@@ -56,13 +105,15 @@ def main():
                     "course": course
                 }
                 try:
-                    response = requests.post(API_BASE + "/", json=data)
+                    response = requests.post(f"{API_BASE_URL}/api/{entity_lower}s/", json=data)
+                    response.raise_for_status()  # MANDATORY: Status code validation
                     if response.status_code in [200, 201]:
                         st.success("{entity} created successfully!")
                         st.rerun()
                     else:
                         st.error(f"Failed to create {entity}: {response.text}")
                 except Exception as e:
+                    logger.error(f"Error creating {entity}: {e}")
                     st.error(f"Error creating {entity}: {e}")
             else:
                 st.error("Please fill in all fields")
@@ -70,7 +121,8 @@ def main():
     st.header("All {entity}s")
 
     try:
-        response = requests.get(API_BASE + "/")
+        response = requests.get(f"{API_BASE_URL}/api/{entity_lower}s/")
+        response.raise_for_status()  # MANDATORY: Status code validation
         if response.status_code == 200:
             {entity_lower}s = response.json()
             if {entity_lower}s:
@@ -112,7 +164,8 @@ def main():
                             if st.button("Delete Selected {entity}", type="secondary"):
                                 if st.session_state.get('confirm_delete') == selected_id:
                                     try:
-                                        delete_response = requests.delete(f"{API_BASE}/{selected_id}")
+                                        delete_response = requests.delete(f"{API_BASE_URL}/api/{entity_lower}s/{selected_id}")
+                                        delete_response.raise_for_status()  # MANDATORY: Status code validation
                                         if delete_response.status_code in [200, 204]:
                                             st.success("{entity} deleted successfully!")
                                             st.session_state.refresh_data = True
@@ -122,6 +175,7 @@ def main():
                                         else:
                                             st.error(f"Failed to delete {entity}")
                                     except Exception as e:
+                                        logger.error(f"Error deleting {entity}: {e}")
                                         st.error(f"Error deleting {entity}: {e}")
                                 else:
                                     st.session_state.confirm_delete = selected_id
@@ -131,6 +185,7 @@ def main():
         else:
             st.error(f"Error fetching {entity_lower}s: {response.text}")
     except Exception as e:
+        logger.error(f"Connection error: {e}")
         st.error(f"Connection error: {e}")
 
     if st.session_state.editing_item:
@@ -152,7 +207,8 @@ def main():
                             "course": edit_course
                         }
                         try:
-                            response = requests.put(f"{API_BASE}/{item['id']}", json=update_data)
+                            response = requests.put(f"{API_BASE_URL}/api/{entity_lower}s/{item['id']}", json=update_data)
+                            response.raise_for_status()  # MANDATORY: Status code validation
                             if response.status_code == 200:
                                 st.success("{entity} updated successfully!")
                                 st.session_state.editing_item = None
@@ -160,6 +216,7 @@ def main():
                             else:
                                 st.error(f"Failed to update {entity}: {response.text}")
                         except Exception as e:
+                            logger.error(f"Error updating {entity}: {e}")
                             st.error(f"Error updating {entity}: {e}")
                     else:
                         st.error("Please fill in all fields")
@@ -187,8 +244,12 @@ CRITICAL: Generate complete working Python code with actual form fields and API 
 import streamlit as st
 import requests
 import pandas as pd
+import logging
 from datetime import datetime
 from config import Config
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 # Page configuration
 st.set_page_config(
@@ -234,8 +295,8 @@ st.markdown("""
 # API configuration
 API_BASE_URL = Config.get_api_endpoint_url("<entity_name_lower>s")
 
-def main():
-    """Main application function"""
+def main() -> None:
+    """Main application function for entity management system."""
     # Header
     st.markdown('<h1 class="main-header">👥 <EntityName> Management System</h1>', unsafe_allow_html=True)
 
@@ -258,13 +319,14 @@ def main():
     elif page == "Delete <EntityName>":
         delete_<entity_name_lower>()
 
-def show_dashboard():
-    """Display dashboard with metrics and overview"""
+def show_dashboard() -> None:
+    """Display dashboard with metrics and overview."""
     st.header("📊 Dashboard")
 
     try:
         # Fetch <entity_name_lower>s for metrics
         response = requests.get(API_BASE_URL)
+        response.raise_for_status()  # MANDATORY: Status code validation
         if response.status_code == 200:
             <entity_name_lower>s = response.json()
 
@@ -295,10 +357,11 @@ def show_dashboard():
                 st.info("No <entity_name_lower>s found. Add your first <entity_name_lower>!")
 
     except Exception as e:
+        logger.error(f"Error loading dashboard: {str(e)}")
         st.error(f"Error loading dashboard: {str(e)}")
 
-def view_<entity_name_lower>s():
-    """View all <entity_name_lower>s with search and filter options"""
+def view_<entity_name_lower>s() -> None:
+    """View all <entity_name_lower>s with search and filter options."""
     st.header("👥 View <EntityName>s")
 
     try:
@@ -313,6 +376,7 @@ def view_<entity_name_lower>s():
 
         # Fetch <entity_name_lower>s
         response = requests.get(API_BASE_URL)
+        response.raise_for_status()  # MANDATORY: Status code validation
         if response.status_code == 200:
             <entity_name_lower>s = response.json()
 
@@ -338,10 +402,11 @@ def view_<entity_name_lower>s():
             st.error(f"Failed to fetch <entity_name_lower>s: {response.status_code}")
 
     except Exception as e:
+        logger.error(f"Error viewing <entity_name_lower>s: {str(e)}")
         st.error(f"Error viewing <entity_name_lower>s: {str(e)}")
 
-def add_<entity_name_lower>():
-    """Add a new <entity_name_lower>"""
+def add_<entity_name_lower>() -> None:
+    """Add a new <entity_name_lower>."""
     st.header("➕ Add New <EntityName>")
 
     with st.form("add_<entity_name_lower>_form"):
@@ -371,6 +436,7 @@ def add_<entity_name_lower>():
             try:
                 # Send POST request
                 response = requests.post(API_BASE_URL, json=<entity_name_lower>_data)
+                response.raise_for_status()  # MANDATORY: Status code validation
 
                 if response.status_code == 201:
                     st.success("✅ <EntityName> added successfully!")
@@ -383,15 +449,17 @@ def add_<entity_name_lower>():
                     st.error(f"❌ Failed to add <entity_name_lower>: {response.status_code}")
 
             except Exception as e:
+                logger.error(f"Error adding <entity_name_lower>: {str(e)}")
                 st.error(f"❌ Error adding <entity_name_lower>: {str(e)}")
 
-def edit_<entity_name_lower>():
-    """Edit an existing <entity_name_lower>"""
+def edit_<entity_name_lower>() -> None:
+    """Edit an existing <entity_name_lower>."""
     st.header("✏️ Edit <EntityName>")
 
     try:
         # Fetch <entity_name_lower>s for selection
         response = requests.get(API_BASE_URL)
+        response.raise_for_status()  # MANDATORY: Status code validation
         if response.status_code == 200:
             <entity_name_lower>s = response.json()
 
@@ -429,6 +497,7 @@ def edit_<entity_name_lower>():
                         try:
                             # Send PUT request
                             response = requests.put(f"{API_BASE_URL}{selected_<entity_name_lower>['id']}", json=update_data)
+                            response.raise_for_status()  # MANDATORY: Status code validation
 
                             if response.status_code == 200:
                                 st.success("✅ <EntityName> updated successfully!")
@@ -439,20 +508,23 @@ def edit_<entity_name_lower>():
                                 st.error(f"❌ Failed to update <entity_name_lower>: {response.status_code}")
 
                         except Exception as e:
+                            logger.error(f"Error updating <entity_name_lower>: {str(e)}")
                             st.error(f"❌ Error updating <entity_name_lower>: {str(e)}")
         else:
             st.error(f"Failed to fetch <entity_name_lower>s: {response.status_code}")
 
     except Exception as e:
+        logger.error(f"Error in edit form: {str(e)}")
         st.error(f"Error in edit form: {str(e)}")
 
-def delete_<entity_name_lower>():
-    """Delete a <entity_name_lower>"""
+def delete_<entity_name_lower>() -> None:
+    """Delete a <entity_name_lower>."""
     st.header("🗑️ Delete <EntityName>")
 
     try:
         # Fetch <entity_name_lower>s for selection
         response = requests.get(API_BASE_URL)
+        response.raise_for_status()  # MANDATORY: Status code validation
         if response.status_code == 200:
             <entity_name_lower>s = response.json()
 
@@ -474,6 +546,7 @@ def delete_<entity_name_lower>():
                     try:
                         # Send DELETE request
                         response = requests.delete(f"{API_BASE_URL}{selected_<entity_name_lower>['id']}")
+                        response.raise_for_status()  # MANDATORY: Status code validation
 
                         if response.status_code == 204:
                             st.success("✅ <EntityName> deleted successfully!")
@@ -484,11 +557,13 @@ def delete_<entity_name_lower>():
                             st.error(f"❌ Failed to delete <entity_name_lower>: {response.status_code}")
 
                     except Exception as e:
+                        logger.error(f"Error deleting <entity_name_lower>: {str(e)}")
                         st.error(f"❌ Error deleting <entity_name_lower>: {str(e)}")
         else:
             st.error(f"Failed to fetch <entity_name_lower>s: {response.status_code}")
 
     except Exception as e:
+        logger.error(f"Error in delete form: {str(e)}")
         st.error(f"Error in delete form: {str(e)}")
 
 if __name__ == "__main__":
@@ -498,10 +573,15 @@ if __name__ == "__main__":
 ```python
 import streamlit as st
 import requests
+import logging
+from typing import List, Dict, Any, Optional
 from config import Config
 
-def <entity_name_lower>_form(<entity_name_lower>_data=None, mode="create"):
-    """Reusable form component for <EntityName> creation/editing"""
+# Setup logging
+logger = logging.getLogger(__name__)
+
+def <entity_name_lower>_form(<entity_name_lower>_data: Optional[Dict[str, Any]] = None, mode: str = "create") -> bool:
+    """Reusable form component for <EntityName> creation/editing."""
     API_BASE_URL = Config.get_api_endpoint_url("<entity_name_lower>s")
 
     with st.form(f"{mode}_<entity_name_lower>_form"):
@@ -542,6 +622,8 @@ def <entity_name_lower>_form(<entity_name_lower>_data=None, mode="create"):
                     response = requests.put(f"{API_BASE_URL}{<entity_name_lower>_data['id']}", json=data)
                 else:
                     response = requests.post(API_BASE_URL, json=data)
+                
+                response.raise_for_status()  # MANDATORY: Status code validation
 
                 if response.status_code in [200, 201]:
                     st.success(f"✅ <EntityName> {mode}d successfully!")
@@ -551,6 +633,7 @@ def <entity_name_lower>_form(<entity_name_lower>_data=None, mode="create"):
                     return False
 
             except Exception as e:
+                logger.error(f"Error {mode}ing <entity_name_lower>: {str(e)}")
                 st.error(f"❌ Error {mode}ing <entity_name_lower>: {str(e)}")
                 return False
 
