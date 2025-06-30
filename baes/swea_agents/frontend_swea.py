@@ -12,6 +12,7 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
+
 # Stage 2 Improvement #8: Feedback Loop Analytics for FrontendSWEA
 class FeedbackLoopAnalytics:
     """
@@ -89,7 +90,9 @@ class FeedbackLoopAnalytics:
                 writer = csv.writer(f)
                 writer.writerow(row_data)
 
-            logger.info(f"\U0001F4CA Frontend feedback analytics logged: {entity} round {feedback_round}")
+            logger.info(
+                f"\U0001F4CA Frontend feedback analytics logged: {entity} round {feedback_round}"
+            )
 
         except Exception as e:
             logger.warning(f"Failed to log frontend feedback analytics: {e}")
@@ -145,6 +148,7 @@ class FeedbackLoopAnalytics:
             areas.add("form_validation")
 
         return list(areas) if areas else ["user_experience"]
+
 
 class FrontendSWEA(BaseAgent):
     """SWEA responsible for generating Streamlit UI code for domain entities."""
@@ -267,8 +271,7 @@ COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and 
 
         # Removed unused variable entity_lower
 
-        prompt = (
-            """
+        prompt = """
 {self._get_do_not_ignore_warning()}
 
 You are a FrontendSWEA agent specialized in generating Streamlit UI code for domain entity management.
@@ -460,7 +463,6 @@ if __name__ == "__main__":
 
 CRITICAL: Generate ONLY the Python code above, with actual field names and validation logic based on the provided attributes. Do not include any markdown formatting, code block markers, or explanations.
 """
-        )
 
         return prompt
 
@@ -889,9 +891,7 @@ MANDATORY REQUIREMENTS:
             # Removed unused variable entity_lower
 
             # Create comprehensive Streamlit UI
-            code = self._create_streamlit_ui_code(
-                entity, parsed_attributes, context
-            )
+            code = self._create_streamlit_ui_code(entity, parsed_attributes, context)
 
             return {
                 "success": True,
@@ -1072,9 +1072,11 @@ MANDATORY REQUIREMENTS:
             components.append("tabs")
         return components
 
+
 # ---------------------------------------------------------------------------
 # Custom exception to make failures explicit (no silent fallback)
 # ---------------------------------------------------------------------------
+
 
 class FrontendGenerationError(Exception):
     """Raised when UI generation or feedback interpretation fails"""
