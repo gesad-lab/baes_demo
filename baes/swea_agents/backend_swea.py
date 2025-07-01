@@ -3,6 +3,7 @@ import os
 from typing import Any, Dict, List
 from baes.agents.base_agent import BaseAgent
 from baes.llm.openai_client import OpenAIClient
+from baes.core.managed_system_manager import ManagedSystemManager
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,14 @@ class BackendSWEA(BaseAgent):
     def __init__(self):
         super().__init__("BackendSWEA", "Backend Generation Agent", "SWEA")
         self.llm_client = OpenAIClient()
+        self._managed_system_manager = None  # Lazy initialization
+
+    @property
+    def managed_system_manager(self):
+        """Lazy initialization of ManagedSystemManager"""
+        if self._managed_system_manager is None:
+            self._managed_system_manager = ManagedSystemManager()
+        return self._managed_system_manager
 
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if task not in self._SUPPORTED_TASKS:
@@ -55,7 +64,10 @@ class BackendSWEA(BaseAgent):
         )
         if not code or not isinstance(code, str):
             raise RuntimeError(f"LLM did not return valid API code for {entity}.")
-        file_path = self._write_to_managed_system(entity, code, "api")
+        
+        # Use the proper managed system manager to write route files
+        file_path = self.managed_system_manager.write_entity_artifact(entity, "routes", code)
+        
         return self.create_success_response(
             "generate_api",
             {"file_path": file_path, "code": code, "entity": entity, "attributes": attributes},
@@ -141,13 +153,4 @@ CRITICAL API REQUIREMENTS:
 - Must include contextlib import for @contextmanager
 """
 
-    def _write_to_managed_system(self, entity: str, code: str, artifact_type: str) -> str:
-        # Only write route files; models are included in the route file
-        if artifact_type == "api":
-            base_path = Path(os.getenv("BAE_MANAGED_SYSTEM_PATH", "../managed_system/app/routes"))
-            base_path.mkdir(parents=True, exist_ok=True)
-            file_path = base_path / f"{entity.lower()}_routes.py"
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(code)
-            return str(file_path)
-        return None 
+ 
