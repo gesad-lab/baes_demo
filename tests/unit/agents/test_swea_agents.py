@@ -394,16 +394,88 @@ class TestFrontendSWEA:
     """Test FrontendSWEA functionality."""
 
     @patch("baes.swea_agents.frontend_swea.OpenAIClient")
-    def test_generate_ui(self, mock_client_cls):
-        """Test UI generation."""
+    def test_generate_ui_with_llm(self, mock_client_cls):
+        """Test UI generation using LLM approach (core PoC requirement)."""
         from baes.swea_agents.frontend_swea import FrontendSWEA
 
+        # Mock LLM to return proper Streamlit code following DRY principles
         mock_client = mock_client_cls.return_value
-        mock_client.generate_code_with_domain_focus.return_value = "import streamlit as st"
+        mock_client.generate_response.return_value = '''import streamlit as st
+import requests
+from typing import List, Dict, Any, Optional
+
+# API Configuration
+API_BASE_URL = "http://localhost:8000"
+
+def create_student(data: Dict[str, Any]) -> bool:
+    """Create a new student."""
+    try:
+        response = requests.post(f"{API_BASE_URL}/api/students/", json=data)
+        response.raise_for_status()
+        if response.status_code == 201:
+            st.success("Student created successfully!")
+            return True
+        return False
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error creating student: {e}")
+        return False
+
+def main():
+    """Main student management interface."""
+    st.title("Student Management")
+    
+    # Create tabs for different operations
+    tab1, tab2, tab3 = st.tabs(["📋 List Students", "➕ Add Student", "✏️ Edit Student"])
+    
+    with tab1:
+        st.header("All Students")
+        if st.button("🔄 Refresh", key="refresh_list"):
+            st.rerun()
+    
+    with tab2:
+        st.header("Add New Student")
+        with st.form("add_student_form"):
+            name = st.text_input("Name", key="name_input")
+            email = st.text_input("Email", key="email_input")
+            age = st.number_input("Age", min_value=0, key="age_input")
+            
+            submitted = st.form_submit_button("➕ Add Student")
+            
+            if submitted:
+                if not name:
+                    st.error("Name is required")
+                    return
+                if not email:
+                    st.error("Email is required")
+                    return
+                
+                data = {"name": name, "email": email, "age": age}
+                if create_student(data):
+                    st.rerun()
+
+if __name__ == "__main__":
+    main()'''
+
         swea = FrontendSWEA()
-        payload = {"entity": "Student", "model_code": "class Student: pass"}
+        payload = {
+            "entity": "Student", 
+            "attributes": ["name:str", "email:str", "age:int"],
+            "context": "academic"
+        }
         result = swea.handle_task("generate_ui", payload)
         assert result["success"] is True
         # Check for code in the nested data structure
         assert "data" in result
         assert "code" in result["data"]
+        
+        # Verify LLM generates proper code following DRY principles
+        generated_code = result["data"]["code"]
+        assert "import streamlit as st" in generated_code
+        assert "import requests" in generated_code
+        assert "API_BASE_URL" in generated_code
+        assert "def main():" in generated_code
+        assert "def create_student(" in generated_code
+        assert "st.set_page_config" not in generated_code  # Should NOT be in entity pages
+        
+        # Verify LLM was called (core PoC requirement)
+        mock_client.generate_response.assert_called_once()

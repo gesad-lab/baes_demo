@@ -152,10 +152,8 @@ class FrontendStandards(BaseStandards):
         issues = []
         suggestions = []
         
-        # Check for page config (should be first)
-        if "st.set_page_config" not in code:
-            issues.append("Missing st.set_page_config() for page configuration")
-            suggestions.append("Add st.set_page_config() at the beginning of the file")
+        # NOTE: st.set_page_config is NOT required in entity pages as they are imported into main app
+        # Entity pages are modules, not standalone Streamlit apps
         
         # Check for main content structure
         if "st.title" not in code and "st.header" not in code:

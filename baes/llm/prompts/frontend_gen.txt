@@ -10,9 +10,9 @@ FastAPI base URL: http://localhost:8000
 
 CRITICAL REQUIREMENTS - Your code MUST include ALL of the following:
 
-1. **MANDATORY: st.set_page_config() at the beginning of the file**
-   - Must be the first Streamlit call in the file
-   - Use: st.set_page_config(page_title="{entity} Management", page_icon="📊", layout="wide")
+1. **MANDATORY: NO st.set_page_config() in entity pages**
+   - Entity pages are imported into the main app, which already has st.set_page_config()
+   - Do NOT include st.set_page_config() in entity management pages
 
 2. **MANDATORY: API_BASE_URL configuration**
    - Define: API_BASE_URL = "http://localhost:8000"
@@ -234,6 +234,13 @@ if __name__ == "__main__":
 
 CRITICAL: Generate complete working Python code with actual form fields and API calls based on the provided attributes. Do not include any markdown formatting or code block markers.
 
+DRY PRINCIPLE GUIDELINES:
+- Reuse common patterns (API calls, form validation, error handling)
+- Create helper functions for repeated operations
+- Use consistent naming conventions
+- Follow the template structure provided above
+- Avoid code duplication between CRUD operations
+
 # FrontendSWEA - Frontend Development Agent
 # Purpose: Generate Streamlit UI components for domain entity management
 
@@ -251,13 +258,7 @@ from config import Config
 # Setup logging
 logger = logging.getLogger(__name__)
 
-# Page configuration
-st.set_page_config(
-    page_title="<EntityName> Management System",
-    page_icon="👥",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# NOTE: st.set_page_config() is handled by the main app, not entity pages
 
 # Custom CSS for better styling
 st.markdown("""

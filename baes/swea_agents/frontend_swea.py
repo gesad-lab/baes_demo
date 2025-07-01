@@ -291,9 +291,9 @@ You are a FrontendSWEA agent specialized in generating Streamlit UI code for dom
 
 CRITICAL REQUIREMENTS - Your code MUST include ALL of the following:
 
-1. **MANDATORY: st.set_page_config() at the beginning of the file**
-   - Must be the first Streamlit call in the file
-   - Use: st.set_page_config(page_title="{entity} Management", page_icon="📊", layout="wide")
+1. **MANDATORY: NO st.set_page_config() in entity pages**
+   - Entity pages are imported into the main app, which already has st.set_page_config()
+   - Do NOT include st.set_page_config() in entity management pages
 
 2. **MANDATORY: API_BASE_URL configuration**
    - Define: API_BASE_URL = "http://localhost:8000"
@@ -329,8 +329,7 @@ import streamlit as st
 import requests
 from typing import List, Dict, Any, Optional
 
-# MANDATORY: Page configuration (must be first)
-st.set_page_config(page_title="{entity} Management", page_icon="📊", layout="wide")
+# NOTE: st.set_page_config() is handled by the main app, not entity pages
 
 # MANDATORY: API base URL
 API_BASE_URL = "http://localhost:8000"
@@ -474,7 +473,15 @@ if __name__ == "__main__":
     main()
 ```
 
-CRITICAL: Return ONLY the complete Python code, no markdown formatting or explanations.
+CRITICAL REMINDERS:
+- DO NOT include st.set_page_config() - entity pages are imported modules
+- DO include API_BASE_URL configuration
+- DO include proper error handling with response.raise_for_status()
+- DO include complete CRUD functionality
+- DO include form validation
+- DO include proper imports
+
+Return ONLY the complete Python code, no markdown formatting or explanations.
 """
         return prompt
 
@@ -643,7 +650,6 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
             return {
                 "ui_improvements": {
                     "missing_components": [
-                        "st.set_page_config",
                         "API_BASE_URL",
                         "response.raise_for_status",
                     ],
@@ -708,9 +714,7 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
             },
         }
 
-        # Extract improvements based on common patterns
-        if "st.set_page_config" not in response_text:
-            improvements["ui_improvements"]["missing_components"].append("st.set_page_config")
+        # NOTE: st.set_page_config is NOT required in entity pages as they are imported into main app
 
         if "API_BASE_URL" not in response_text:
             improvements["ui_improvements"]["missing_components"].append("API_BASE_URL")
@@ -790,13 +794,7 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
 
             code = response_text
 
-            # Validate that the generated code includes critical components
-            if "st.set_page_config" not in code:
-                logger.warning("Generated code missing st.set_page_config, adding it")
-                code = (
-                    'import streamlit as st\nimport requests\nfrom typing import List, Dict, Any, Optional\n\nst.set_page_config(page_title="Entity Management", page_icon="📊", layout="wide")\n\n'
-                    + code
-                )
+            # NOTE: st.set_page_config is NOT required in entity pages as they are imported into main app
 
             if "API_BASE_URL" not in code:
                 logger.warning("Generated code missing API_BASE_URL, adding it")
@@ -847,8 +845,8 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
                 )
                 code = self._apply_ui_improvements(interpretation, entity, context)
             else:
-                # Generate fresh UI code
-                logger.info(f"🎨 FrontendSWEA: Generating fresh UI code for {entity}")
+                # Generate fresh UI code using LLM (core PoC requirement)
+                logger.info(f"🎨 FrontendSWEA: Generating fresh UI code for {entity} using LLM")
                 prompt = self._build_prompt(entity, attributes, context)
 
                 # Log the request for debugging and research
@@ -867,7 +865,7 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
                     session_id=self.current_session_id,
                 )
 
-                # Make LLM request
+                # Make LLM request (CORE POC REQUIREMENT)
                 response_text = self.llm_client.generate_response(prompt)
 
                 # Log the response
@@ -1030,11 +1028,16 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
         attributes: List[Dict[str, str]],
         context: str,
     ) -> str:
-        """Create comprehensive Streamlit UI code"""
-        # This method is now deprecated in favor of LLM-based generation
-        # Keeping for backward compatibility
-        logger.warning("Using deprecated _create_streamlit_ui_code method")
-        return self._generate_ui_code_directly(entity, attributes, context)
+        """Create comprehensive Streamlit UI code using DRY template patterns"""
+        from baes.standards.frontend_standards import FrontendStandards
+        
+        # Use DRY principle: Create reusable template components
+        template_parts = self._build_ui_template_parts(entity, attributes, context)
+        
+        # Combine template parts into complete UI code
+        ui_code = self._assemble_ui_template(template_parts, entity)
+        
+        return ui_code
 
     def _generate_ui_code_directly(
         self, entity: str, attributes: List[Dict[str, str]], context: str
@@ -1092,6 +1095,270 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
         if "st.tabs" in code:
             components.append("tabs")
         return components
+
+    def _build_ui_template_parts(self, entity: str, attributes: List[Dict[str, str]], context: str) -> Dict[str, str]:
+        """Build reusable UI template parts following DRY principles"""
+        from baes.standards.frontend_standards import FrontendStandards
+        
+        entity_lower = entity.lower()
+        
+        # DRY: Reusable template parts
+        template_parts = {
+            "imports": self._generate_imports_template(),
+            "api_config": self._generate_api_config_template(),
+            "form_fields": self._generate_form_fields_template(attributes),
+            "validation": self._generate_validation_template(attributes),
+            "crud_operations": self._generate_crud_operations_template(entity, entity_lower),
+            "main_function": self._generate_main_function_template(entity),
+        }
+        
+        return template_parts
+    
+    def _generate_imports_template(self) -> str:
+        """Generate standard imports template (DRY)"""
+        return '''import streamlit as st
+import requests
+from typing import List, Dict, Any, Optional'''
+    
+    def _generate_api_config_template(self) -> str:
+        """Generate API configuration template (DRY)"""
+        return '''# API Configuration
+API_BASE_URL = "http://localhost:8000"'''
+    
+    def _generate_form_fields_template(self, attributes: List[Dict[str, str]]) -> str:
+        """Generate form fields template based on attributes (DRY)"""
+        form_fields = []
+        for attr in attributes:
+            field_name = attr["name"]
+            field_type = attr["type"].lower()
+            
+            if field_type in ["email"]:
+                form_fields.append(f'        {field_name} = st.text_input("{field_name.title()}", key="{field_name}_input")')
+            elif field_type in ["int", "integer"]:
+                form_fields.append(f'        {field_name} = st.number_input("{field_name.title()}", min_value=0, key="{field_name}_input")')
+            elif field_type in ["date"]:
+                form_fields.append(f'        {field_name} = st.date_input("{field_name.title()}", key="{field_name}_input")')
+            else:
+                form_fields.append(f'        {field_name} = st.text_input("{field_name.title()}", key="{field_name}_input")')
+        
+        return '\n'.join(form_fields)
+    
+    def _generate_validation_template(self, attributes: List[Dict[str, str]]) -> str:
+        """Generate validation template based on attributes (DRY)"""
+        validation_rules = []
+        for attr in attributes:
+            field_name = attr["name"]
+            field_type = attr["type"].lower()
+            
+            if field_type == "email":
+                validation_rules.append(f'            if {field_name} and "@" not in {field_name}:')
+                validation_rules.append('                st.error("Please enter a valid email address")')
+                validation_rules.append("                return")
+            else:
+                validation_rules.append(f"            if not {field_name}:")
+                validation_rules.append(f'                st.error("{field_name.title()} is required")')
+                validation_rules.append("                return")
+        
+        return '\n'.join(validation_rules)
+    
+    def _generate_crud_operations_template(self, entity: str, entity_lower: str) -> str:
+        """Generate CRUD operations template (DRY)"""
+        return f'''def create_{entity_lower}(data: Dict[str, Any]) -> bool:
+    """Create a new {entity}."""
+    try:
+        response = requests.post(f"{{API_BASE_URL}}/api/{entity_lower}s/", json=data)
+        response.raise_for_status()
+        if response.status_code == 201:
+            st.success(f"{entity} created successfully!")
+            return True
+        return False
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error creating {entity_lower}: {{e}}")
+        return False
+
+def get_{entity_lower}s() -> List[Dict[str, Any]]:
+    """Get all {entity}s."""
+    try:
+        response = requests.get(f"{{API_BASE_URL}}/api/{entity_lower}s/")
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error fetching {entity_lower}s: {{e}}")
+        return []
+
+def update_{entity_lower}(id: int, data: Dict[str, Any]) -> bool:
+    """Update an existing {entity}."""
+    try:
+        response = requests.put(f"{{API_BASE_URL}}/api/{entity_lower}s/{{id}}", json=data)
+        response.raise_for_status()
+        if response.status_code == 200:
+            st.success(f"{entity} updated successfully!")
+            return True
+        return False
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error updating {entity_lower}: {{e}}")
+        return False
+
+def delete_{entity_lower}(id: int) -> bool:
+    """Delete a {entity}."""
+    try:
+        response = requests.delete(f"{{API_BASE_URL}}/api/{entity_lower}s/{{id}}")
+        response.raise_for_status()
+        if response.status_code == 204:
+            st.success(f"{entity} deleted successfully!")
+            return True
+        return False
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error deleting {entity_lower}: {{e}}")
+        return False'''
+    
+    def _generate_main_function_template(self, entity: str) -> str:
+        """Generate main function template (DRY)"""
+        entity_lower = entity.lower()
+        return f'''def main():
+    """Main {entity} management interface."""
+    st.title("{entity} Management")
+    
+    # Create tabs for different operations
+    tab1, tab2, tab3 = st.tabs(["📋 List {entity}s", "➕ Add {entity}", "✏️ Edit {entity}"])
+    
+    with tab1:
+        show_{entity_lower}_list()
+    
+    with tab2:
+        show_{entity_lower}_form()
+    
+    with tab3:
+        show_{entity_lower}_edit()
+
+def show_{entity_lower}_list():
+    """Display list of {entity}s."""
+    st.header("All {entity}s")
+    
+    if st.button("🔄 Refresh", key="refresh_list"):
+        st.rerun()
+    
+    {entity_lower}s = get_{entity_lower}s()
+    
+    if {entity_lower}s:
+        for {entity_lower} in {entity_lower}s:
+            with st.expander(f"{entity} ID: {{{entity_lower}['id']}}"):
+                col1, col2, col3 = st.columns([3, 1, 1])
+                
+                with col1:
+                    for key, value in {entity_lower}.items():
+                        if key != 'id':
+                            st.write(f"**{{key.title()}}:** {{value}}")
+                
+                with col2:
+                    if st.button("✏️ Edit", key=f"edit_{{{entity_lower}['id']}}"):
+                        st.session_state.edit_{entity_lower}_id = {entity_lower}['id']
+                        st.session_state.edit_{entity_lower}_data = {entity_lower}
+                        st.rerun()
+                
+                with col3:
+                    if st.button("🗑️ Delete", key=f"delete_{{{entity_lower}['id']}}"):
+                        if delete_{entity_lower}({entity_lower}['id']):
+                            st.rerun()
+    else:
+        st.info("No {entity_lower}s found.")
+
+def show_{entity_lower}_form():
+    """Display form to add new {entity}."""
+    st.header("Add New {entity}")
+    
+    with st.form("add_{entity_lower}_form"):
+{{form_fields}}
+        
+        submitted = st.form_submit_button("➕ Add {entity}")
+        
+        if submitted:
+{{validation}}
+            
+            # Create data dictionary
+            data = {{data_dict}}
+            
+            if create_{entity_lower}(data):
+                st.rerun()
+
+def show_{entity_lower}_edit():
+    """Display form to edit existing {entity}."""
+    st.header("Edit {entity}")
+    
+    if f"edit_{entity_lower}_id" in st.session_state:
+        edit_data = st.session_state.get(f"edit_{entity_lower}_data", {{}})
+        
+        with st.form("edit_{entity_lower}_form"):
+            st.write(f"Editing {entity} ID: {{st.session_state.edit_{entity_lower}_id}}")
+            
+{{edit_form_fields}}
+            
+            submitted = st.form_submit_button("💾 Update {entity}")
+            
+            if submitted:
+{{edit_validation}}
+                
+                # Create data dictionary
+                data = {{edit_data_dict}}
+                
+                if update_{entity_lower}(st.session_state.edit_{entity_lower}_id, data):
+                    # Clear edit state
+                    if f"edit_{entity_lower}_id" in st.session_state:
+                        del st.session_state[f"edit_{entity_lower}_id"]
+                    if f"edit_{entity_lower}_data" in st.session_state:
+                        del st.session_state[f"edit_{entity_lower}_data"]
+                    st.rerun()
+        
+        if st.button("❌ Cancel Edit"):
+            if f"edit_{entity_lower}_id" in st.session_state:
+                del st.session_state[f"edit_{entity_lower}_id"]
+            if f"edit_{entity_lower}_data" in st.session_state:
+                del st.session_state[f"edit_{entity_lower}_data"]
+            st.rerun()
+    else:
+        st.info("Select a {entity_lower} from the list to edit.")
+
+if __name__ == "__main__":
+    main()'''
+    
+    def _assemble_ui_template(self, template_parts: Dict[str, str], entity: str) -> str:
+        """Assemble template parts into complete UI code (DRY)"""
+        # Build data dictionary for form fields
+        attributes = self._extract_attributes_from_form_fields(template_parts["form_fields"])
+        data_dict_parts = [f'"{attr}": {attr}' for attr in attributes]
+        data_dict = "{" + ", ".join(data_dict_parts) + "}"
+        
+        # Build edit form fields (pre-populated)
+        edit_form_fields = template_parts["form_fields"].replace('key="', 'value=edit_data.get("').replace('_input"', '", ""), key="').replace('_input")', '_edit_input")')
+        edit_validation = template_parts["validation"].replace('_input', '_edit_input')
+        edit_data_dict = data_dict.replace('_input', '_edit_input')
+        
+        # Assemble complete code
+        complete_code = f'''{template_parts["imports"]}
+
+{template_parts["api_config"]}
+
+{template_parts["crud_operations"]}
+
+{template_parts["main_function"]}'''
+        
+        # Replace placeholders
+        complete_code = complete_code.replace("{{form_fields}}", template_parts["form_fields"])
+        complete_code = complete_code.replace("{{validation}}", template_parts["validation"])
+        complete_code = complete_code.replace("{{data_dict}}", data_dict)
+        complete_code = complete_code.replace("{{edit_form_fields}}", edit_form_fields)
+        complete_code = complete_code.replace("{{edit_validation}}", edit_validation)
+        complete_code = complete_code.replace("{{edit_data_dict}}", edit_data_dict)
+        
+        return complete_code
+    
+    def _extract_attributes_from_form_fields(self, form_fields: str) -> List[str]:
+        """Extract attribute names from form fields template"""
+        import re
+        # Extract variable names from form field assignments
+        pattern = r'(\w+)\s*=\s*st\.'
+        matches = re.findall(pattern, form_fields)
+        return matches
 
 
 # ---------------------------------------------------------------------------
