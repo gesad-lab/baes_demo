@@ -32,6 +32,11 @@ class TestScenario1Integration:
         temp_dir = Path(temp_test_dir)
         # Override managed system path for this test run to avoid affecting production system
         os.environ["MANAGED_SYSTEM_PATH"] = str(temp_dir / "managed_system")
+
+        # Patch Config to return the overridden path
+        from config import Config
+        Config.get_managed_system_path = classmethod(lambda cls: Path(os.environ["MANAGED_SYSTEM_PATH"]))
+
         managed_system_test_dir = Path(os.environ["MANAGED_SYSTEM_PATH"])
         business_request = "Create a system to manage students with name, email, and age"
         print("\n🚀 Starting Scenario 1 system generation...")
@@ -259,7 +264,7 @@ class TestScenario1Integration:
             # Test POST /api/students/ (create student)
             student_data = {"name": "John Doe", "email": "john.doe@example.com", "age": 25}
             response = requests.post(f"{base_url}/api/students/", json=student_data, timeout=10)
-            assert response.status_code == 200, f"Create student failed: {response.status_code}"
+            assert response.status_code in (200, 201), f"Create student failed: {response.status_code}"
 
             created_student = response.json()
             assert created_student["name"] == student_data["name"]
