@@ -302,6 +302,7 @@ class EnhancedRuntimeKernel:
                     "success": True,
                     "message": "Phase 1 artifact generation completed (Phase 2 test generation temporarily disabled)",
                     "entity": detected_entity,
+                    "interpretation": interpretation_result,
                     "execution_results": execution_results,
                 }
                 # (The rest of Phase 2 code is skipped)

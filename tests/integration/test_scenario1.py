@@ -34,17 +34,38 @@ class TestScenario1Integration:
         print(f"📝 Business Request: {business_request}")
         print(f"📁 Temp Directory: {temp_dir}")
         start_time = time.time()
-        print("\n🎯 Testing entity recognition...")
-        from baes.domain_entities.academic.student_bae import StudentBae
-
-        student_bae = StudentBae()
-        interpretation = student_bae._interpret_business_request({"request": business_request})
-        print(f"📊 Student BAE interpretation: {interpretation}")
-        assert (
-            interpretation["entity_focus"] == "Student"
-        ), f"Expected Student entity focus, got {interpretation['entity_focus']}"
-        assert "attributes" in interpretation, "Missing attributes in interpretation"
-        attributes = interpretation["attributes"]
+        
+        # Import and initialize Enhanced Runtime Kernel
+        print("\n🎯 Initializing Enhanced Runtime Kernel...")
+        from baes.core.enhanced_runtime_kernel import EnhancedRuntimeKernel
+        
+        # Create kernel instance
+        kernel = EnhancedRuntimeKernel()
+        
+        print("\n🎯 Processing natural language request...")
+        # Process the natural language request using the kernel
+        result = kernel.process_natural_language_request(
+            request=business_request,
+            context="academic",
+            start_servers=False  # Don't start servers in test environment
+        )
+        
+        execution_time = time.time() - start_time
+        
+        # Validate the result structure
+        print(f"📊 Generation result: {result.get('success', False)}")
+        assert result.get("success", False), f"System generation failed: {result.get('message', 'Unknown error')}"
+        
+        # Validate entity detection
+        detected_entity = result.get("entity", "")
+        assert detected_entity.lower() == "student", f"Expected Student entity, got {detected_entity}"
+        
+        # Validate BAE interpretation
+        interpretation = result.get("interpretation", {})
+        assert interpretation, "Missing BAE interpretation"
+        
+        # Validate attributes extraction
+        attributes = interpretation.get("attributes", [])
         expected_attributes = ["name", "email", "age"]
         attribute_names = []
         for attr in attributes:
@@ -53,55 +74,42 @@ class TestScenario1Integration:
                 attribute_names.append(attr_name)
             else:
                 attribute_names.append(attr.strip())
+        
         for attr in expected_attributes:
             assert attr in attribute_names, f"Missing expected attribute: {attr}"
-        print("✅ Entity recognition and interpretation successful!")
-        print("\n🎯 Testing basic SWEA coordination...")
-        from baes.swea_agents.database_swea import DatabaseSWEA
-
-        database_swea = DatabaseSWEA()
-        db_result = database_swea.handle_task(
-            "create_database",
-            {"entity": "student", "attributes": attributes, "context": "academic"},
-        )
-        print(f"📊 DatabaseSWEA result: {db_result.get('success', False)}")
-        print("\n🎯 Testing file generation...")
-        managed_system_dir = Path("managed_system")
-        if managed_system_dir.exists():
-            print("✅ Managed system directory exists")
-            db_dir = managed_system_dir / "app" / "database"
-            if db_dir.exists():
-                print("✅ Database directory exists")
-                db_files = list(db_dir.glob("*.db"))
-                if db_files:
-                    print(f"✅ Database file created: {db_files[0]}")
-                else:
-                    print("⚠️ No database files found")
-            else:
-                print("⚠️ Database directory not found")
-        else:
-            print("⚠️ Managed system directory not found")
-        execution_time = time.time() - start_time
-        assert (
-            execution_time < 300
-        ), f"System generation took {execution_time:.2f}s, exceeding 300s limit"
-        print(f"✅ Basic system generation completed in {execution_time:.2f} seconds")
+        
+        # Validate execution results
+        execution_results = result.get("execution_results", [])
+        assert execution_results, "No execution results returned"
+        
+        # Check that all tasks were successful
+        successful_tasks = [task for task in execution_results if task.get("success", False)]
+        assert len(successful_tasks) > 0, "No successful tasks in execution results"
+        
+        print("✅ System generation workflow completed successfully!")
+        print(f"⏱️  Execution time: {execution_time:.2f} seconds")
+        
+        # Store results for subsequent tests
         self.generation_result = {
             "success": True,
-            "entity": "student",
+            "entity": detected_entity,
             "interpretation": interpretation,
             "attributes": attributes,
+            "execution_results": execution_results,
             "execution_time": execution_time,
         }
         self.temp_dir = temp_dir
+        
+        # Validate performance criteria (< 3 minutes)
+        assert execution_time < 180, f"System generation took {execution_time:.2f}s, exceeding 180s limit"
 
     def test_02_generated_files_validation(self):
         """Validate all expected files are generated correctly"""
 
-        if not hasattr(self, "temp_dir"):
+        if not hasattr(self, "generation_result"):
             pytest.skip("System generation test must run first")
 
-        managed_system_dir = self.temp_dir / "managed_system"
+        managed_system_dir = Path("managed_system")
 
         print(f"\n📁 Validating generated files in: {managed_system_dir}")
 
@@ -150,7 +158,7 @@ class TestScenario1Integration:
                     warnings.simplefilter("ignore", DeprecationWarning)
                     warnings.simplefilter("ignore", SyntaxWarning)
                     compile(code, str(py_file), "exec")
-                print(f"✅ Valid Python syntax: {py_file.relative_to(self.temp_dir)}")
+                print(f"✅ Valid Python syntax: {py_file}")
             except SyntaxError as e:
                 pytest.fail(f"Invalid Python syntax in {py_file}: {e}")
 
@@ -159,10 +167,10 @@ class TestScenario1Integration:
     def test_03_database_schema_validation(self):
         """Validate database schema matches user-specified attributes"""
 
-        if not hasattr(self, "temp_dir"):
+        if not hasattr(self, "generation_result"):
             pytest.skip("System generation test must run first")
 
-        db_path = self.temp_dir / "managed_system" / "app" / "database" / "baes_system.db"
+        db_path = Path("managed_system") / "app" / "database" / "baes_system.db"
 
         print(f"\n🗄️ Validating database schema at: {db_path}")
 
@@ -205,11 +213,11 @@ class TestScenario1Integration:
     def test_04_api_functionality_validation(self):
         """Validate API CRUD operations work correctly"""
 
-        if not hasattr(self, "temp_dir"):
+        if not hasattr(self, "generation_result"):
             pytest.skip("System generation test must run first")
 
         # Start servers for API testing
-        managed_system_dir = self.temp_dir / "managed_system"
+        managed_system_dir = Path("managed_system")
 
         print("\n🔌 Starting servers for API testing...")
 
@@ -269,32 +277,59 @@ class TestScenario1Integration:
         max_generation_time = 180  # 3 minutes in seconds
 
         # Get execution time from generation result
-        execution_results = self.generation_result["execution_results"]
-
-        # Calculate total execution time
-        total_time = 0
-        for result in execution_results:
-            if "execution_time" in result:
-                total_time += result["execution_time"]
-
-        # If no individual times, use the overall time from test_01
-        if total_time == 0:
-            # This would be set in test_01, but for now we'll use a reasonable estimate
-            total_time = 60  # Conservative estimate
+        execution_time = self.generation_result["execution_time"]
 
         assert (
-            total_time < max_generation_time
-        ), f"Total execution time {total_time}s exceeds {max_generation_time}s limit"
+            execution_time < max_generation_time
+        ), f"Total execution time {execution_time:.2f}s exceeds {max_generation_time}s limit"
 
         # Validate success rate
+        execution_results = self.generation_result["execution_results"]
         successful_tasks = [r for r in execution_results if r.get("success")]
         success_rate = len(successful_tasks) / len(execution_results) * 100
 
         assert success_rate >= 80, f"Success rate {success_rate:.1f}% below 80% threshold"
 
         print("✅ Performance criteria met:")
-        print(f"   ⏱️  Execution time: {total_time:.2f}s (limit: {max_generation_time}s)")
+        print(f"   ⏱️  Execution time: {execution_time:.2f}s (limit: {max_generation_time}s)")
         print(f"   🎯 Success rate: {success_rate:.1f}% (target: ≥80%)")
+
+    def test_06_semantic_coherence_validation(self):
+        """Validate semantic coherence between business vocabulary and technical artifacts"""
+
+        if not hasattr(self, "generation_result"):
+            pytest.skip("System generation test must run first")
+
+        print("\n🧠 Validating semantic coherence...")
+
+        interpretation = self.generation_result["interpretation"]
+        
+        # Validate that business vocabulary is preserved
+        business_vocabulary = interpretation.get("business_vocabulary", [])
+        assert business_vocabulary, "Business vocabulary not preserved in interpretation"
+        
+        # Validate domain entity focus
+        entity_focus = interpretation.get("entity_focus", "")
+        assert entity_focus == "Student", f"Expected Student entity focus, got {entity_focus}"
+        
+        # Validate domain operations
+        domain_operations = interpretation.get("domain_operations", [])
+        assert domain_operations, "Domain operations not defined"
+        
+        # Check that the interpretation maintains semantic coherence
+        semantic_coherence = interpretation.get("semantic_coherence", False)
+        assert semantic_coherence, "Semantic coherence not maintained"
+        
+        # Check that domain knowledge is preserved
+        domain_knowledge_preserved = interpretation.get("domain_knowledge_preserved", False)
+        assert domain_knowledge_preserved, "Domain knowledge not preserved"
+        
+        print("✅ Semantic coherence validated:")
+        print(f"   🎯 Entity focus: {entity_focus}")
+        print(f"   📝 Business vocabulary: {business_vocabulary}")
+        print(f"   🔧 Domain operations: {domain_operations}")
+        print(f"   🧠 Semantic coherence: {semantic_coherence}")
+        print(f"   💾 Domain knowledge preserved: {domain_knowledge_preserved}")
 
 
 @pytest.fixture
