@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
+import os
 
 from baes.core.managed_system_manager import ManagedSystemManager
 from baes.domain_entities.base_bae import BaseAgent
@@ -296,24 +297,26 @@ CRITICAL REQUIREMENTS - Your code MUST include ALL of the following:
    - Do NOT include st.set_page_config() in entity management pages
 
 2. **MANDATORY: API_BASE_URL configuration**
-   - Define: API_BASE_URL = "http://localhost:8000"
+   - Define: API_BASE_URL = f"http://localhost:{{os.getenv('REALWORLD_FASTAPI_PORT', '8000')}}"
    - Use this constant for all API calls
+   - Import os at the top of the file
 
 3. **MANDATORY: Proper error handling with response.raise_for_status()**
    - Add response.raise_for_status() after every API call
    - Wrap all API calls in try/except blocks
 
 4. **MANDATORY: Complete CRUD functionality**
-   - Create: POST to /api/{entity_lower}s/
-   - Read: GET from /api/{entity_lower}s/
-   - Update: PUT to /api/{entity_lower}s/{{id}}
-   - Delete: DELETE to /api/{entity_lower}s/{{id}}
+   - Create: POST to /api/{entity_lower}s/ with "Add New {entity}" form
+   - Read: GET from /api/{entity_lower}s/ with "List {entity}s" display
+   - Update: PUT to /api/{entity_lower}s/{{id}} with "Edit {entity}" form
+   - Delete: DELETE to /api/{entity_lower}s/{{id}} with delete buttons
 
 5. **MANDATORY: Form validation and error messages**
    - Validate all required fields
    - Show st.error() messages for validation failures
 
 6. **MANDATORY: Proper imports**
+   - import os
    - import streamlit as st
    - import requests
    - from typing import List, Dict, Any, Optional
@@ -322,166 +325,19 @@ Entity: {entity}
 Attributes: {attributes}
 Context: {context}
 
-Generate complete Streamlit UI code that includes:
+Generate complete Streamlit UI code with CRUD operations:
+- List {entity}s tab with requests.get() and display
+- Add New {entity} tab with st.form() and requests.post()
+- Edit {entity} tab with pre-populated form and requests.put()
+- Delete buttons with requests.delete()
 
-```python
-import streamlit as st
-import requests
-from typing import List, Dict, Any, Optional
-
-# NOTE: st.set_page_config() is handled by the main app, not entity pages
-
-# MANDATORY: API base URL
-API_BASE_URL = "http://localhost:8000"
-
-def main():
-    st.title("{entity} Management System")
-
-    # Create tabs for different operations
-    tab1, tab2, tab3 = st.tabs(["📋 List {entity}s", "➕ Add {entity}", "✏️ Edit {entity}"])
-
-    with tab1:
-        st.header("All {entity}s")
-
-        # Refresh button
-        if st.button("🔄 Refresh", key="refresh_list"):
-            st.rerun()
-
-        try:
-            response = requests.get(f"{{API_BASE_URL}}/api/{entity_lower}s/")
-            response.raise_for_status()  # MANDATORY: Status code validation
-            {entity_lower}s = response.json()
-
-            if {entity_lower}s:
-                # Convert to DataFrame for better display
-                import pandas as pd
-                df = pd.DataFrame({entity_lower}s)
-
-                # Display with edit/delete buttons
-                for idx, {entity_lower} in enumerate({entity_lower}s):
-                    with st.expander(f"{entity} ID: {{{entity_lower}['id']}}"):
-                        col1, col2, col3 = st.columns([3, 1, 1])
-
-                        with col1:
-                            for key, value in {entity_lower}.items():
-                                if key != 'id':
-                                    st.write(f"**{{key.title()}}:** {{value}}")
-
-                        with col2:
-                            if st.button("✏️ Edit", key=f"edit_{{{entity_lower}['id']}}"):
-                                st.session_state.edit_{entity_lower}_id = {entity_lower}['id']
-                                st.session_state.edit_{entity_lower}_data = {entity_lower}
-                                st.rerun()
-
-                        with col3:
-                            if st.button("🗑️ Delete", key=f"delete_{{{entity_lower}['id']}}"):
-                                try:
-                                    delete_response = requests.delete(f"{{API_BASE_URL}}/api/{entity_lower}s/{{{entity_lower}['id']}}")
-                                    delete_response.raise_for_status()  # MANDATORY: Status code validation
-                                    if delete_response.status_code == 204:
-                                        st.success(f"{entity} deleted successfully!")
-                                        st.rerun()
-                                    else:
-                                        st.error("Failed to delete {entity_lower}")
-                                except requests.exceptions.RequestException as e:
-                                    st.error(f"Error deleting {entity_lower}: {{e}}")
-            else:
-                st.info("No {entity_lower}s found.")
-
-        except requests.exceptions.RequestException as e:
-            st.error(f"Error fetching {entity_lower}s: {{e}}")
-
-    with tab2:
-        st.header("Add New {entity}")
-
-        with st.form("add_{entity_lower}_form"):
-{chr(10).join(form_fields)}
-
-            submitted = st.form_submit_button("➕ Add {entity}")
-
-            if submitted:
-{chr(10).join(validation_rules)}
-
-                # Create data dictionary
-                data = {data_dict}
-
-                try:
-                    response = requests.post(f"{{API_BASE_URL}}/api/{entity_lower}s/", json=data)
-                    response.raise_for_status()  # MANDATORY: Status code validation
-
-                    if response.status_code == 201:
-                        st.success(f"{entity} added successfully!")
-                        st.rerun()
-                    else:
-                        st.error("Failed to add {entity_lower}")
-
-                except requests.exceptions.RequestException as e:
-                    st.error(f"Error adding {entity_lower}: {{e}}")
-
-    with tab3:
-        st.header("Edit {entity}")
-
-        if f"edit_{entity_lower}_id" in st.session_state:
-            edit_data = st.session_state.get(f"edit_{entity_lower}_data", {{}})
-
-            with st.form("edit_{entity_lower}_form"):
-                st.write(f"Editing {entity} ID: {{st.session_state.edit_{entity_lower}_id}}")
-
-                # Pre-populate form fields with existing data
-                {chr(10).join([field.replace('key="', 'value=edit_data.get("').replace('_input"', '", ""), key="').replace('_input")', '_edit_input")') for field in form_fields])}
-
-                submitted = st.form_submit_button("💾 Update {entity}")
-
-                if submitted:
-                    {chr(10).join([rule.replace('_input', '_edit_input') for rule in validation_rules])}
-
-                    # Create data dictionary
-                    data = {data_dict.replace('_input', '_edit_input')}
-
-                    try:
-                        response = requests.put(
-                            f"{{API_BASE_URL}}/api/{entity_lower}s/{{st.session_state.edit_{entity_lower}_id}}",
-                            json=data
-                        )
-                        response.raise_for_status()  # MANDATORY: Status code validation
-
-                        if response.status_code == 200:
-                            st.success(f"{entity} updated successfully!")
-                            # Clear edit state
-                            if f"edit_{entity_lower}_id" in st.session_state:
-                                del st.session_state[f"edit_{entity_lower}_id"]
-                            if f"edit_{entity_lower}_data" in st.session_state:
-                                del st.session_state[f"edit_{entity_lower}_data"]
-                            st.rerun()
-                        else:
-                            st.error("Failed to update {entity_lower}")
-
-                    except requests.exceptions.RequestException as e:
-                        st.error(f"Error updating {entity_lower}: {{e}}")
-
-            if st.button("❌ Cancel Edit"):
-                if f"edit_{entity_lower}_id" in st.session_state:
-                    del st.session_state[f"edit_{entity_lower}_id"]
-                if f"edit_{entity_lower}_data" in st.session_state:
-                    del st.session_state[f"edit_{entity_lower}_data"]
-                st.rerun()
-
-        else:
-            st.info("Select a {entity_lower} from the list to edit.")
-
-if __name__ == "__main__":
-    main()
-```
-
-CRITICAL REMINDERS:
-- DO NOT include st.set_page_config() - entity pages are imported modules
-- DO include API_BASE_URL configuration
-- DO include proper error handling with response.raise_for_status()
-- DO include complete CRUD functionality
-- DO include form validation
-- DO include proper imports
-
-Return ONLY the complete Python code, no markdown formatting or explanations.
+CRITICAL OUTPUT FORMAT:
+- Return ONLY pure Python code
+- DO NOT use markdown code blocks (```python or ```)
+- DO NOT include any explanations or comments outside the code
+- Start directly with import statements
+- Include complete CRUD functionality
+- Use proper error handling with response.raise_for_status()
 """
         return prompt
 
@@ -567,7 +423,7 @@ Return ONLY a JSON object with the following structure:
         "specific validation rules to implement"
     ],
     "api_integration": {{
-        "base_url": "API_BASE_URL = \"http://localhost:8000\"",
+                        "base_url": "API_BASE_URL = \"http://localhost:8100\"",
         "endpoints": {{
             "list": "/api/{entity.lower()}s/",
             "create": "/api/{entity.lower()}s/",
@@ -792,7 +648,8 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
                 logger.error("❌ FrontendSWEA: LLM request failed - empty response")
                 raise FrontendGenerationError("LLM request failed - empty response")
 
-            code = response_text
+            # Clean LLM response to remove markdown formatting (DRY principle)
+            code = self._clean_llm_response(response_text)
 
             # NOTE: st.set_page_config is NOT required in entity pages as they are imported into main app
 
@@ -881,7 +738,8 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
                     logger.error("❌ FrontendSWEA: LLM request failed - empty response")
                     raise FrontendGenerationError("LLM request failed - empty response")
 
-                code = response_text
+                # Clean LLM response to remove markdown formatting (DRY principle)
+                code = self._clean_llm_response(response_text)
 
             # Write the generated code to the managed system
             file_path = self._write_to_managed_system(entity, code)
@@ -1079,7 +937,8 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
             logger.error("❌ FrontendSWEA: LLM request failed - empty response")
             raise FrontendGenerationError("LLM request failed - empty response")
 
-        return response_text
+        # Clean LLM response to remove markdown formatting (DRY principle)
+        return self._clean_llm_response(response_text)
 
     def _extract_ui_components(self, code: str) -> List[str]:
         """Extract UI components from generated code"""
@@ -1123,7 +982,7 @@ from typing import List, Dict, Any, Optional'''
     def _generate_api_config_template(self) -> str:
         """Generate API configuration template (DRY)"""
         return '''# API Configuration
-API_BASE_URL = "http://localhost:8000"'''
+API_BASE_URL = f"http://localhost:{{os.getenv('REALWORLD_FASTAPI_PORT', '8000')}}"'''
     
     def _generate_form_fields_template(self, attributes: List[Dict[str, str]]) -> str:
         """Generate form fields template based on attributes (DRY)"""
@@ -1359,6 +1218,52 @@ if __name__ == "__main__":
         pattern = r'(\w+)\s*=\s*st\.'
         matches = re.findall(pattern, form_fields)
         return matches
+
+    def _clean_llm_response(self, response_text: str) -> str:
+        """
+        Clean LLM response to remove markdown formatting and ensure valid Python code.
+        
+        Following DRY principles: This method handles all LLM response cleaning
+        consistently across the FrontendSWEA to prevent syntax errors.
+        """
+        import re
+        
+        # Remove markdown code block markers
+        code = response_text.strip()
+        
+        # Remove opening markdown markers
+        if code.startswith("```python"):
+            code = code[9:].strip()
+        elif code.startswith("```"):
+            code = code[3:].strip()
+        
+        # Remove closing markdown markers
+        if code.endswith("```"):
+            code = code[:-3].strip()
+        
+        # Remove any leading/trailing whitespace
+        code = code.strip()
+        
+        # Validate that we have actual Python code
+        if not code or not any(line.strip() for line in code.split('\n')):
+            logger.warning("⚠️ FrontendSWEA: Cleaned code is empty, using fallback")
+            # Return a minimal valid Python file
+            return '''import streamlit as st
+
+def main():
+    st.title("Entity Management")
+    st.write("Generated code was empty. Please regenerate.")
+
+if __name__ == "__main__":
+    main()'''
+        
+        # Log cleaning action for debugging
+        if response_text != code:
+            logger.info(f"🧹 FrontendSWEA: Cleaned LLM response (removed markdown formatting)")
+            logger.debug(f"   Original length: {len(response_text)} chars")
+            logger.debug(f"   Cleaned length: {len(code)} chars")
+        
+        return code
 
 
 # ---------------------------------------------------------------------------
