@@ -15,6 +15,7 @@ Expected workflow:
 import sqlite3
 import time
 from pathlib import Path
+import os
 
 import pytest
 import requests
@@ -26,14 +27,24 @@ class TestScenario1Integration:
     """Integration test for PoC Scenario 1: Initial System Generation"""
 
     @pytest.mark.integration
-    def test_01_system_generation_workflow(self, temp_test_dir):
-        """Test complete system generation workflow from natural language"""
+    def test_complete_scenario1_workflow(self, temp_test_dir):
+        """Test complete Scenario 1 workflow including all validations"""
         temp_dir = Path(temp_test_dir)
+        # Override managed system path for this test run to avoid affecting production system
+        os.environ["MANAGED_SYSTEM_PATH"] = str(temp_dir / "managed_system")
+        managed_system_test_dir = Path(os.environ["MANAGED_SYSTEM_PATH"])
         business_request = "Create a system to manage students with name, email, and age"
         print("\n🚀 Starting Scenario 1 system generation...")
         print(f"📝 Business Request: {business_request}")
         print(f"📁 Temp Directory: {temp_dir}")
         start_time = time.time()
+        
+        # ====================================================================
+        # STEP 1: System Generation Workflow
+        # ====================================================================
+        print("\n" + "="*60)
+        print("STEP 1: SYSTEM GENERATION WORKFLOW")
+        print("="*60)
         
         # Import and initialize Enhanced Runtime Kernel
         print("\n🎯 Initializing Enhanced Runtime Kernel...")
@@ -89,8 +100,8 @@ class TestScenario1Integration:
         print("✅ System generation workflow completed successfully!")
         print(f"⏱️  Execution time: {execution_time:.2f} seconds")
         
-        # Store results for subsequent tests
-        self.generation_result = {
+        # Store results for subsequent validations
+        generation_result = {
             "success": True,
             "entity": detected_entity,
             "interpretation": interpretation,
@@ -98,19 +109,18 @@ class TestScenario1Integration:
             "execution_results": execution_results,
             "execution_time": execution_time,
         }
-        self.temp_dir = temp_dir
         
         # Validate performance criteria (< 3 minutes)
         assert execution_time < 180, f"System generation took {execution_time:.2f}s, exceeding 180s limit"
-
-    def test_02_generated_files_validation(self):
-        """Validate all expected files are generated correctly"""
-
-        if not hasattr(self, "generation_result"):
-            pytest.skip("System generation test must run first")
-
-        managed_system_dir = Path("managed_system")
-
+        
+        # ====================================================================
+        # STEP 2: Generated Files Validation
+        # ====================================================================
+        print("\n" + "="*60)
+        print("STEP 2: GENERATED FILES VALIDATION")
+        print("="*60)
+        
+        managed_system_dir = managed_system_test_dir
         print(f"\n📁 Validating generated files in: {managed_system_dir}")
 
         # Check managed system structure exists
@@ -163,15 +173,15 @@ class TestScenario1Integration:
                 pytest.fail(f"Invalid Python syntax in {py_file}: {e}")
 
         print(f"✅ All {len(python_files)} Python files have valid syntax")
-
-    def test_03_database_schema_validation(self):
-        """Validate database schema matches user-specified attributes"""
-
-        if not hasattr(self, "generation_result"):
-            pytest.skip("System generation test must run first")
-
-        db_path = Path("managed_system") / "app" / "database" / "baes_system.db"
-
+        
+        # ====================================================================
+        # STEP 3: Database Schema Validation
+        # ====================================================================
+        print("\n" + "="*60)
+        print("STEP 3: DATABASE SCHEMA VALIDATION")
+        print("="*60)
+        
+        db_path = managed_system_dir / "app" / "database" / "baes_system.db"
         print(f"\n🗄️ Validating database schema at: {db_path}")
 
         # Check database file exists
@@ -209,21 +219,20 @@ class TestScenario1Integration:
 
         finally:
             conn.close()
-
-    def test_04_api_functionality_validation(self):
-        """Validate API CRUD operations work correctly"""
-
-        if not hasattr(self, "generation_result"):
-            pytest.skip("System generation test must run first")
-
+            
+        # ====================================================================
+        # STEP 4: API Functionality Validation
+        # ====================================================================
+        print("\n" + "="*60)
+        print("STEP 4: API FUNCTIONALITY VALIDATION")
+        print("="*60)
+        
         # Start servers for API testing
-        managed_system_dir = Path("managed_system")
-
+        managed_system_dir = managed_system_test_dir
         print("\n🔌 Starting servers for API testing...")
 
         # Start FastAPI server
         import subprocess
-        import time
 
         api_process = subprocess.Popen(
             ["python", "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8100"],
@@ -264,27 +273,28 @@ class TestScenario1Integration:
             # Cleanup
             api_process.terminate()
             api_process.wait()
-
-    def test_05_performance_criteria_validation(self):
-        """Validate performance meets PoC criteria"""
-
-        if not hasattr(self, "generation_result"):
-            pytest.skip("System generation test must run first")
-
+            
+        # ====================================================================
+        # STEP 5: Performance Criteria Validation
+        # ====================================================================
+        print("\n" + "="*60)
+        print("STEP 5: PERFORMANCE CRITERIA VALIDATION")
+        print("="*60)
+        
         print("\n⏱️ Validating performance criteria...")
 
         # Performance criteria from PoC: < 3 minutes
         max_generation_time = 180  # 3 minutes in seconds
 
         # Get execution time from generation result
-        execution_time = self.generation_result["execution_time"]
+        execution_time = generation_result["execution_time"]
 
         assert (
             execution_time < max_generation_time
         ), f"Total execution time {execution_time:.2f}s exceeds {max_generation_time}s limit"
 
         # Validate success rate
-        execution_results = self.generation_result["execution_results"]
+        execution_results = generation_result["execution_results"]
         successful_tasks = [r for r in execution_results if r.get("success")]
         success_rate = len(successful_tasks) / len(execution_results) * 100
 
@@ -293,16 +303,17 @@ class TestScenario1Integration:
         print("✅ Performance criteria met:")
         print(f"   ⏱️  Execution time: {execution_time:.2f}s (limit: {max_generation_time}s)")
         print(f"   🎯 Success rate: {success_rate:.1f}% (target: ≥80%)")
-
-    def test_06_semantic_coherence_validation(self):
-        """Validate semantic coherence between business vocabulary and technical artifacts"""
-
-        if not hasattr(self, "generation_result"):
-            pytest.skip("System generation test must run first")
-
+        
+        # ====================================================================
+        # STEP 6: Semantic Coherence Validation
+        # ====================================================================
+        print("\n" + "="*60)
+        print("STEP 6: SEMANTIC COHERENCE VALIDATION")
+        print("="*60)
+        
         print("\n🧠 Validating semantic coherence...")
 
-        interpretation = self.generation_result["interpretation"]
+        interpretation = generation_result["interpretation"]
         
         # Validate that business vocabulary is preserved
         business_vocabulary = interpretation.get("business_vocabulary", [])
@@ -330,6 +341,20 @@ class TestScenario1Integration:
         print(f"   🔧 Domain operations: {domain_operations}")
         print(f"   🧠 Semantic coherence: {semantic_coherence}")
         print(f"   💾 Domain knowledge preserved: {domain_knowledge_preserved}")
+        
+        # ====================================================================
+        # FINAL SUMMARY
+        # ====================================================================
+        print("\n" + "="*60)
+        print("🎉 SCENARIO 1 COMPLETE - ALL VALIDATIONS PASSED")
+        print("="*60)
+        print(f"✅ System Generation: {execution_time:.2f}s")
+        print(f"✅ Generated Files: {len(python_files)} Python files")
+        print(f"✅ Database Schema: {len(columns)} columns")
+        print(f"✅ API Functionality: CRUD operations working")
+        print(f"✅ Performance: {success_rate:.1f}% success rate")
+        print(f"✅ Semantic Coherence: Domain knowledge preserved")
+        print("="*60)
 
 
 @pytest.fixture
