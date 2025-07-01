@@ -374,7 +374,7 @@ class BAEConversationalCLI:
         self.current_system_state["servers_running"] = True
         managed_system_path = Config.get_managed_system_path()
         self.current_system_state["database_path"] = str(
-            managed_system_path / "app/database/academic.db"
+            managed_system_path / "app/database/baes_system.db"
         )
         self.current_system_state["managed_system_path"] = str(managed_system_path) + "/"
 
@@ -385,7 +385,7 @@ class BAEConversationalCLI:
         print("  📊 FastAPI Documentation: http://localhost:8100/docs")
         print("  🖥️  Streamlit CRUD Interface: http://localhost:8600")
         print(f"  📁 Generated files: {managed_system_path}/")
-        print(f"  🗄️  Database: {managed_system_path}/app/database/academic.db")
+        print(f"  🗄️  Database: {managed_system_path}/app/database/baes_system.db")
         print(f"  📝 Server logs: {managed_system_path}/logs/ (fastapi.log, streamlit.log)")
         print("\n💡 Use the web interface above for CRUD operations!")
         print("💡 Server output is redirected to log files to keep CLI clean")

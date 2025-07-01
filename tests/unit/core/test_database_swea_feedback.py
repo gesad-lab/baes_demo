@@ -71,7 +71,7 @@ class TestDatabaseSWEAFeedbackProcessing:
     def test_fallback_database_creation(self):
         """Test fallback database creation when interpretation fails"""
         with tempfile.TemporaryDirectory() as temp_dir:
-            db_file = os.path.join(temp_dir, "test_academic.db")
+            db_file = os.path.join(temp_dir, "test_baes_system.db")
 
             result = self.database_swea._create_fallback_database(self.test_entity, db_file)
 
@@ -118,7 +118,7 @@ class TestDatabaseSWEAFeedbackProcessing:
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            db_file = os.path.join(temp_dir, "test_academic.db")
+            db_file = os.path.join(temp_dir, "test_baes_system.db")
 
             # This should not raise any errors
             result = self.database_swea._apply_database_improvements(
@@ -197,7 +197,7 @@ class TestDatabaseSWEAFeedbackProcessing:
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            db_file = os.path.join(temp_dir, "test_academic.db")
+            db_file = os.path.join(temp_dir, "test_baes_system.db")
 
             result = self.database_swea._apply_database_improvements(
                 interpretation, self.test_entity, db_file
@@ -219,7 +219,7 @@ class TestDatabaseSWEAFeedbackProcessing:
                 with patch.object(self.database_swea, "managed_system_manager") as mock_manager:
                     mock_manager.managed_system_path = temp_dir
 
-                    db_file = os.path.join(temp_dir, "test_academic.db")
+                    db_file = os.path.join(temp_dir, "test_baes_system.db")
 
                     # Should recover gracefully with fallback database
                     interpretation = self.database_swea._interpret_feedback_for_database_setup(

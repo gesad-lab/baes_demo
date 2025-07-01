@@ -62,7 +62,7 @@ class DatabaseStandards(BaseStandards):
     
     # Database connection patterns (CRITICAL - reuse from backend)
     CONNECTION_PATTERNS = {
-        "database_path": "Path(\"app/database/academic.db\")",
+        "database_path": "Path(\"app/database/baes_system.db\")",
         "path_creation": "db_path.parent.mkdir(parents=True, exist_ok=True)",
         "connection": "sqlite3.connect(str(db_path))",
         "row_factory": "conn.row_factory = sqlite3.Row",
@@ -111,7 +111,7 @@ class DatabaseStandards(BaseStandards):
             "def setup_database(db_path: str = None) -> str:",
             "\"\"\"Initialize database with all required tables\"\"\"",
             "if db_path is None:",
-            "db_path = Path(\"app/database/academic.db\")",
+            "db_path = Path(\"app/database/baes_system.db\")",
             "else:",
             "db_path = Path(db_path)",
             "db_path.parent.mkdir(parents=True, exist_ok=True)",

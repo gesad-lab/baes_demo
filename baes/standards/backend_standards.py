@@ -38,7 +38,7 @@ class BackendStandards(BaseStandards):
         "context_manager_decorator": "@contextmanager",
         "context_manager_function": "def get_db_connection():",
         "connection_setup": [
-            'db_path = Path("app/database/academic.db")',
+            'db_path = Path("app/database/baes_system.db")',
             "db_path.parent.mkdir(parents=True, exist_ok=True)",
             "conn = sqlite3.connect(str(db_path))",
             "conn.row_factory = sqlite3.Row",

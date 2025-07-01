@@ -162,7 +162,7 @@ class TestScenario1Integration:
         if not hasattr(self, "temp_dir"):
             pytest.skip("System generation test must run first")
 
-        db_path = self.temp_dir / "managed_system" / "app" / "database" / "academic.db"
+        db_path = self.temp_dir / "managed_system" / "app" / "database" / "baes_system.db"
 
         print(f"\n🗄️ Validating database schema at: {db_path}")
 

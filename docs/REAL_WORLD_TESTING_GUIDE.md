@@ -206,7 +206,7 @@ cat ui/app.py
 ### **Database Inspection**
 ```bash
 # Connect to generated database
-sqlite3 tests/.temp/scenario1_system_<timestamp>/managed_system/app/database/academic.db
+sqlite3 tests/.temp/scenario1_system_<timestamp>/managed_system/app/database/baes_system.db
 
 # View schema
 .schema

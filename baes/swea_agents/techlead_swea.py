@@ -402,6 +402,39 @@ class TechLeadSWEA(BaseAgent):
                     "context": {"error_pattern": "syntax_error"},
                 }
             )
+        
+        # 8. URL pattern mismatches (specific to TestSWEA)
+        if "404" in combined_output and "not found" in combined_output:
+            # Enhanced 404 analysis to distinguish between routing and URL pattern issues
+            if any(pattern in combined_output for pattern in ["/students/", "/api/students/", "students/students"]):
+                issues.append(
+                    {
+                        "issue_type": "url_pattern_mismatch",
+                        "responsible_swea": "TestSWEA",
+                        "fix_actions": ["fix_test_url_patterns", "validate_api_prefix"],
+                        "priority": "high",
+                        "confidence": 0.9,
+                        "description": "Test URL patterns don't match actual API endpoints - extract actual API prefix from routes file",
+                        "context": {
+                            "error_pattern": "url_pattern_mismatch", 
+                            "entity": entity, 
+                            "suggested_fix": "Extract actual API prefix from routes file and update test URLs to match BackendSWEA generated patterns"
+                        },
+                    }
+                )
+            else:
+                issues.append(
+                    {
+                        "issue_type": "endpoint_missing",
+                        "responsible_swea": "BackendSWEA",
+                        "fix_actions": ["fix_api_routing", "verify_endpoint_registration"],
+                        "priority": "high",
+                        "confidence": 0.8,
+                        "description": "API endpoint returning 404 Not Found",
+                        "context": {"error_pattern": "404_not_found", "entity": entity},
+                    }
+                )
+        
         return issues
 
     def _review_and_approve(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -819,6 +852,30 @@ class TechLeadSWEA(BaseAgent):
             code = data.get("code", "") if data else result.get("code", "")
             file_path = data.get("file_path", "") if data else result.get("file_path", "")
             
+            # Handle None code gracefully
+            if code is None:
+                logger.warning(f"🔍 TechLeadSWEA: {swea_agent}.{task_type} returned None code - this may be intentional")
+                # For BackendSWEA generate_model, this is expected (models are in API file)
+                if swea_agent == "BackendSWEA" and task_type == "generate_model":
+                    return {
+                        "is_valid": True,
+                        "quality_score": 1.0,
+                        "details": f"Model generation skipped for {entity} - models defined in API file",
+                        "issues": [],
+                        "suggestions": ["Model generation completed successfully"],
+                        "validation_method": "NoOpValidation",
+                        "entity": entity,
+                        "task_type": task_type
+                    }
+                else:
+                    return {
+                        "is_valid": False,
+                        "quality_score": 0.0,
+                        "details": f"No code generated for {swea_agent}.{task_type}",
+                        "issues": ["No code was generated"],
+                        "suggestions": ["Check code generation implementation"],
+                    }
+            
             # Log what we found for debugging
             logger.info(f"🔍 TechLeadSWEA: Extracted code length: {len(code)} characters")
             logger.info(f"🔍 TechLeadSWEA: File path: {file_path}")
@@ -851,23 +908,32 @@ class TechLeadSWEA(BaseAgent):
 
     def _validate_backend_with_standards(self, entity: str, code: str, task_type: str) -> Dict[str, Any]:
         """
-        Validate BackendSWEA code using the same BackendStandards used for generation.
+        Validate BackendSWEA code using task-specific BackendStandards validation.
         
-        This ensures perfect alignment between generation and validation, 
-        directly addressing the max_retries issue.
+        This ensures perfect alignment between generation and validation,
+        directly addressing the max_retries issue by using appropriate validation
+        for each task type (model vs API).
         """
         try:
             # Import standards - same ones used by BackendSWEA for generation
             from baes.standards.backend_standards import BackendStandards
             
-            # Use comprehensive standards-based validation
-            validation_result = BackendStandards.get_backend_validation(code, entity)
+            # Use task-specific validation based on task_type
+            if task_type == "generate_model":
+                # For model generation, only validate Pydantic model patterns
+                validation_result = self._validate_model_only(code, entity)
+            elif task_type == "generate_api":
+                # For API generation, use comprehensive backend validation
+                validation_result = BackendStandards.get_backend_validation(code, entity)
+            else:
+                # Fallback to comprehensive validation for unknown task types
+                validation_result = BackendStandards.get_backend_validation(code, entity)
             
             # Convert standards validation result to TechLeadSWEA format
             techlead_result = {
                 "is_valid": validation_result["is_valid"],
                 "quality_score": validation_result["quality_score"],
-                "details": f"Standards-based validation for {entity} backend code",
+                "details": f"Task-specific validation for {entity} {task_type}",
                 "issues": validation_result["issues"],
                 "suggestions": validation_result["suggestions"],
                 "actionable_feedback": validation_result["suggestions"],  # TechLeadSWEA format
@@ -878,9 +944,9 @@ class TechLeadSWEA(BaseAgent):
             
             # Log validation result
             if validation_result["is_valid"]:
-                logger.info(f"✅ TechLeadSWEA: Backend code for {entity} passed standards validation")
+                logger.info(f"✅ TechLeadSWEA: {task_type} for {entity} passed standards validation")
             else:
-                logger.warning(f"❌ TechLeadSWEA: Backend code for {entity} failed standards validation:")
+                logger.warning(f"❌ TechLeadSWEA: {task_type} for {entity} failed standards validation:")
                 for issue in validation_result["issues"][:3]:  # Log first 3 issues
                     logger.warning(f"  - {issue}")
                     
@@ -899,6 +965,55 @@ class TechLeadSWEA(BaseAgent):
                 "issues": [f"Standards validation failed: {str(e)}"],
                 "suggestions": ["Check BackendStandards implementation"],
             }
+
+    def _validate_model_only(self, code: str, entity: str) -> Dict[str, Any]:
+        """
+        Validate only Pydantic model patterns, not API requirements.
+        
+        This prevents the validation from checking for API-specific requirements
+        like @contextmanager decorators and CRUD endpoints when validating model generation.
+        """
+        issues = []
+        suggestions = []
+        
+        # Check for Pydantic model structure
+        if "class" not in code or "BaseModel" not in code:
+            issues.append("Missing Pydantic model class definition")
+            suggestions.append("Define a class that inherits from BaseModel")
+        
+        # Check for proper imports
+        if "from pydantic import BaseModel" not in code and "import pydantic" not in code:
+            issues.append("Missing Pydantic import")
+            suggestions.append("Add 'from pydantic import BaseModel' import")
+        
+        # Check for field definitions
+        if ":" not in code or "str" not in code and "int" not in code and "float" not in code:
+            issues.append("Missing field definitions with type hints")
+            suggestions.append("Define fields with proper type hints (e.g., name: str)")
+        
+        # Check for entity name in class
+        if entity.lower() not in code.lower():
+            issues.append(f"Model class should reference {entity} entity")
+            suggestions.append(f"Use {entity} in class name or field definitions")
+        
+        # Calculate validity and quality score
+        is_valid = len(issues) == 0
+        quality_score = max(0.0, 1.0 - (len(issues) * 0.2))  # Higher penalty for model issues
+        
+        return {
+            "is_valid": is_valid,
+            "quality_score": quality_score,
+            "issues": issues,
+            "suggestions": suggestions,
+            "validation_details": {
+                "model_structure": {
+                    "is_valid": is_valid,
+                    "issues": issues,
+                    "suggestions": suggestions
+                }
+            },
+            "entity": entity
+        }
 
     def _validate_frontend_with_standards(self, entity: str, code: str, task_type: str) -> Dict[str, Any]:
         """

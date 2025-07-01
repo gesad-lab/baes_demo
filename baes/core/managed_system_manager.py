@@ -87,7 +87,7 @@ API_HOST={Config.API_HOST}
 API_PORT={Config.API_PORT}
 UI_HOST={Config.UI_HOST}
 UI_PORT={Config.UI_PORT}
-DATABASE_URL=sqlite:///app/database/academic.db
+DATABASE_URL=sqlite:///app/database/baes_system.db
 """
         self._write_file(".env", env_content)
 
@@ -535,10 +535,10 @@ from sqlalchemy.orm import sessionmaker
 from pathlib import Path
 
 # Database configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///app/database/academic.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///app/database/baes_system.db")
 
 # Ensure database directory exists
-db_path = Path(__file__).parent / "academic.db"
+db_path = Path(__file__).parent / "baes_system.db"
 db_path.parent.mkdir(parents=True, exist_ok=True)
 
 # Create SQLAlchemy engine

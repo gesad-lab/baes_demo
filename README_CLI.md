@@ -143,7 +143,7 @@ After successful generation, access your system at:
 - **🖥️  CRUD Interface**: http://localhost:8600 (Streamlit)
 - **📊 API Documentation**: http://localhost:8100/docs (FastAPI)
 - **📁 Generated Files**: `managed_system/` directory
-- **🗄️  Database**: `managed_system/app/database/academic.db`
+- **🗄️  Database**: `managed_system/app/database/baes_system.db`
 
 ### **Important**: All CRUD operations (Create, Read, Update, Delete) are performed in the web interface, not the CLI!
 

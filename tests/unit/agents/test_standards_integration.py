@@ -185,7 +185,7 @@ import logging
 def setup_database(db_path: str = None) -> str:
     """Initialize database with all required tables"""
     if db_path is None:
-        db_path = Path("app/database/academic.db")
+        db_path = Path("app/database/baes_system.db")
     else:
         db_path = Path(db_path)
     
@@ -236,7 +236,7 @@ import sqlite3
 from pathlib import Path
 
 def setup_database():
-    db_path = Path("app/database/academic.db")
+    db_path = Path("app/database/baes_system.db")
     db_path.parent.mkdir(parents=True, exist_ok=True)
     
     try:

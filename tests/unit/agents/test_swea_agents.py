@@ -378,7 +378,7 @@ class TestDatabaseSWEA:
             from baes.swea_agents.database_swea import DatabaseSWEA
 
             swea = DatabaseSWEA()
-            db_path = temp_dir / "academic.db"
+            db_path = temp_dir / "baes_system.db"
             payload = {"database_path": str(db_path), "entity": "Student"}
             result = swea.handle_task("setup_database", payload)
             assert result["success"] is True

@@ -64,7 +64,7 @@ bae_academic_system/
 │   └── app.py                   # Streamlit with business vocabulary
 │
 ├── database/
-│   └── academic.db              # Domain data persistence
+│   └── baes_system.db              # Domain data persistence
 │
 ├── .env                         # OpenAI GPT-4o-mini configuration
 ├── requirements.txt
@@ -91,7 +91,7 @@ Create .env:
 ```dotenv
 OPENAI_API_KEY=sk-your_openai_api_key_here
 OPENAI_MODEL=gpt-4o-mini
-DATABASE_URL=sqlite:///database/academic.db
+DATABASE_URL=sqlite:///database/baes_system.db
 ```
 
 ### 2. Implement OpenAI Wrapper (llm/openai_wrapper.py)

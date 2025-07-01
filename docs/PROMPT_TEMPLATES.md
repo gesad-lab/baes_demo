@@ -373,7 +373,7 @@ import os
 from typing import Dict, Any
 from datetime import datetime
 
-def setup_{entity.lower()}_database(db_path: str = "managed_system/app/database/academic.db") -> Dict[str, Any]:
+def setup_{entity.lower()}_database(db_path: str = "managed_system/app/database/baes_system.db") -> Dict[str, Any]:
     """Setup database for {entity} domain entity with business rule preservation"""
 
     try:

@@ -117,7 +117,7 @@ sqlite3
 ```
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_MODEL=gpt-4o-mini
-DATABASE_URL=sqlite:///database/academic.db
+DATABASE_URL=sqlite:///database/baes_system.db
 API_HOST=0.0.0.0
 API_PORT=8000
 UI_HOST=0.0.0.0

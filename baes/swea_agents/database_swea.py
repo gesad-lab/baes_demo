@@ -646,7 +646,7 @@ Please provide the JSON response with database improvements."""
         # Use managed system database path
         managed_system_path = self.managed_system_manager.managed_system_path
         db_file = payload.get(
-            "database_path", str(managed_system_path / "app" / "database" / "academic.db")
+            "database_path", str(managed_system_path / "app" / "database" / "baes_system.db")
         )
         os.makedirs(os.path.dirname(db_file), exist_ok=True)
 
@@ -683,7 +683,7 @@ Please provide the JSON response with database improvements."""
 
             # Get database file path
             db_file = (
-                self.managed_system_manager.managed_system_path / "app" / "database" / "academic.db"
+                self.managed_system_manager.managed_system_path / "app" / "database" / "baes_system.db"
             )
 
             # Apply schema migration

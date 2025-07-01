@@ -204,7 +204,7 @@ def main():
 """
         )
 
-        (temp_managed_system / "app" / "database" / "academic.db").touch()
+        (temp_managed_system / "app" / "database" / "baes_system.db").touch()
 
         with patch.object(test_swea, "managed_system_manager") as mock_manager:
             mock_manager.managed_system_path = temp_managed_system
@@ -344,7 +344,7 @@ def main():
 """
         )
 
-        (temp_managed_system / "app" / "database" / "academic.db").touch()
+        (temp_managed_system / "app" / "database" / "baes_system.db").touch()
 
         with patch.object(test_swea, "managed_system_manager") as mock_manager:
             mock_manager.managed_system_path = temp_managed_system

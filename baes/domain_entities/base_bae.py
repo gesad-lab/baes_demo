@@ -247,7 +247,19 @@ class BaseBae(BaseAgent):
                 },
                 {
                     "swea_agent": "BackendSWEA",
-                    "task_type": "generate_api",  # Now generates complete API with models
+                    "task_type": "generate_model",
+                    "payload": {
+                        "entity": self.entity_name,
+                        "attributes": extracted_attributes,
+                        "context": payload.get("request", ""),
+                        "business_vocabulary": True,
+                        "domain_focus": True,
+                        "semantic_coherence": True,
+                    },
+                },
+                {
+                    "swea_agent": "BackendSWEA",
+                    "task_type": "generate_api",
                     "payload": {
                         "entity": self.entity_name,
                         "attributes": extracted_attributes,
@@ -270,23 +282,13 @@ class BaseBae(BaseAgent):
                     },
                 },
                 {
-                    "swea_agent": "TestSWEA",
-                    "task_type": "generate_all_tests_with_collaboration",
-                    "payload": {
-                        "entity": self.entity_name,
-                        "attributes": extracted_attributes,
-                        "context": payload.get("request", ""),
-                        "test_types": ["unit_tests", "integration_tests", "ui_tests"],
-                        "collaboration_mode": True,
-                    },
-                },
-                {
                     "swea_agent": "TechLeadSWEA",
                     "task_type": "review_and_approve",
                     "payload": {
                         "entity": self.entity_name,
                         "context": payload.get("request", ""),
-                        "system_components": ["database", "backend", "frontend", "tests"],
+                        "system_components": ["database", "backend", "frontend"],
+                        "phase": "phase_1_complete",
                         "final_review": True,
                     },
                 },

@@ -14,7 +14,7 @@ This report provides a comprehensive analysis of inconsistencies between the BAE
 - **Issue**: DatabaseSWEA existed but wasn't routed in EnhancedRuntimeKernel
 - **Fix Applied**: Added DatabaseSWEA import and routing logic
 - **Result**: Database setup now works correctly in coordination plans
-- **Evidence**: Test shows successful database creation at `/managed_system/app/database/academic.db`
+- **Evidence**: Test shows successful database creation at `/managed_system/app/database/baes_system.db`
 
 #### 2. **Auto-Restart Feature for PoC Demonstrations** - ✅ IMPLEMENTED
 - **Issue**: Adding new entities required manual server restart to appear in web UI

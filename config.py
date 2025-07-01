@@ -10,7 +10,7 @@ load_dotenv(override=True)
 class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "your_openai_api_key_here")
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///database/academic.db")
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///database/baes_system.db")
 
     # Test Environment Detection
     IS_TEST_ENVIRONMENT = (

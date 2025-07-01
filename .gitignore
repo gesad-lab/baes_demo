@@ -1,6 +1,7 @@
 # Ignore all files in the logs directory
 logs/
 FrontendSWEA/requests/
+FrontendSWEA/responses/
 BackendSWEA/requests/
 DatabaseSWEA/requests/
 TestSWEA/requests/

@@ -131,7 +131,7 @@ class OpenAIClient:
             CRITICAL REQUIREMENTS:
             - Use APIRouter, NOT FastAPI app
             - Start with: router = APIRouter(prefix="/api", tags=["{entity}s"])
-            - Use sqlite3 for database operations with path: "../database/academic.db"
+            - Use sqlite3 for database operations with path: "../database/baes_system.db"
             - Include proper Pydantic models for requests/responses
             - Implement full CRUD: POST, GET (list), GET (single), PUT, DELETE
             - Use /api/{entity.lower()}s/ endpoint pattern with:
@@ -141,7 +141,7 @@ class OpenAIClient:
               * PUT /api/{entity.lower()}s/{{id}} (update by id)
               * DELETE /api/{entity.lower()}s/{{id}} (delete by id)
             - Handle database with sqlite3 and proper row_factory
-            - Database path must be: os.path.abspath(os.path.join(os.path.dirname(__file__), "../database/academic.db"))
+            - Database path must be: os.path.abspath(os.path.join(os.path.dirname(__file__), "../database/baes_system.db"))
             - Add error handling for database connection failures
             - Ensure database file exists before connecting
             - Create separate response model that includes id field for API responses
@@ -156,7 +156,7 @@ class OpenAIClient:
             IMPORTANT: Use this database connection pattern:
             ```python
             def get_db_connection():
-                db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../database/academic.db"))
+                db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../database/baes_system.db"))
                 if not os.path.exists(db_path):
                     raise HTTPException(status_code=500, detail=f"Database not found at {{db_path}}")
                 conn = sqlite3.connect(db_path)
