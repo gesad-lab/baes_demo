@@ -591,24 +591,47 @@ class BAEConversationalCLI:
             "clear": self._clear_session,
         }
 
+        # First check for exact matches
         if input_lower in shortcuts:
             action = shortcuts[input_lower]
             if callable(action):
                 action()
             else:
                 self.process_business_request(action)
-        else:
-            # Check for partial matches
-            for shortcut, action in shortcuts.items():
-                if input_lower.startswith(shortcut.split()[0]):
-                    if callable(action):
-                        action()
-                    else:
-                        self.process_business_request(action)
-                    return
+            return
 
-            # If no shortcut found, process as regular request
-            self.process_business_request(user_input)
+        # Check for partial matches - fix the bug by checking more words
+        best_match = None
+        max_words_matched = 0
+
+        for shortcut, action in shortcuts.items():
+            shortcut_words = shortcut.split()
+            input_words = input_lower.split()
+
+            # Check how many consecutive words match from the beginning
+            words_matched = 0
+            for i, word in enumerate(shortcut_words):
+                if i < len(input_words) and input_words[i] == word:
+                    words_matched += 1
+                else:
+                    break
+
+            # If we matched all words of the shortcut, this is a good match
+            if words_matched == len(shortcut_words) and words_matched > max_words_matched:
+                best_match = (shortcut, action)
+                max_words_matched = words_matched
+
+        # Execute the best match if found
+        if best_match:
+            shortcut, action = best_match
+            if callable(action):
+                action()
+            else:
+                self.process_business_request(action)
+            return
+
+        # If no shortcut found, process as regular request
+        self.process_business_request(user_input)
 
     def _restart_servers(self):
         """Restart the generated system servers"""
