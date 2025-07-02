@@ -796,11 +796,18 @@ class BaseBae(BaseAgent):
         has_add = "add" in request_lower
         has_attribute_keyword = any(attr_word in request_lower for attr_word in ["attribute", "field", "property", "column"])
 
-        # Check for evolution patterns
-        return (any(keyword in request_lower for keyword in evolution_keywords) or 
-                any(pattern in request_lower for pattern in attribute_addition_patterns) or
-                any(pattern in request_lower for pattern in add_as_attribute_patterns) or
-                (has_add and has_attribute_keyword))
+        # Additional heuristic: detect "include" statements that mention an attribute/field even if the
+        # exact phrase "include attribute" is not present (e.g. "include the \"email\" attribute").
+        has_include = "include" in request_lower
+
+        # Check for evolution patterns (broadened to catch more natural-language variants)
+        return (
+            any(keyword in request_lower for keyword in evolution_keywords)
+            or any(pattern in request_lower for pattern in attribute_addition_patterns)
+            or any(pattern in request_lower for pattern in add_as_attribute_patterns)
+            or (has_add and has_attribute_keyword)
+            or (has_include and has_attribute_keyword)
+        )
 
     def _get_default_attributes(self) -> List[str]:
         """Get default attributes for this entity type"""
