@@ -854,7 +854,7 @@ class TechLeadSWEA(BaseAgent):
             
             # Handle None code gracefully
             if code is None:
-                logger.warning(f"🔍 TechLeadSWEA: {swea_agent}.{task_type} returned None code - this may be intentional")
+                # logger.warning(f"🔍 TechLeadSWEA: {swea_agent}.{task_type} returned None code - this may be intentional")
                 # For BackendSWEA generate_model, this is expected (models are in API file)
                 if swea_agent == "BackendSWEA" and task_type == "generate_model":
                     return {

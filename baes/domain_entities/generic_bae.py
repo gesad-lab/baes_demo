@@ -212,6 +212,7 @@ class GenericBae(BaseAgent):
                 "task": "generate_api",
                 "payload": {
                     "entity": entity,
+                    "attributes": attributes,
                     "context": context,
                     "business_vocabulary": business_vocab,
                     "domain_operations": ["create", "read", "update", "delete", "list"],
@@ -225,6 +226,7 @@ class GenericBae(BaseAgent):
                 "task": "setup_database",
                 "payload": {
                     "entity": entity,
+                    "attributes": attributes,
                     "context": context,
                     "persistence_requirements": ["durability", "consistency", "domain_integrity"],
                 },
@@ -237,6 +239,7 @@ class GenericBae(BaseAgent):
                 "task": "generate_ui",
                 "payload": {
                     "entity": entity,
+                    "attributes": attributes,
                     "context": context,
                     "business_vocabulary": business_vocab,
                     "user_workflows": [

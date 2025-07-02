@@ -702,44 +702,16 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
                 )
                 code = self._apply_ui_improvements(interpretation, entity, context)
             else:
-                # Generate fresh UI code using LLM (core PoC requirement)
-                logger.info(f"🎨 FrontendSWEA: Generating fresh UI code for {entity} using LLM")
-                prompt = self._build_prompt(entity, attributes, context)
-
-                # Log the request for debugging and research
-                request_id = self.llm_logger.log_request(
-                    agent_name="FrontendSWEA",
-                    request_type=RequestType.CODE_GENERATION,
-                    entity=entity,
-                    task="generate_ui_code",
-                    prompt=prompt,
-                    context={
-                        "attributes": attributes,
-                        "entity": entity,
-                        "context": context,
-                    },
-                    retry_count=0,
-                    session_id=self.current_session_id,
+                # Generate fresh UI code using internal template generator (deterministic)
+                logger.info(
+                    f"🎨 FrontendSWEA: Generating fresh UI code for {entity} using template generator"
                 )
 
-                # Make LLM request (CORE POC REQUIREMENT)
-                response_text = self.llm_client.generate_response(prompt)
+                # Parse attributes to structured list
+                parsed_attributes = self._parse_attributes(attributes)
 
-                # Log the response
-                self.llm_logger.log_response(
-                    request_id=request_id,
-                    response_text=response_text,
-                    success=True,
-                    response_time_ms=0.0,  # TODO: Add actual timing
-                    model_used="gpt-4o-mini",
-                )
-
-                if not response_text:
-                    logger.error("❌ FrontendSWEA: LLM request failed - empty response")
-                    raise FrontendGenerationError("LLM request failed - empty response")
-
-                # Clean LLM response to remove markdown formatting (DRY principle)
-                code = self._clean_llm_response(response_text)
+                # Build Streamlit UI code based on attributes (DRY template)
+                code = self._create_streamlit_ui_code(entity, parsed_attributes, context)
 
             # Write the generated code to the managed system
             file_path = self._write_to_managed_system(entity, code)
@@ -750,7 +722,7 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
                     "file_path": file_path,
                     "code": code,
                     "managed_system": True,
-                    "quality_mode": "llm_generated",
+                    "quality_mode": "template_generated",
                 },
             )
 
@@ -969,20 +941,23 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
             "validation": self._generate_validation_template(attributes),
             "crud_operations": self._generate_crud_operations_template(entity, entity_lower),
             "main_function": self._generate_main_function_template(entity),
+            "attributes": attributes,
         }
         
         return template_parts
     
     def _generate_imports_template(self) -> str:
         """Generate standard imports template (DRY)"""
-        return '''import streamlit as st
+        return '''import os
+import streamlit as st
 import requests
 from typing import List, Dict, Any, Optional'''
     
     def _generate_api_config_template(self) -> str:
         """Generate API configuration template (DRY)"""
         return '''# API Configuration
-API_BASE_URL = f"http://localhost:{{os.getenv('REALWORLD_FASTAPI_PORT', '8000')}}"'''
+API_PORT = os.getenv("REALWORLD_FASTAPI_PORT", "8000")
+API_BASE_URL = f"http://localhost:{API_PORT}"'''
     
     def _generate_form_fields_template(self, attributes: List[Dict[str, str]]) -> str:
         """Generate form fields template based on attributes (DRY)"""
@@ -1182,16 +1157,61 @@ if __name__ == "__main__":
     
     def _assemble_ui_template(self, template_parts: Dict[str, str], entity: str) -> str:
         """Assemble template parts into complete UI code (DRY)"""
-        # Build data dictionary for form fields
-        attributes = self._extract_attributes_from_form_fields(template_parts["form_fields"])
-        data_dict_parts = [f'"{attr}": {attr}' for attr in attributes]
+        # Retrieve full attribute metadata (name/type)
+        attributes_meta = template_parts.get("attributes", [])
+        # Fallback to simple name extraction if metadata missing
+        if not attributes_meta:
+            attributes_names = self._extract_attributes_from_form_fields(template_parts["form_fields"])
+            attributes_meta = [{"name": n, "type": "str"} for n in attributes_names]
+
+        # Helper: determine if type represents a list
+        def _is_list_type(t: str) -> bool:
+            return t.lower().startswith("list") or "[" in t.lower()
+
+        # Build data dictionary for create form – convert list-like fields
+        data_dict_parts = []
+        for attr in attributes_meta:
+            name = attr["name"]
+            atype = attr.get("type", "str")
+            if _is_list_type(atype):
+                data_dict_parts.append(f'"{name}": {name}.split(",")')
+            else:
+                data_dict_parts.append(f'"{name}": {name}')
         data_dict = "{" + ", ".join(data_dict_parts) + "}"
-        
+
         # Build edit form fields (pre-populated)
-        edit_form_fields = template_parts["form_fields"].replace('key="', 'value=edit_data.get("').replace('_input"', '", ""), key="').replace('_input")', '_edit_input")')
-        edit_validation = template_parts["validation"].replace('_input', '_edit_input')
-        edit_data_dict = data_dict.replace('_input', '_edit_input')
-        
+        edit_form_fields_lines = []
+        for attr in attributes_meta:
+            name = attr["name"]
+            # 12 spaces indentation to align with code inside the "with st.form" block
+            edit_form_fields_lines.append(
+                f'            {name}_edit = st.text_input("{name.title().replace("_"," ")}", value=edit_data.get("{name}", ""), key="{name}_edit")'
+            )
+        edit_form_fields = "\n".join(edit_form_fields_lines)
+
+        # Build edit validation rules
+        edit_validation_lines = []
+        for attr in attributes_meta:
+            name = attr["name"]
+            # 16 spaces indent to align inside 'if submitted:' block
+            edit_validation_lines.append(f'                if not {name}_edit:')
+            edit_validation_lines.append(
+                f'                    st.error("{name.title().replace("_"," ")} is required")'
+            )
+            edit_validation_lines.append("                    return")
+        edit_validation = "\n".join(edit_validation_lines)
+
+        # Build edit data dict – convert list-like fields
+        edit_data_dict_parts = []
+        for attr in attributes_meta:
+            name = attr["name"]
+            atype = attr.get("type", "str")
+            if _is_list_type(atype):
+                edit_data_dict_parts.append(f'"{name}": {name}_edit.split(",")')
+            else:
+                edit_data_dict_parts.append(f'"{name}": {name}_edit')
+        edit_data_dict = "{" + ", ".join(edit_data_dict_parts) + "}"
+
         # Assemble complete code
         complete_code = f'''{template_parts["imports"]}
 
@@ -1201,13 +1221,23 @@ if __name__ == "__main__":
 
 {template_parts["main_function"]}'''
         
-        # Replace placeholders
-        complete_code = complete_code.replace("{{form_fields}}", template_parts["form_fields"])
-        complete_code = complete_code.replace("{{validation}}", template_parts["validation"])
-        complete_code = complete_code.replace("{{data_dict}}", data_dict)
-        complete_code = complete_code.replace("{{edit_form_fields}}", edit_form_fields)
-        complete_code = complete_code.replace("{{edit_validation}}", edit_validation)
-        complete_code = complete_code.replace("{{edit_data_dict}}", edit_data_dict)
+        # Replace placeholders (support both single and double braces)
+        replacements = {
+            "{form_fields}": template_parts["form_fields"],
+            "{validation}": template_parts["validation"],
+            "{data_dict}": data_dict,
+            "{edit_form_fields}": edit_form_fields,
+            "{edit_validation}": edit_validation,
+            "{edit_data_dict}": edit_data_dict,
+            "{{form_fields}}": template_parts["form_fields"],
+            "{{validation}}": template_parts["validation"],
+            "{{data_dict}}": data_dict,
+            "{{edit_form_fields}}": edit_form_fields,
+            "{{edit_validation}}": edit_validation,
+            "{{edit_data_dict}}": edit_data_dict,
+        }
+        for placeholder, value in replacements.items():
+            complete_code = complete_code.replace(placeholder, value)
         
         return complete_code
     
