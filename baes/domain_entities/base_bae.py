@@ -49,79 +49,65 @@ class BaseBae(BaseAgent):
 
     def _load_stored_schema(self):
         """Load previously stored schema from persistent memory for evolution detection"""
-        try:
-            # Try to load from agent memory first
-            stored_schema = self.get_memory("current_schema")
-            if stored_schema:
+        # Try to load from agent memory first
+        stored_schema = self.get_memory("current_schema")
+        if stored_schema:
+            self.current_schema = stored_schema
+            logger.debug(
+                f"📥 Loaded stored schema for {self.entity_name} with "
+                f"{len(stored_schema.get('attributes', []))} attributes: {stored_schema.get('attributes', [])}"
+            )
+            return
+
+        # Try to load from context store agent memory
+        context_store_path = os.environ.get(
+            "BAE_CONTEXT_STORE_PATH", "database/context_store.json"
+        )
+        context_store = ContextStore(context_store_path)
+
+        # Check for stored agent memory
+        agent_memory = context_store.get_agent_memory(self.name)
+        if agent_memory and isinstance(agent_memory, dict):
+            # Context store memory has direct structure, but BaseAgent expects wrapped structure
+            # Convert context store format to BaseAgent format
+            for key, value in agent_memory.items():
+                if key == "current_schema" and value:
+                    # Found schema in context store, update our current schema directly
+                    self.current_schema = value
+                    # Also update memory in the BaseAgent format
+                    self.update_memory("current_schema", value)
+                    logger.debug(
+                        f"📥 Restored schema for {self.entity_name} from context store with "
+                        f"{len(value.get('attributes', []))} attributes: {value.get('attributes', [])}"
+                    )
+                    return
+
+        # If no schema in memory, check context store for domain knowledge
+        domain_knowledge = context_store.get_domain_knowledge(self.entity_name.lower())
+        if domain_knowledge and isinstance(domain_knowledge, dict):
+            interpretation = domain_knowledge.get("interpretation", {})
+            if interpretation and interpretation.get("extracted_attributes"):
+                stored_schema = {
+                    "entity": self.entity_name,
+                    "attributes": interpretation.get("extracted_attributes", []),
+                    "context": domain_knowledge.get("context", "academic"),
+                    "generated_at": domain_knowledge.get("timestamp", "unknown"),
+                    "business_rules": interpretation.get("business_vocabulary", []),
+                    "code": "",
+                }
                 self.current_schema = stored_schema
+                self.update_memory("current_schema", stored_schema)
                 logger.debug(
-                    f"📥 Loaded stored schema for {self.entity_name} with "
-                    f"{len(stored_schema.get('attributes', []))} attributes"
+                    f"📥 Reconstructed schema for {self.entity_name} from domain knowledge with "
+                    f"{len(stored_schema['attributes'])} attributes: {stored_schema['attributes']}"
                 )
                 return
 
-            # Try to load from context store agent memory
-            # Use the same context store path as the kernel if available
-            # Check for environment variable or use default
-            context_store_path = os.environ.get(
-                "BAE_CONTEXT_STORE_PATH", "database/context_store.json"
-            )
-            context_store = ContextStore(context_store_path)
-
-            # Check for stored agent memory
-            agent_memory = context_store.get_agent_memory(self.name)
-            if agent_memory and isinstance(agent_memory, dict):
-                # Restore full memory from context store
-                self.memory = agent_memory
-                stored_schema = self.get_memory("current_schema")
-                if stored_schema:
-                    # Handle both wrapped and unwrapped schema formats
-                    if isinstance(stored_schema, dict) and "value" in stored_schema:
-                        # This is a wrapped memory item, extract the value
-                        actual_schema = stored_schema["value"]
-                    else:
-                        # This is already the unwrapped schema
-                        actual_schema = stored_schema
-
-                    self.current_schema = actual_schema
-                    logger.debug(
-                        f"📥 Restored schema for {self.entity_name} from context store with "
-                        f"{len(actual_schema.get('attributes', []))} attributes"
-                    )
-                    return
-
-            # If no schema in memory, check context store for domain knowledge
-            domain_knowledge = context_store.get_domain_knowledge(self.entity_name.lower())
-
-            if domain_knowledge and isinstance(domain_knowledge, dict):
-                # Check if domain knowledge contains interpretation with extracted attributes
-                interpretation = domain_knowledge.get("interpretation", {})
-                if interpretation and interpretation.get("extracted_attributes"):
-                    # Reconstruct schema from domain knowledge
-                    stored_schema = {
-                        "entity": self.entity_name,
-                        "attributes": interpretation.get("extracted_attributes", []),
-                        "context": domain_knowledge.get("context", "academic"),
-                        "generated_at": domain_knowledge.get("timestamp", "unknown"),
-                        "business_rules": interpretation.get("business_vocabulary", []),
-                        "code": "",  # Will be populated by backend SWEA if needed
-                    }
-                    self.current_schema = stored_schema
-                    # Also store it in memory for future use
-                    self.update_memory("current_schema", stored_schema)
-                    logger.debug(
-                        f"📥 Reconstructed schema for {self.entity_name} from domain knowledge with "
-                        f"{len(stored_schema['attributes'])} attributes"
-                    )
-                    return
-
-            logger.debug(
-                f"🆕 No stored schema found for {self.entity_name}, starting with empty schema"
-            )
-
-        except Exception as e:
-            logger.warning(f"⚠️  Could not load stored schema for {self.entity_name}: {str(e)}")
-            # Continue with empty schema if loading fails
+        # No stored schema found - this is normal for fresh starts
+        logger.debug(
+            f"🆕 No stored schema found for {self.entity_name}, starting with empty schema"
+        )
+        self.current_schema = None
 
     @abstractmethod
     def _initialize_domain_knowledge(self):
@@ -191,30 +177,89 @@ class BaseBae(BaseAgent):
     def _interpret_business_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Interpret business request and create SWEA coordination plan with TechLeadSWEA governance"""
         try:
-            # Extract attributes from the request
-            extracted_attributes = self._extract_attributes_from_request(payload.get("request", ""))
-
             # Determine if this is evolution or new generation
             is_evolution = self._is_evolution_request(payload.get("request", ""))
-
-            interpretation = {
-                "entity": self.entity_name,
-                "domain": self.domain,
-                "attributes": extracted_attributes,
-                "is_evolution": is_evolution,
-                "request_type": "evolution" if is_evolution else "generation",
-                "business_context": payload.get("request", ""),
-                "semantic_coherence": True,
-                "domain_knowledge_preserved": True,
-                "interpreted_intent": f"{'evolve' if is_evolution else 'create'}_{self.entity_name.lower()}_management_system",
-                "domain_operations": (
-                    ["create_entity", "setup_crud"]
-                    if not is_evolution
-                    else ["evolve_entity", "update_schema"]
-                ),
-                "business_vocabulary": self._extract_business_vocabulary(),
-                "entity_focus": self.entity_name,
-            }
+            request = payload.get("request", "")
+            
+            # Handle evolution requests differently than initial generation
+            if is_evolution:
+                # For evolution, we need to preserve existing attributes
+                # Load current schema if available
+                if self.current_schema:
+                    current_schema = self.current_schema
+                    if is_debug_mode():
+                        logger.info(f"🔍 {self.entity_name}BAE: Using cached schema with {len(current_schema.get('attributes', []))} attributes: {current_schema.get('attributes', [])}")
+                else:
+                    # Try to load from memory/context store
+                    logger.info(f"🔍 {self.entity_name}BAE: Loading stored schema for evolution...")
+                    self._load_stored_schema()
+                    current_schema = self.current_schema or {"attributes": []}
+                    if is_debug_mode():
+                        logger.info(f"🔍 {self.entity_name}BAE: Loaded schema with {len(current_schema.get('attributes', []))} attributes: {current_schema.get('attributes', [])}")
+                
+                # Use specialized evolution handling
+                evolution_result = self._handle_evolution_request(
+                    request, payload.get("context", "academic"), current_schema
+                )
+                
+                if evolution_result:
+                    # Use the evolution result which properly preserves existing attributes
+                    extracted_attributes = evolution_result.get("extracted_attributes", [])
+                    interpretation = {
+                        "entity": self.entity_name,
+                        "domain": getattr(self, 'domain', 'academic'),
+                        "attributes": extracted_attributes,
+                        "extracted_attributes": extracted_attributes,  # Add for consistency
+                        "is_evolution": True,
+                        "request_type": "evolution",
+                        "business_context": request,
+                        "semantic_coherence": True,
+                        "domain_knowledge_preserved": True,
+                        "interpreted_intent": evolution_result.get("interpreted_intent", f"evolve_{self.entity_name.lower()}_management_system"),
+                        "domain_operations": evolution_result.get("domain_operations", ["evolve_entity", "update_schema"]),
+                        "business_vocabulary": self._extract_business_vocabulary(),
+                        "entity_focus": self.entity_name,
+                        # Include evolution-specific metadata
+                        "new_attributes": evolution_result.get("new_attributes", []),
+                        "existing_attributes": evolution_result.get("existing_attributes", []),
+                        "evolution_type": evolution_result.get("evolution_type", "addition"),
+                    }
+                else:
+                    # Fallback if evolution handling fails
+                    extracted_attributes = self._extract_attributes_from_request(request)
+                    interpretation = {
+                        "entity": self.entity_name,
+                        "domain": getattr(self, 'domain', 'academic'),
+                        "attributes": extracted_attributes,
+                        "extracted_attributes": extracted_attributes,  # Add for consistency
+                        "is_evolution": True,
+                        "request_type": "evolution",
+                        "business_context": request,
+                        "semantic_coherence": True,
+                        "domain_knowledge_preserved": True,
+                        "interpreted_intent": f"evolve_{self.entity_name.lower()}_management_system",
+                        "domain_operations": ["evolve_entity", "update_schema"],
+                        "business_vocabulary": self._extract_business_vocabulary(),
+                        "entity_focus": self.entity_name,
+                    }
+            else:
+                # For initial generation, use standard attribute extraction
+                extracted_attributes = self._extract_attributes_from_request(request)
+                interpretation = {
+                    "entity": self.entity_name,
+                    "domain": getattr(self, 'domain', 'academic'),
+                    "attributes": extracted_attributes,
+                    "extracted_attributes": extracted_attributes,  # Add for consistency
+                    "is_evolution": False,
+                    "request_type": "generation",
+                    "business_context": request,
+                    "semantic_coherence": True,
+                    "domain_knowledge_preserved": True,
+                    "interpreted_intent": f"create_{self.entity_name.lower()}_management_system",
+                    "domain_operations": ["create_entity", "setup_crud"],
+                    "business_vocabulary": self._extract_business_vocabulary(),
+                    "entity_focus": self.entity_name,
+                }
 
             # Create comprehensive coordination plan with TechLeadSWEA governance
             interpretation["swea_coordination"] = [
@@ -224,7 +269,7 @@ class BaseBae(BaseAgent):
                     "payload": {
                         "entity": self.entity_name,
                         "attributes": extracted_attributes,
-                        "context": payload.get("request", ""),
+                        "context": request,
                         "is_evolution": is_evolution,
                         "business_requirements": {
                             "domain_focus": True,
@@ -236,11 +281,11 @@ class BaseBae(BaseAgent):
                 },
                 {
                     "swea_agent": "DatabaseSWEA",
-                    "task_type": "setup_database",
+                    "task_type": "migrate_schema" if is_evolution else "setup_database",
                     "payload": {
                         "entity": self.entity_name,
                         "attributes": extracted_attributes,
-                        "context": payload.get("request", ""),
+                        "context": request,
                         "preserve_data": is_evolution,
                         "business_rules": True,
                     },
@@ -251,7 +296,7 @@ class BaseBae(BaseAgent):
                     "payload": {
                         "entity": self.entity_name,
                         "attributes": extracted_attributes,
-                        "context": payload.get("request", ""),
+                        "context": request,
                         "business_vocabulary": True,
                         "domain_focus": True,
                         "semantic_coherence": True,
@@ -263,7 +308,7 @@ class BaseBae(BaseAgent):
                     "payload": {
                         "entity": self.entity_name,
                         "attributes": extracted_attributes,
-                        "context": payload.get("request", ""),
+                        "context": request,
                         "crud_operations": True,
                         "business_vocabulary": True,
                         "domain_focus": True,
@@ -276,7 +321,7 @@ class BaseBae(BaseAgent):
                     "payload": {
                         "entity": self.entity_name,
                         "attributes": extracted_attributes,
-                        "context": payload.get("request", ""),
+                        "context": request,
                         "ui_framework": "streamlit",
                         "features": ["crud_operations", "data_visualization", "user_friendly"],
                     },
@@ -286,7 +331,7 @@ class BaseBae(BaseAgent):
                     "task_type": "review_and_approve",
                     "payload": {
                         "entity": self.entity_name,
-                        "context": payload.get("request", ""),
+                        "context": request,
                         "system_components": ["database", "backend", "frontend"],
                         "phase": "phase_1_complete",
                         "final_review": True,
@@ -309,13 +354,58 @@ class BaseBae(BaseAgent):
                 }
 
             # Preserve domain knowledge for reusability
-            self._update_domain_knowledge(payload.get("request", ""), extracted_attributes)
+            self._update_domain_knowledge(request, extracted_attributes)
+            
+            # CRITICAL: Update current schema with the latest attributes for future evolution requests
+            # This ensures the next evolution request can access the current attributes
+            updated_schema = {
+                "entity": self.entity_name,
+                "attributes": extracted_attributes,
+                "context": payload.get("context", "academic"),
+                "generated_at": datetime.now().isoformat(),
+                "business_rules": self._get_business_rules(),
+                "is_evolution": is_evolution,
+                "interpretation": interpretation,  # Store full interpretation for debugging
+            }
+            
+            # Save to both current_schema and memory
+            self.current_schema = updated_schema
+            self.update_memory("current_schema", updated_schema)
+            
+            # Also save to context store for persistence across BAE instances
+            try:
+                context_store_path = os.environ.get(
+                    "BAE_CONTEXT_STORE_PATH", "database/context_store.json"
+                )
+                context_store = ContextStore(context_store_path)
+                
+                # Preserve domain knowledge with updated attributes
+                domain_knowledge_data = {
+                    "entity": self.entity_name,
+                    "context": payload.get("context", "academic"),
+                    "timestamp": datetime.now().isoformat(),
+                    "interpretation": interpretation,
+                    "current_attributes": extracted_attributes,
+                }
+                context_store.preserve_domain_knowledge(self.entity_name.lower(), domain_knowledge_data)
+                
+                # Also update agent memory in context store
+                context_store.update_agent_memory_key(self.name, "current_schema", updated_schema)
+                
+                if is_debug_mode():
+                    logger.info(
+                        f"💾 {self.entity_name}BAE: Saved schema with {len(extracted_attributes)} attributes to context store"
+                    )
+                    
+            except Exception as e:
+                logger.warning(f"⚠️  {self.entity_name}BAE: Could not save to context store: {str(e)}")
 
             if is_debug_mode():
                 logger.info(
                     f"✅ {self.entity_name}BAE: Interpreted request with {len(extracted_attributes)} attributes "
                     f"and {len(interpretation['swea_coordination'])} SWEA tasks"
                 )
+                logger.info(f"🔍 Current attributes: {extracted_attributes}")
 
             return interpretation
 
@@ -382,10 +472,6 @@ class BaseBae(BaseAgent):
         current_attributes = current_schema.get("attributes", [])
         request_lower = business_request.lower()
 
-        # Check for complex operations (multiple operations in one request)
-        # This is a placeholder for future complex evolution handling
-        # For now, we'll handle simple additions, removals, and modifications
-
         # Handle different types of evolution
         if any(
             keyword in request_lower
@@ -400,12 +486,51 @@ class BaseBae(BaseAgent):
             ]
         ):
             return self._handle_addition_evolution(business_request, context, current_attributes)
+        
+        elif any(
+            keyword in request_lower
+            for keyword in [
+                "remove",
+                "delete",
+                "drop",
+                "eliminate",
+            ]
+        ):
+            return self._handle_removal_evolution(business_request, context, current_attributes)
+        
+        elif any(
+            keyword in request_lower
+            for keyword in [
+                "modify",
+                "update",
+                "change",
+                "alter",
+                "rename",
+            ]
+        ):
+            return self._handle_modification_evolution(business_request, context, current_attributes)
+        
+        else:
+            # Handle complex operations or fallback to addition
+            # Check if it might be a complex request with multiple operations
+            has_multiple_ops = (
+                sum(1 for keyword in ["add", "remove", "modify", "change", "update", "delete"] 
+                    if keyword in request_lower) > 1
+            )
+            
+            if has_multiple_ops:
+                return self._handle_complex_evolution(business_request, context, current_attributes)
+            else:
+                # Default to addition evolution for unclear requests
+                return self._handle_addition_evolution(business_request, context, current_attributes)
 
     def _handle_addition_evolution(
         self, business_request: str, context: str, current_attributes: List[str]
     ) -> Dict[str, Any]:
         """Handle adding new attributes to existing entity"""
-        # Extract new attributes from the request
+        logger.info(f"🔍 {self.entity_name}BAE: Adding attributes to existing entity")
+        logger.info(f"📋 Current attributes: {current_attributes}")
+        logger.info(f"📝 Request: {business_request}")
         prompt = f"""
         As the {self.entity_name} BAE, analyze this attribute addition request:
 
@@ -424,10 +549,19 @@ class BaseBae(BaseAgent):
 
         For example, if the request is "add email address", return: ["email: str"]
         """
-
-        new_attributes = self._extract_attributes_from_request(business_request, prompt)
+        response = self.llm.generate_domain_entity_response(prompt, self.entity_name)
+        cleaned_response = self._clean_json_response(response)
+        new_attributes = json.loads(cleaned_response)
+        if not isinstance(new_attributes, list):
+            raise ValueError(f"LLM did not return a list of new attributes: {new_attributes}")
+        # Filter out attributes that already exist
+        existing_attr_names = [attr.split(":")[0].strip() for attr in current_attributes]
+        new_attributes = [attr for attr in new_attributes if attr.split(":")[0].strip() not in existing_attr_names]
         all_attributes = current_attributes + new_attributes
-
+        logger.info(f"✅ {self.entity_name}BAE: Addition evolution result:")
+        logger.info(f"   📋 Existing attributes: {current_attributes}")
+        logger.info(f"   🆕 New attributes: {new_attributes}")
+        logger.info(f"   🔄 Combined attributes: {all_attributes}")
         return {
             "entity": self.entity_name,
             "interpreted_intent": f"Add attributes to existing {self.entity_name} entity: {', '.join(new_attributes)}",
@@ -596,7 +730,6 @@ class BaseBae(BaseAgent):
 
     def _extract_attributes_from_request(self, request: str) -> List[str]:
         """Extract attributes from natural language request"""
-        # Simple attribute extraction logic
         common_attributes = {
             "name": "name: str",
             "email": "email: str",
@@ -609,18 +742,18 @@ class BaseBae(BaseAgent):
             "course": "course: str",
             "enrollment": "enrollment_date: date",
         }
-
         extracted = []
         request_lower = request.lower()
-
         for keyword, attribute in common_attributes.items():
             if keyword in request_lower:
                 extracted.append(attribute)
-
-        # If no attributes found, use defaults
         if not extracted:
-            extracted = self._get_default_attributes()
-
+            # For initial generation, use default attributes when none are specified
+            if not self._is_evolution_request(request):
+                logger.info(f"{self.entity_name}BAE: No specific attributes found in request, using default attributes")
+                return self._get_default_attributes()
+            else:
+                raise ValueError(f"No attributes could be extracted from request: {request}")
         return extracted
 
     def _is_evolution_request(self, request: str) -> bool:
@@ -651,11 +784,23 @@ class BaseBae(BaseAgent):
             "add phone to",
             "add address to",
         ]
+        
+        # Check for "add X as attribute" patterns (more flexible matching)
+        add_as_attribute_patterns = [
+            "as attribute",
+            "as field", 
+            "as property",
+        ]
+
+        # Check for basic "add" + attribute keywords
+        has_add = "add" in request_lower
+        has_attribute_keyword = any(attr_word in request_lower for attr_word in ["attribute", "field", "property", "column"])
 
         # Check for evolution patterns
-        return any(keyword in request_lower for keyword in evolution_keywords) or any(
-            pattern in request_lower for pattern in attribute_addition_patterns
-        )
+        return (any(keyword in request_lower for keyword in evolution_keywords) or 
+                any(pattern in request_lower for pattern in attribute_addition_patterns) or
+                any(pattern in request_lower for pattern in add_as_attribute_patterns) or
+                (has_add and has_attribute_keyword))
 
     def _get_default_attributes(self) -> List[str]:
         """Get default attributes for this entity type"""
@@ -777,8 +922,13 @@ class BaseBae(BaseAgent):
             },
             {
                 "swea_agent": "DatabaseSWEA",
-                "task_type": "setup_database",
-                "payload": {"attributes": attributes, "is_evolution": True},
+                "task_type": "migrate_schema",
+                "payload": {
+                    "entity": self.entity_name,
+                    "attributes": attributes, 
+                    "is_evolution": True,
+                    "preserve_data": True,
+                },
             },
             {
                 "swea_agent": "BackendSWEA",
