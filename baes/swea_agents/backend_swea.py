@@ -129,28 +129,130 @@ REQUIREMENTS:
         if retry_count > 0:
             retry_info = f"\nThis is retry attempt #{retry_count}. Please ensure you address the feedback above."
         
+        # Format attributes list for clearer display
+        attributes_display = "\n".join([f"- {attr}" for attr in attributes])
+        entity_lower = entity.lower()
+        
         return f"""
-Generate FastAPI router code for the {entity} entity with the following attributes:
-{attributes}
+Generate FastAPI router code for the {entity} entity with EXACTLY these attributes and NO OTHERS:
+{attributes_display}
 Context: {context}{feedback_section}{retry_info}
 
-REQUIREMENTS:
-- Use APIRouter, not FastAPI app
+CRITICAL REQUIREMENTS (ALL MUST BE IMPLEMENTED):
+- Use APIRouter with correct prefix: prefix="/api/{entity_lower}s"
 - Implement full CRUD endpoints (POST, GET, PUT, DELETE)
-- Use only the specified attributes
+- Use ONLY the attributes listed above - DO NOT ADD EXTRA FIELDS
+- Router endpoints should be: /, /{{id}}, etc. (not full paths)
 - No fallback or placeholder logic
 - Raise errors for any missing or invalid data
 - Use generic database path: app/database/baes_system.db
-- No extra fields
 
-CRITICAL API REQUIREMENTS:
-- Must include '@contextmanager' decorator for database connection function
+CRITICAL ROUTER CONFIGURATION:
+- Must use: router = APIRouter(prefix="/api/{entity_lower}s", tags=["{entity}s"])
+- Endpoints should be @router.post("/"), @router.get("/"), etc.
+- This creates routes like /api/{entity_lower}s/, /api/{entity_lower}s/{{id}}, etc.
+
+CRITICAL PYDANTIC MODELS (ONLY USE SPECIFIED ATTRIBUTES):
+- {entity}Create: Only the attributes listed above (no id, no extra fields)
+- {entity}Response: Include id plus the attributes listed above (no extra fields)
+- {entity}Update: Only the attributes listed above (no id, no extra fields)
+- DO NOT add any fields not explicitly specified in the attributes list
+
+MANDATORY CODE QUALITY REQUIREMENTS:
+- ALL FUNCTIONS MUST HAVE DETAILED DOCSTRINGS (no exceptions)
+- ALL FUNCTIONS MUST HAVE PROPER RETURN TYPE HINTS (no exceptions)
+- ALL IMPORTS MUST BE COMPLETE AND CORRECT
+- ALL ERROR HANDLING MUST BE COMPREHENSIVE
+
+CRITICAL DATABASE REQUIREMENTS (MANDATORY):
+- Must use @contextmanager decorator for database connection function
+- Must include database rollback in all exception handlers: db.rollback()
+- Must implement proper try/except/finally blocks for all database operations
+- Database connections must be properly closed in finally blocks
+- Must include comprehensive error handling with HTTPException
+
+CRITICAL API STANDARDS:
 - Must implement proper error handling with HTTPException
 - Must include all CRUD endpoints: create_, get_, update_, delete_, list_
-- DELETE endpoint must return status code 204 (HTTP_204_NO_CONTENT)
-- POST endpoint must return status code 201 (HTTP_201_CREATED)
+- DELETE endpoint MUST return Response(status_code=status.HTTP_204_NO_CONTENT)
+- POST endpoint MUST use status_code=status.HTTP_201_CREATED in decorator
 - Must use proper FastAPI imports: APIRouter, HTTPException, Depends, status, Response
 - Must include contextlib import for @contextmanager
+- Must include logging import and logger setup
+
+MANDATORY EXCEPTION HANDLING PATTERN (CRITICAL):
+Every database operation MUST follow this exact pattern:
+```python
+try:
+    # database operations here
+    db.commit()
+except HTTPException:
+    raise  # Re-raise HTTPException without modification
+except Exception as e:
+    db.rollback()  # MANDATORY - will be rejected without this
+    logger.error(f"Database error: {{e}}")
+    raise HTTPException(status_code=500, detail="Internal server error")
+```
+
+MANDATORY DOCSTRING REQUIREMENTS:
+- Every function MUST have a comprehensive docstring
+- Docstrings MUST describe purpose, parameters, and return values
+- Use proper docstring format with Args: and Returns: sections
+
+MANDATORY TYPE HINT REQUIREMENTS:
+- Every function MUST have complete return type hints
+- Use proper typing imports (List, Optional, Dict, etc.)
+- All parameters MUST have type hints
+
+MANDATORY DATABASE CONNECTION PATTERN:
+```python
+from contextlib import contextmanager
+import sqlite3
+from pathlib import Path
+
+@contextmanager
+def get_db_connection():
+    \"\"\"Database connection context manager with proper error handling\"\"\"
+    db_path = Path("app/database/baes_system.db")
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+```
+
+EXAMPLE ROUTER STRUCTURE:
+```python
+from fastapi import APIRouter, HTTPException, Depends, status, Response
+from pydantic import BaseModel
+from typing import List, Dict, Any
+from contextlib import contextmanager
+import sqlite3
+from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/{entity_lower}s", tags=["{entity}s"])
+
+class {entity}Create(BaseModel):
+    # Only the specified attributes, no extra fields
+    
+class {entity}Response(BaseModel):
+    id: int
+    # Only the specified attributes, no extra fields
+
+@router.post("/", response_model={entity}Response, status_code=status.HTTP_201_CREATED)
+def create_{entity_lower}(data: {entity}Create) -> Dict[str, Any]:
+    # Implementation here
+```
+
+CRITICAL REMINDER: Use ONLY the attributes specified above. Do not add age, created_at, updated_at, or any other fields unless explicitly listed in the attributes.
 """
 
  

@@ -1729,15 +1729,15 @@ VALIDATION HELPERS FOR {entity.upper()}:
                         
                         attributes.append(f"{field_name}: {field_type}")
         
-        # If still no attributes, use BackendSWEA defaults
+        # If still no attributes, use minimal defaults - don't assume extra fields
         if not attributes:
             entity_lower = entity.lower()
             if entity_lower == "student":
-                attributes = ["name: str", "email: str", "age: int"]
+                attributes = ["name: str", "email: str"]  # Removed age - only include if explicitly requested
             elif entity_lower == "course":
-                attributes = ["name: str", "code: str", "credits: int"]
+                attributes = ["name: str", "code: str"]  # Removed credits
             elif entity_lower == "teacher":
-                attributes = ["name: str", "email: str", "department: str"]
+                attributes = ["name: str", "email: str"]  # Removed department
             else:
                 attributes = ["name: str", "description: str", "created_at: str"]
         

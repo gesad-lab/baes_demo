@@ -2170,10 +2170,11 @@ class EnhancedRuntimeKernel:
 
     def _get_default_attributes_for_entity(self, entity: str) -> List[str]:
         """Get default attributes for an entity if none can be extracted."""
+        # Use minimal defaults - don't assume extra fields like age unless explicitly requested
         default_attributes = {
-            "student": ["name", "email", "age"],
-            "course": ["name", "code", "credits"],
-            "teacher": ["name", "email", "department"],
+            "student": ["name", "email"],  # Removed age - only include if explicitly requested
+            "course": ["name", "code"],   # Removed credits
+            "teacher": ["name", "email"], # Removed department
         }
 
         return default_attributes.get(entity.lower(), ["name", "id"])

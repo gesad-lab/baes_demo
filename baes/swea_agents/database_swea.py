@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sqlite3
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
@@ -564,6 +565,12 @@ Please provide the JSON response with database improvements."""
 
                 # Sanitize field name
                 name = name.replace(" ", "_").lower()
+                
+                # Skip 'id' field since it's already added as PRIMARY KEY
+                if name == 'id':
+                    logger.debug(f"DatabaseSWEA: Skipping 'id' attribute - already handled as PRIMARY KEY")
+                    continue
+                
                 sql_type = type_map.get(typ.replace("Optional[", "").replace("]", ""), "TEXT")
                 columns_sql.append(f"{name} {sql_type}")
 
@@ -670,336 +677,766 @@ Please provide the JSON response with database improvements."""
         """Migrate database schema for entity evolution"""
         try:
             entity = payload.get("entity", "Student")
-            attributes = payload.get("attributes", [])
+            new_attributes = payload.get("attributes", [])
             feedback = payload.get("feedback", [])
 
-            logger.info(f"🔄 DatabaseSWEA: Migrating schema for {entity} entity")
+            logger.info(f"🔄 DatabaseSWEA: Starting schema migration for {entity} entity")
 
-            # Interpret feedback for schema migration
+            db_file = self.managed_system_manager.managed_system_path / "app" / "database" / "baes_system.db"
+            table_name = entity.lower() + "s"
+            
+            # Get current schema from database
+            current_schema_from_db = self._get_current_table_schema(str(db_file), table_name)
+            current_attributes = []
+            type_map_reverse = {"TEXT": "str", "INTEGER": "int", "REAL": "float"}
+            
+            logger.info(f"📊 Current table schema for {table_name}: {current_schema_from_db}")
+            
+            for col_def in current_schema_from_db:
+                parts = col_def.split()
+                name = parts[0]
+                if name == 'id': continue
+                sql_type = parts[1]
+                py_type = type_map_reverse.get(sql_type, "str")
+                current_attributes.append(f"{name}:{py_type}")
+            
+            # DEBUG: Log the extracted current attributes
+            logger.info(f"🔍 DEBUG - current_attributes from DB: {current_attributes}")
+            logger.info(f"🔍 DEBUG - new_attributes from request: {new_attributes}")
+
+            # Merge current and new attributes, preserving existing ones
+            all_attributes = list(dict.fromkeys(current_attributes + new_attributes))
+            logger.info(f"🔗 Merged attributes for migration: {all_attributes}")
+            
             interpretation = self._interpret_feedback_for_database_setup(
-                feedback, entity, attributes
+                feedback, entity, all_attributes
             )
             interpretation = self._validate_interpretation_structure(interpretation)
+            
+            # DEBUG: Log what the LLM interpretation returned
+            logger.info(f"🔍 DEBUG - LLM interpretation result: {interpretation}")
 
-            # Get database file path
-            db_file = (
-                self.managed_system_manager.managed_system_path / "app" / "database" / "baes_system.db"
-            )
-
-            # Apply schema migration
             result = self._apply_schema_migration(interpretation, entity, str(db_file))
 
-            logger.info(f"✅ DatabaseSWEA: Schema migration completed for {entity}")
-            return self.create_success_response("migrate_schema", result)
+            logger.info(f"✅ DatabaseSWEA: Schema migration completed successfully for {entity}")
+            
+            # Extract SQL code for TechLeadSWEA validation
+            sql_code = result.get("code", "")
+            
+            # Return result with 'code' field for TechLeadSWEA validation
+            return self.create_success_response("migrate_schema", {
+                **result,
+                "code": sql_code,  # TechLeadSWEA expects this field
+                "file_path": f"migration_{entity.lower()}_{int(time.time())}.sql"
+            })
 
         except Exception as e:
-            logger.error(f"❌ DatabaseSWEA schema migration failed: {str(e)}")
+            logger.error(f"❌ DatabaseSWEA schema migration failed for {entity}: {str(e)}")
             return self.create_error_response("migrate_schema", str(e), "migration_error")
 
-    def _apply_schema_migration(
-        self, interpretation: Dict[str, Any], entity: str, db_file: str
-    ) -> Dict[str, Any]:
-        """Apply schema migration based on interpretation"""
+    def _create_relationships(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Create foreign key relationships between tables with comprehensive SQL generation."""
         try:
+            entity = payload.get("entity")
+            relationships = payload.get("relationships", [])
+            attributes = payload.get("attributes", [])
+            context = payload.get("context", "")
+            
+            db_file = self.managed_system_manager.managed_system_path / "app" / "database" / "baes_system.db"
             table_name = entity.lower() + "s"
-
-            # Build new schema from interpretation
-            new_attributes = interpretation.get("attributes", [])
-            new_columns = []
-
-            # Process attributes similar to _apply_database_improvements
-            for attr in new_attributes:
-                if isinstance(attr, dict):
-                    # LLM returned structured attribute info
-                    name = attr.get("name", "unknown_field")
-                    typ = attr.get("type", "str")
-                    logger.debug(f"DatabaseSWEA: Processing dict attribute: {name}:{typ}")
-                elif isinstance(attr, str):
-                    # Traditional string format
+            
+            logger.info(f"🔗 DatabaseSWEA: Creating relationships for {entity}")
+            
+            # Build comprehensive columns map with explicit PRIMARY KEY
+            current_columns_map = {'id': 'INTEGER PRIMARY KEY AUTOINCREMENT'}
+            
+            # Process existing attributes
+            for attr in attributes:
+                if isinstance(attr, str):
                     if ":" in attr:
                         name, typ = [p.strip() for p in attr.split(":", 1)]
                     else:
                         name, typ = attr.strip(), "str"
-                    logger.debug(f"DatabaseSWEA: Processing string attribute: {name}:{typ}")
-                else:
-                    # Fallback for unexpected formats
-                    logger.warning(
-                        f"DatabaseSWEA: Unexpected attribute format: {attr} (type: {type(attr)})"
-                    )
-                    name, typ = str(attr), "str"
+                    
+                    name = name.replace(" ", "_").lower()
+                    if name != 'id':  # Skip id as it's already handled
+                        sql_type = self._convert_type_hint_to_sql(typ)
+                        current_columns_map[name] = sql_type
 
-                # Sanitize field name and get SQL type
-                name = name.replace(" ", "_").lower()
-                sql_type = self._convert_type_hint_to_sql(typ)
-                new_columns.append(f"{name} {sql_type}")
+            # Add foreign key columns for relationships
+            existing_columns = {}
+            with sqlite3.connect(db_file) as conn:
+                cursor = conn.cursor()
+                
+                # Check if table exists and get current structure
+                cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+                table_exists = cursor.fetchone() is not None
+                
+                if table_exists:
+                    cursor.execute(f"PRAGMA table_info({table_name})")
+                    existing_columns = {row[1]: row[2] for row in cursor.fetchall()}
+                    logger.info(f"📋 Current table structure for {table_name}: {list(existing_columns.keys())}")
+                    
+                    # Update current_columns_map with existing structure, preserving PRIMARY KEY
+                    for col_name, col_type in existing_columns.items():
+                        if col_name == 'id':
+                            # Ensure id column always has PRIMARY KEY
+                            current_columns_map['id'] = 'INTEGER PRIMARY KEY AUTOINCREMENT'
+                        else:
+                            current_columns_map[col_name] = col_type
+                
+                # Add foreign key columns to the schema
+                for rel in relationships:
+                    foreign_key_name = f"{rel['target_entity'].lower()}_id"
+                    target_table = f"{rel['target_entity'].lower()}s"
+                    
+                    # Add foreign key column to the schema
+                    current_columns_map[foreign_key_name] = f"INTEGER REFERENCES {target_table}(id)"
+                    logger.info(f"🔗 Added foreign key: {foreign_key_name} -> {target_table}")
 
-            # Add ID primary key if not explicitly defined (avoid false positives like 'employee_id')
-            def _has_primary_key(cols: List[str]) -> bool:
-                """Detect if a standalone 'id' primary key column already exists."""
-                for col_def in cols:
-                    # Extract first token (column name) before any whitespace
-                    first_token = col_def.strip().split()[0].lower()
-                    if first_token == "id":
-                        return True
-                return False
-
-            if not _has_primary_key(new_columns):
-                new_columns.insert(0, "id INTEGER PRIMARY KEY AUTOINCREMENT")
-
-            # Generate SQL code for TechLeadSWEA validation
-            columns_sql = ", ".join(new_columns)
+            # Generate complete CREATE TABLE statement with explicit PRIMARY KEY
+            columns_sql = ", ".join([f"{name} {typ}" for name, typ in current_columns_map.items()])
             create_table_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({columns_sql})"
             
-            # Create SQL code string that TechLeadSWEA can validate  
-            sql_code = f"""
-import sqlite3
+            # Execute the relationship creation in the database
+            logger.info(f"🛠️  Executing relationship creation SQL for {table_name}")
+            with sqlite3.connect(db_file) as conn:
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA foreign_keys = ON")
+                
+                # Execute the CREATE TABLE statement (IF NOT EXISTS)
+                cursor.execute(create_table_sql)
+                logger.info(f"✅ Table created/verified: {table_name}")
+                
+                # Execute any ALTER TABLE statements for existing tables
+                for rel in relationships:
+                    foreign_key_name = f"{rel['target_entity'].lower()}_id"
+                    target_table = f"{rel['target_entity'].lower()}s"
+                    
+                    # Check if column already exists
+                    cursor.execute(f"PRAGMA table_info({table_name})")
+                    current_column_names = [row[1] for row in cursor.fetchall()]
+                    
+                    if foreign_key_name not in current_column_names:
+                        alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {foreign_key_name} INTEGER REFERENCES {target_table}(id)"
+                        cursor.execute(alter_sql)
+                        logger.info(f"✅ Added foreign key: {foreign_key_name}")
+                
+                conn.commit()
+                logger.info(f"💾 Relationship creation committed to database")
+
+            # Build comprehensive SQL documentation for TechLeadSWEA validation
+            sql_statements = []
+            sql_statements.append(f"-- Relationship creation for {entity} entity")
+            sql_statements.append(f"-- Generated by DatabaseSWEA with comprehensive table management")
+            sql_statements.append(f"-- Entity: {entity} | Table: {table_name} | Timestamp: {datetime.now().isoformat()}")
+            sql_statements.append(f"-- Context: {context}")
+            sql_statements.append("")
+            
+            # Add main table creation with explicit PRIMARY KEY
+            sql_statements.append(f"-- Create {table_name} table with PRIMARY KEY and relationships")
+            sql_statements.append(create_table_sql + ";")
+            
+            # Add relationship-specific ALTER TABLE statements for existing tables
+            for rel in relationships:
+                foreign_key_name = f"{rel['target_entity'].lower()}_id"
+                target_table = f"{rel['target_entity'].lower()}s"
+                
+                if table_exists and foreign_key_name not in existing_columns:
+                    alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {foreign_key_name} INTEGER REFERENCES {target_table}(id)"
+                    sql_statements.append(f"{alter_sql};")
+                    sql_statements.append(f"-- Added foreign key relationship: {table_name}.{foreign_key_name} -> {target_table}.id")
+
+            # Combine all SQL statements
+            pure_sql = "\n".join(sql_statements)
+            
+            # Generate comprehensive Python code with logging for TechLeadSWEA validation
+            python_code = f"""-- Relationship creation for {entity} entity
+-- Generated by DatabaseSWEA with comprehensive logging and table management
+-- Entity: {entity} | Table: {table_name} | Timestamp: {datetime.now().isoformat()}
+
 import logging
+import sqlite3
 from pathlib import Path
-from contextlib import contextmanager
-from typing import Generator
+from typing import Dict, List, Optional, Any
 
 logger = logging.getLogger(__name__)
 
-@contextmanager
-def get_db_connection() -> Generator[sqlite3.Connection, None, None]:
-    \"\"\"Get database connection with proper error handling\"\"\"
-    db_path = Path("app/database/baes_system.db")
+def setup_database(db_path: str = None) -> str:
+    \"\"\"
+    Initialize database with all required tables including relationships.
+    
+    Args:
+        db_path: Optional path to database file
+        
+    Returns:
+        str: Path to the initialized database
+    \"\"\"
+    if db_path is None:
+        db_path = Path("app/database/baes_system.db")
+    else:
+        db_path = Path(db_path)
+    
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
+    
+    logger.info(f"🔗 Setting up database with relationships at: {{db_path}}")
+    
+    conn = None
     try:
-        yield conn
-    except Exception:
-        conn.rollback()
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Enable foreign key constraints
+        cursor.execute("PRAGMA foreign_keys = ON")
+        logger.info("✅ Foreign key constraints enabled")
+        
+        # Create {table_name} table with PRIMARY KEY and relationships
+        create_table_sql = "CREATE TABLE IF NOT EXISTS {table_name} ({columns_sql})"
+        cursor.execute(create_table_sql)
+        logger.info(f"✅ Created/verified table: {table_name} with PRIMARY KEY")
+        
+        conn.commit()
+        logger.info("✅ Database setup with relationships completed successfully")
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ Database setup failed: {{e}}")
         raise
     finally:
-        conn.close()
+        if conn:
+            conn.close()
+    
+    return str(db_path)
 
-def setup_database() -> None:
-    \"\"\"Setup database with proper connection management\"\"\"
-    try:
-        logger.info("Setting up database for {entity}")
+def create_{entity.lower()}_relationships(db_path: str = None) -> Dict[str, Any]:
+    \"\"\"
+    Create foreign key relationships for {entity} entity.
+    
+    This function adds foreign key columns and relationships while preserving existing data.
+    Generated by DatabaseSWEA for relationship management.
+    
+    Args:
+        db_path: Optional path to database file
         
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Create table for {entity}
-            cursor.execute(\"\"\"{create_table_sql}\"\"\")
-            logger.info("Database setup completed for {entity}")
-            
-            conn.commit()
-            
-    except Exception as e:
-        logger.error("Database setup failed for {entity}: " + str(e))
-        raise
-
-def migrate_schema() -> None:
-    \"\"\"Migrate database schema for {entity} entity\"\"\"
+    Returns:
+        Dict containing relationship creation results
+    \"\"\"
+    if db_path is None:
+        db_path = Path("app/database/baes_system.db")
+    else:
+        db_path = Path(db_path)
+    
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    logger.info(f"🔗 Creating relationships for {table_name}")
+    logger.info(f"📊 Database path: {{db_path}}")
+    
+    conn = None
     try:
-        logger.info("Starting schema migration for {entity}")
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
         
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Create table for {entity} (migration)
-            cursor.execute(\"\"\"{create_table_sql}\"\"\")
-            logger.info("Schema migration completed for {entity}")
-            
-            conn.commit()
-            
-    except Exception as e:
-        logger.error("Schema migration failed for {entity}: " + str(e))
+        # Enable foreign key constraints
+        cursor.execute("PRAGMA foreign_keys = ON")
+        logger.info("✅ Foreign key constraints enabled")
+        
+        # Log current schema before relationship creation
+        cursor.execute("PRAGMA table_info({table_name})")
+        current_schema = cursor.fetchall()
+        logger.info(f"📋 Current schema: {{[col[1] for col in current_schema]}}")
+        
+        # Ensure table exists with complete structure including PRIMARY KEY
+        cursor.execute("CREATE TABLE IF NOT EXISTS {table_name} ({columns_sql})")
+        logger.info(f"✅ Ensured table exists: {table_name} with PRIMARY KEY")
+        
+        conn.commit()
+        logger.info(f"✅ Relationship creation completed successfully for {table_name}")
+        
+        # Log final schema
+        cursor.execute("PRAGMA table_info({table_name})")
+        final_schema = cursor.fetchall()
+        logger.info(f"📊 Final schema: {{[col[1] for col in final_schema]}}")
+        
+        return {{
+            "success": True,
+            "table": "{table_name}",
+            "columns": {list(current_columns_map.keys())},
+            "relationships_created": True,
+            "foreign_keys": {[f"{rel['target_entity'].lower()}_id" for rel in relationships]}
+        }}
+        
+    except sqlite3.Error as db_error:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ Database error during {table_name} relationship creation: {{db_error}}")
         raise
+    except Exception as error:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ Relationship creation failed for {table_name}: {{error}}")
+        raise
+    finally:
+        if conn:
+            conn.close()
 
-# Execute migration
-migrate_schema()
+if __name__ == "__main__":
+    create_{entity.lower()}_relationships()
 """
+            
+            result = {
+                "database_path": str(db_file),
+                "table": table_name,
+                "columns": list(current_columns_map.keys()),
+                "relationships_created": True,
+                "code": python_code,  # Full Python code with logging for TechLeadSWEA validation
+                "sql": pure_sql,  # Pure SQL statements that were executed
+                "foreign_keys": [f"{rel['target_entity'].lower()}_id" for rel in relationships],
+                "entity": entity,
+                "improvements_applied": {
+                    "relationships": relationships,
+                    "context": context
+                }
+            }
+            
+            logger.info(f"✅ Relationship creation for '{table_name}' completed successfully")
+            logger.info(f"📊 Final table columns: {list(current_columns_map.keys())}")
+            logger.info(f"🔗 Foreign keys created: {[f'{rel['target_entity'].lower()}_id' for rel in relationships]}")
+            return result
 
-            # Execute the actual migration
+        except Exception as e:
+            logger.error(f"❌ Relationship creation failed for {entity}: {str(e)}")
+            raise
+
+    def _apply_schema_migration(
+        self, interpretation: Dict[str, Any], entity: str, db_file: str
+    ) -> Dict[str, Any]:
+        """Apply schema migration based on interpretation, preserving existing data."""
+        try:
+            table_name = entity.lower() + "s"
+            new_attributes = interpretation.get("attributes", [])
+            
+            logger.info(f"🔄 Applying schema migration for {table_name}")
+            logger.info(f"📝 New attributes to process: {new_attributes}")
+            
+            # Get current table columns before migration
+            current_columns = []
+            try:
+                with sqlite3.connect(db_file) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(f"PRAGMA table_info({table_name})")
+                    current_columns = [row[1] for row in cursor.fetchall()]
+                    logger.info(f"📊 Current table columns: {current_columns}")
+            except Exception as e:
+                logger.warning(f"⚠️  Could not get current table info: {e}")
+            
+            # DEBUG: Log the interpretation attributes
+            logger.info(f"🔍 DEBUG - interpretation attributes: {new_attributes}")
+            
+            new_columns_map = {}
+            for attr in new_attributes:
+                if isinstance(attr, str):
+                    if ":" in attr:
+                        name, typ = [p.strip() for p in attr.split(":", 1)]
+                    else:
+                        name, typ = attr.strip(), "str"
+                elif isinstance(attr, dict):
+                    name = attr.get("name", "unknown_field")
+                    typ = attr.get("type", "str")
+                else:
+                    continue
+
+                name = name.replace(" ", "_").lower()
+                
+                # Skip 'id' field since it will be handled separately as PRIMARY KEY
+                if name == 'id':
+                    logger.debug(f"DatabaseSWEA: Skipping 'id' attribute in migration - will be handled as PRIMARY KEY")
+                    continue
+                
+                sql_type = self._convert_type_hint_to_sql(typ)
+                new_columns_map[name] = sql_type
+
+            # Always ensure 'id' column is first with PRIMARY KEY
+            new_columns_map = {'id': 'INTEGER PRIMARY KEY AUTOINCREMENT', **new_columns_map}
+            
+            # DEBUG: Log the new columns map
+            logger.info(f"🔍 DEBUG - new_columns_map: {new_columns_map}")
+
+            # Determine which columns to preserve from backup
+            columns_to_preserve = []
+            if current_columns:
+                # For migration operations, preserve ALL existing columns by default
+                # Always start with 'id' column which should always exist
+                if 'id' in current_columns:
+                    columns_to_preserve.append('id')
+                    logger.info(f"🔍 DEBUG - Column 'id' added to preserve list (always preserved)")
+                
+                # Process all other existing columns
+                for col in current_columns:
+                    if col == 'id':
+                        continue  # Already handled above
+                    
+                    if col in new_columns_map:
+                        # Column exists in new schema, preserve it
+                        columns_to_preserve.append(col)
+                        logger.info(f"🔍 DEBUG - Column '{col}' found in new_columns_map, preserving")
+                    else:
+                        # Column doesn't exist in new schema, but we should preserve it anyway
+                        # Try to infer the type from the existing table and add to new schema
+                        existing_type = self._get_column_type_from_current_table(db_file, table_name, col)
+                        if existing_type:
+                            new_columns_map[col] = existing_type
+                            columns_to_preserve.append(col)
+                            logger.info(f"🔍 DEBUG - Column '{col}' added to new schema to preserve existing data")
+                        else:
+                            logger.warning(f"🔍 DEBUG - Column '{col}' could not be preserved (unknown type), will be LOST")
+                
+                logger.info(f"🔄 Columns to preserve during migration: {columns_to_preserve}")
+                logger.info(f"🔍 DEBUG - Updated new_columns_map: {new_columns_map}")
+            else:
+                # If no current columns info, assume we're creating new table
+                columns_to_preserve = list(new_columns_map.keys())
+                logger.info(f"🆕 Creating new table with columns: {columns_to_preserve}")
+            
+            # Build new table schema
+            new_columns_sql = ", ".join([f"{name} {typ}" for name, typ in new_columns_map.items()])
+            create_table_sql = f"CREATE TABLE IF NOT EXISTS {table_name} ({new_columns_sql})"
+                
+            # Execute the actual database migration with proper data preservation
+            logger.info(f"🛠️  Executing schema migration SQL for {table_name}")
             with sqlite3.connect(db_file) as conn:
                 cursor = conn.cursor()
-
-                # Get current table schema first
-                try:
-                    cursor.execute(f"PRAGMA table_info({table_name})")
-                    current_schema = cursor.fetchall()
-                    current_columns = [col[1] for col in current_schema] if current_schema else []
-                except sqlite3.Error as e:
-                    logger.warning(f"Could not read table info for {table_name}: {e}")
-                    current_columns = []
                 
-                if current_columns:
-                    # Table exists, perform migration
-                    logger.info(f"Table {table_name} exists, performing migration")
+                # Enable foreign key constraints
+                cursor.execute("PRAGMA foreign_keys = ON")
+                
+                # Check if table exists
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+                table_exists = cursor.fetchone() is not None
+                
+                if table_exists and current_columns:
+                    # CRITICAL: Data preservation logic
+                    logger.info(f"📊 Table exists with {len(current_columns)} columns, preserving data")
                     
-                    # Backup existing data
-                    cursor.execute(
-                        f"CREATE TEMPORARY TABLE {table_name}_backup AS SELECT * FROM {table_name}"
-                    )
-
-                    # Drop old table
-                    cursor.execute(f"DROP TABLE {table_name}")
-
-                    # Create new table with updated schema
+                    # Step 1: Backup existing table
+                    backup_table = f"{table_name}_backup"
+                    cursor.execute(f"ALTER TABLE {table_name} RENAME TO {backup_table}")
+                    logger.info(f"💾 Created backup table: {backup_table}")
+                    
+                    # Step 2: Create new table with updated schema
                     cursor.execute(create_table_sql)
-
-                    # Restore data (matching columns only) with default values for new columns
-                    new_column_names = [col.split()[0] for col in new_columns]
-                    matching_columns = [col for col in current_columns if col in new_column_names]
+                    logger.info(f"🆕 Created new table with updated schema")
                     
-                    if matching_columns:
-                        # Build insert statement with default values for new columns
-                        all_columns = []
-                        select_values = []
+                    # Step 3: Restore data from backup (CRITICAL PART)
+                    if columns_to_preserve:
+                        preserve_columns_sql = ", ".join(columns_to_preserve)
+                        restore_sql = f"INSERT INTO {table_name} ({preserve_columns_sql}) SELECT {preserve_columns_sql} FROM {backup_table}"
+                        logger.info(f"🔄 Restoring data: {restore_sql}")
+                        cursor.execute(restore_sql)
                         
-                        for col_def in new_columns:
-                            col_name = col_def.split()[0]
-                            all_columns.append(col_name)
-                            
-                            if col_name in matching_columns:
-                                # Use existing data
-                                select_values.append(col_name)
-                            else:
-                                # Provide default value for new column
-                                if col_name == "email":
-                                    select_values.append("'default@example.com'")
-                                elif "name" in col_name.lower():
-                                    select_values.append("'Unknown'")
-                                elif "date" in col_name.lower():
-                                    select_values.append("'1970-01-01'")
-                                elif "id" in col_name.lower():
-                                    select_values.append("NULL")  # Let autoincrement handle it
-                                else:
-                                    # Generic default based on SQL type
-                                    col_type = col_def.split()[1] if len(col_def.split()) > 1 else "TEXT"
-                                    if "INTEGER" in col_type.upper():
-                                        select_values.append("0")
-                                    elif "REAL" in col_type.upper():
-                                        select_values.append("0.0")
-                                    else:
-                                        select_values.append("'default'")
+                        # Verify data integrity
+                        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                        new_count = cursor.fetchone()[0]
+                        cursor.execute(f"SELECT COUNT(*) FROM {backup_table}")
+                        old_count = cursor.fetchone()[0]
                         
-                        # Filter out id column for insert if it's auto-increment
-                        insert_columns = [col for col in all_columns if col != "id"]
-                        insert_values = [val for col, val in zip(all_columns, select_values) if col != "id"]
+                        logger.info(f"📊 Data verification: {old_count} -> {new_count} records")
                         
-                        if insert_columns and insert_values:
-                            insert_columns_str = ", ".join(insert_columns)
-                            insert_values_str = ", ".join(insert_values)
-                            
-                            cursor.execute(
-                                f"INSERT INTO {table_name} ({insert_columns_str}) "
-                                f"SELECT {insert_values_str} FROM {table_name}_backup"
-                            )
-                            logger.info(f"Restored data for columns: {matching_columns} with defaults for new columns")
+                        if new_count >= old_count:
+                            logger.info("✅ Data integrity verified - proceeding with cleanup")
+                            cursor.execute(f"DROP TABLE {backup_table}")
+                            logger.info(f"🗑️  Dropped backup table: {backup_table}")
                         else:
-                            logger.warning(f"No columns to restore for {table_name}")
-                    else:
-                        logger.warning(f"No matching columns found, no data restored for {table_name}")
-
-                    # Clean up backup table
-                    cursor.execute(f"DROP TABLE {table_name}_backup")
-                    logger.info(f"Migration completed: preserved {len(matching_columns)} columns")
+                            logger.error("❌ Data integrity check failed - rolling back")
+                            cursor.execute(f"DROP TABLE {table_name}")
+                            cursor.execute(f"ALTER TABLE {backup_table} RENAME TO {table_name}")
+                            raise Exception("Data integrity check failed during migration")
                 else:
-                    # Table doesn't exist, create new one
-                    logger.info(f"Table {table_name} does not exist, creating new table")
+                    # Create new table
+                    logger.info(f"🆕 Creating new table: {table_name}")
                     cursor.execute(create_table_sql)
-                    logger.info(f"Created new table {table_name} with {len(new_columns)} columns")
-
+                
                 conn.commit()
+                logger.info(f"💾 Schema migration committed to database")
+            
+            # Build comprehensive SQL documentation for TechLeadSWEA validation
+            sql_statements = []
+            sql_statements.append(f"-- Schema migration for {entity} entity")
+            sql_statements.append(f"-- Generated by DatabaseSWEA with data preservation")
+            sql_statements.append(f"-- Entity: {entity} | Table: {table_name} | Timestamp: {datetime.now().isoformat()}")
+            sql_statements.append("")
+            
+            if current_columns:
+                sql_statements.append(f"-- Data preservation migration: {len(current_columns)} -> {len(new_columns_map)} columns")
+                sql_statements.append(f"ALTER TABLE {table_name} RENAME TO {table_name}_backup;")
+                sql_statements.append(create_table_sql + ";")
+                if columns_to_preserve:
+                    preserve_columns_sql = ", ".join(columns_to_preserve)
+                    restore_sql = f"INSERT INTO {table_name} ({preserve_columns_sql}) SELECT {preserve_columns_sql} FROM {table_name}_backup"
+                    sql_statements.append(f"{restore_sql};")
+                sql_statements.append(f"DROP TABLE {table_name}_backup;")
+            else:
+                sql_statements.append(f"-- New table creation")
+                sql_statements.append(create_table_sql + ";")
+            
+            pure_sql = "\n".join(sql_statements)
+
+            # Create the comprehensive Python code with logging for TechLeadSWEA validation
+            python_code = f"""-- Schema migration for {entity} entity
+-- Generated by DatabaseSWEA with data preservation and comprehensive logging
+-- Entity: {entity} | Table: {table_name} | Timestamp: {datetime.now().isoformat()}
+
+import logging
+import sqlite3
+from pathlib import Path
+from typing import Dict, List, Optional, Any
+
+logger = logging.getLogger(__name__)
+
+def setup_database(db_path: str = None) -> str:
+    \"\"\"
+    Initialize database with all required tables.
+    
+    Args:
+        db_path: Optional path to database file
+        
+    Returns:
+        str: Path to the initialized database
+    \"\"\"
+    if db_path is None:
+        db_path = Path("app/database/baes_system.db")
+    else:
+        db_path = Path(db_path)
+    
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    logger.info(f"Setting up database at: {{db_path}}")
+    
+    conn = None
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Enable foreign key constraints
+        cursor.execute("PRAGMA foreign_keys = ON")
+        
+        # Create {table_name} table with PRIMARY KEY
+        create_table_sql = "CREATE TABLE IF NOT EXISTS {table_name} ({new_columns_sql})"
+        cursor.execute(create_table_sql)
+        
+        conn.commit()
+        logger.info("Database setup completed successfully")
+        
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Database setup failed: {{e}}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+    
+    return str(db_path)
+
+def migrate_{entity.lower()}_schema(db_path: str = None) -> Dict[str, Any]:
+    \"\"\"
+    Migrate {entity} database schema with data preservation.
+    
+    This migration adds new fields while preserving existing data.
+    Generated by DatabaseSWEA for entity evolution.
+    
+    Args:
+        db_path: Optional path to database file
+        
+    Returns:
+        Dict containing migration results
+    \"\"\"
+    if db_path is None:
+        db_path = Path("app/database/baes_system.db")
+    else:
+        db_path = Path(db_path)
+    
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    logger.info(f"🔄 Starting schema migration for {table_name}")
+    logger.info(f"📊 Database path: {{db_path}}")
+    
+    conn = None
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Enable foreign key constraints
+        cursor.execute("PRAGMA foreign_keys = ON")
+        
+        # Log current schema before migration
+        cursor.execute("PRAGMA table_info({table_name})")
+        current_schema = cursor.fetchall()
+        logger.info(f"📋 Current schema: {{[col[1] for col in current_schema]}}")
+        
+        # Begin transaction for atomic migration
+        logger.info("🔧 Beginning schema migration transaction")
+        
+        # Check if table exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", ("{table_name}",))
+        table_exists = cursor.fetchone() is not None
+        
+        if table_exists:
+            # Backup existing table
+            logger.info(f"💾 Creating backup table: {table_name}_backup")
+            cursor.execute(f"ALTER TABLE {table_name} RENAME TO {table_name}_backup")
+            
+            # Create new table with updated schema including PRIMARY KEY
+            logger.info(f"🆕 Creating new table with updated schema")
+            cursor.execute("CREATE TABLE IF NOT EXISTS {table_name} ({new_columns_sql})")
+            
+            # Restore data from backup, preserving existing columns
+            preserve_columns_sql = "{', '.join(columns_to_preserve) if columns_to_preserve else 'id'}"
+            restore_sql = f"INSERT INTO {table_name} ({{preserve_columns_sql}}) SELECT {{preserve_columns_sql}} FROM {table_name}_backup"
+            cursor.execute(restore_sql)
+            logger.info("📥 Data restored from backup table")
+            
+            # Verify data integrity
+            cursor.execute("SELECT COUNT(*) FROM {table_name}")
+            new_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM {table_name}_backup")
+            old_count = cursor.fetchone()[0]
+            
+            logger.info(f"📊 Data verification: {{old_count}} -> {{new_count}} records")
+            
+            if new_count >= old_count:
+                logger.info("✅ Data integrity verified - proceeding with cleanup")
+                cursor.execute("DROP TABLE {table_name}_backup")
+                logger.info(f"🗑️  Dropped backup table: {table_name}_backup")
+            else:
+                logger.error("❌ Data integrity check failed - rolling back")
+                cursor.execute("DROP TABLE {table_name}")
+                cursor.execute("ALTER TABLE {table_name}_backup RENAME TO {table_name}")
+                raise Exception("Data integrity check failed during migration")
+        else:
+            # Create new table with PRIMARY KEY
+            logger.info(f"🆕 Creating new table: {table_name}")
+            cursor.execute("CREATE TABLE IF NOT EXISTS {table_name} ({new_columns_sql})")
+        
+        conn.commit()
+        logger.info(f"✅ Schema migration completed successfully for {table_name}")
+        
+        # Log final schema
+        cursor.execute("PRAGMA table_info({table_name})")
+        final_schema = cursor.fetchall()
+        logger.info(f"📊 Final schema: {{[col[1] for col in final_schema]}}")
+        
+        return {{
+            "success": True,
+            "table": "{table_name}",
+            "columns": {list(new_columns_map.keys())},
+            "migration_completed": True,
+            "data_preserved": table_exists
+        }}
+        
+    except sqlite3.Error as db_error:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ Database error during {table_name} migration: {{db_error}}")
+        raise
+    except Exception as error:
+        if conn:
+            conn.rollback()
+        logger.error(f"❌ Migration failed for {table_name}: {{error}}")
+        raise
+    finally:
+        if conn:
+            conn.close()
+
+if __name__ == "__main__":
+    migrate_{entity.lower()}_schema()
+"""
 
             result = {
                 "database_path": db_file,
                 "table": table_name,
-                "columns": new_columns,
-                "tables_created": [table_name],  # Add this for TechLeadSWEA validation
+                "columns": list(new_columns_map.keys()),
                 "migration_applied": True,
-                "code": sql_code,  # Add SQL code for TechLeadSWEA validation
+                "code": python_code,  # Full Python code with logging for TechLeadSWEA validation
+                "sql": pure_sql,  # Pure SQL statements that were executed
                 "improvements_applied": interpretation,
+                "data_preserved": len(columns_to_preserve) > 0,
+                "preserved_columns": columns_to_preserve
             }
-
-            logger.info(f"✅ Schema migration completed for {table_name}")
+            
+            logger.info(f"✅ Schema migration for '{table_name}' completed successfully")
+            logger.info(f"📊 Final table columns: {list(new_columns_map.keys())}")
             return result
 
         except Exception as e:
-            logger.error(f"❌ Schema migration failed: {str(e)}")
+            logger.error(f"❌ Schema migration failed for {entity}: {str(e)}")
             raise
 
+    def _format_sql_for_python(self, sql: str) -> str:
+        """Format SQL statements for inclusion in Python code with proper logging"""
+        lines = sql.split('\n')
+        formatted_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('--'):
+                continue
+            if line.endswith(';'):
+                line = line[:-1]  # Remove semicolon for Python execution
+            formatted_lines.append(f'            cursor.execute("{line}")')
+            formatted_lines.append(f'            logger.info("✅ Executed: {line[:50]}...")')
+        
+        return '\n'.join(formatted_lines)
+
     def _get_current_table_schema(self, db_file: str, table_name: str) -> List[str]:
-        """Get current table schema"""
+        """Get current table schema as list of 'column_name column_type' strings"""
         try:
+            logger.info(f"📊 Getting current schema for table: {table_name}")
             with sqlite3.connect(db_file) as conn:
                 cursor = conn.cursor()
                 cursor.execute(f"PRAGMA table_info({table_name})")
                 columns = cursor.fetchall()
-                return [f"{col[1]} {col[2]}" for col in columns]
-        except Exception:
+                schema = [f"{col[1]} {col[2]}" for col in columns]
+                logger.info(f"📋 Current schema for {table_name}: {schema}")
+                return schema
+        except Exception as e:
+            logger.warning(f"⚠️  Could not get schema for {table_name}: {e}")
             return []
 
     def _convert_type_hint_to_sql(self, type_hint: str) -> str:
         """Convert Python type hint to SQL type"""
         type_mapping = {
             "str": "TEXT",
-            "int": "INTEGER",
+            "int": "INTEGER", 
             "float": "REAL",
             "bool": "INTEGER",
             "date": "TEXT",
             "datetime": "TEXT",
         }
-        return type_mapping.get(type_hint.lower(), "TEXT")
+        sql_type = type_mapping.get(type_hint.lower(), "TEXT")
+        logger.debug(f"🔄 Converted type hint '{type_hint}' to SQL type '{sql_type}'")
+        return sql_type
 
-    def _fix_database_issues(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Fix database issues based on TechLeadSWEA coordination"""
+    def _get_column_type_from_current_table(self, db_file: str, table_name: str, column_name: str) -> str:
+        """Get the SQL type of a column from the current table"""
         try:
-            entity = payload.get("entity", "Student")
-            fix_context = payload.get("fix_context", {})
-            issue_type = fix_context.get("issue_type", "")
-            issue_description = fix_context.get("issue_description", "")
-
-            logger.info(
-                "🔧 DatabaseSWEA: Fixing database issues for %s - %s", entity, issue_description
-            )
-
-            # Handle different types of database issues
-            if "schema" in issue_type or "table" in issue_type or "column" in issue_type:
-                logger.debug("🔧 DatabaseSWEA: Fixing schema/table issues - recreating database")
-                return self._setup_database(payload)
-            elif "connection" in issue_type or "access" in issue_type:
-                logger.debug("🔧 DatabaseSWEA: Fixing connection/access issues")
-                # For connection issues, try to recreate the database with proper permissions
-                enhanced_payload = {
-                    **payload,
-                    "techlead_feedback": [f"Fix database connection: {issue_description}"],
-                }
-                return self._setup_database(enhanced_payload)
-            elif "migration" in issue_type or "constraint" in issue_type:
-                logger.debug("🔧 DatabaseSWEA: Fixing migration/constraint issues")
-                # For migration issues, we need to handle existing data
-                enhanced_payload = {
-                    **payload,
-                    "techlead_feedback": [f"Fix migration issues: {issue_description}"],
-                }
-                return self._setup_database(enhanced_payload)
-            elif "data" in issue_type or "integrity" in issue_type:
-                logger.debug("🔧 DatabaseSWEA: Fixing data integrity issues")
-                # For data integrity issues, recreate with better constraints
-                enhanced_payload = {
-                    **payload,
-                    "techlead_feedback": [f"Fix data integrity: {issue_description}"],
-                }
-                return self._setup_database(enhanced_payload)
-            else:
-                # Default: recreate database with generic fix instructions
-                logger.debug("🔧 DatabaseSWEA: Default fix - recreating database")
-                enhanced_payload = {
-                    **payload,
-                    "techlead_feedback": [f"General database fix needed: {issue_description}"],
-                }
-                return self._setup_database(enhanced_payload)
-
+            with sqlite3.connect(db_file) as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"PRAGMA table_info({table_name})")
+                columns = cursor.fetchall()
+                for col in columns:
+                    if col[1] == column_name:  # col[1] is the column name
+                        return col[2]  # col[2] is the column type
+                return None
         except Exception as e:
-            logger.error("❌ DatabaseSWEA fix_issues failed: %s", str(e))
-            return self.create_error_response("fix_issues", str(e), "fix_error")
+            logger.warning(f"⚠️  Could not get column type for {column_name}: {e}")
+            return None
+
+
 
 
 # ---------------------------------------------------------------------------

@@ -174,12 +174,183 @@ class BaseBae(BaseAgent):
 
         return response.strip()
 
+    def _detect_relationship_request(self, request: str) -> Dict[str, Any]:
+        """Detect if this is a relationship creation request rather than entity creation/evolution"""
+        request_lower = request.lower()
+        
+        # Relationship detection patterns
+        relationship_patterns = [
+            ("add a", "to", "entity"),
+            ("add", "to the", "entity"),
+            ("connect", "to", ""),
+            ("link", "to", ""),
+            ("relate", "to", ""),
+            ("associate", "with", ""),
+            ("assign", "to", ""),
+        ]
+        
+        for pattern in relationship_patterns:
+            if all(p in request_lower for p in pattern if p):
+                # Extract entities involved in the relationship
+                target_entity = None
+                related_entity = None
+                
+                # Pattern: "Add a [course] to the [student] entity"
+                if "add a" in request_lower and "to the" in request_lower and "entity" in request_lower:
+                    import re
+                    match = re.search(r'add a (\w+) to the (\w+) entity', request_lower)
+                    if match:
+                        related_entity = match.group(1)
+                        target_entity = match.group(2)
+                        
+                        return {
+                            "is_relationship": True,
+                            "target_entity": target_entity.capitalize(),
+                            "related_entity": related_entity.capitalize(),
+                            "relationship_type": "foreign_key",
+                            "description": f"Add {related_entity}_id foreign key to {target_entity} table"
+                        }
+        
+        return {
+            "is_relationship": False,
+            "target_entity": None,
+            "related_entity": None,
+            "relationship_type": None,
+            "description": None
+        }
+
+    def _handle_relationship_request(self, request: str, context: str, relationship_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle relationship creation request with proper DatabaseSWEA coordination"""
+        target_entity = relationship_info["target_entity"]
+        related_entity = relationship_info["related_entity"]
+        
+        logger.info(f"🔗 {self.entity_name}BAE: Handling relationship creation - {related_entity} -> {target_entity}")
+        
+        # For relationship creation, we don't change attributes of the entity
+        # We just add a foreign key relationship
+        existing_attributes = []
+        if self.current_schema and self.current_schema.get("attributes"):
+            existing_attributes = self.current_schema["attributes"]
+        else:
+            # If no current schema, try to load it or use default attributes
+            self._load_stored_schema()
+            if self.current_schema and self.current_schema.get("attributes"):
+                existing_attributes = self.current_schema["attributes"]
+            else:
+                existing_attributes = self._get_default_attributes()
+        
+        # The relationship will be added by DatabaseSWEA._create_relationships
+        # but the entity attributes should remain the same
+        interpretation = {
+            "entity": self.entity_name,
+            "domain": getattr(self, 'domain', 'academic'),
+            "attributes": existing_attributes,  # Preserve existing attributes
+            "extracted_attributes": existing_attributes,
+            "is_evolution": False,  # This is relationship creation, not evolution
+            "request_type": "relationship",
+            "business_context": request,
+            "semantic_coherence": True,
+            "domain_knowledge_preserved": True,
+            "interpreted_intent": f"create_relationship_{related_entity.lower()}_to_{target_entity.lower()}",
+            "domain_operations": ["create_relationship"],
+            "business_vocabulary": self._extract_business_vocabulary(),
+            "entity_focus": self.entity_name,
+            "relationship_info": relationship_info,
+        }
+        
+        # Create relationship-specific coordination plan
+        interpretation["swea_coordination"] = [
+            {
+                "swea_agent": "TechLeadSWEA", 
+                "task_type": "coordinate_system_generation",
+                "payload": {
+                    "entity": self.entity_name,
+                    "attributes": existing_attributes,
+                    "context": request,
+                    "is_evolution": False,
+                    "is_relationship": True,
+                    "relationship_info": relationship_info,
+                    "business_requirements": {
+                        "domain_focus": True,
+                        "semantic_coherence": True,
+                        "quality_gates": True,
+                        "technical_governance": True,
+                    },
+                },
+            },
+            {
+                "swea_agent": "DatabaseSWEA",
+                "task_type": "create_relationships",  # Use relationship creation task
+                "payload": {
+                    "entity": self.entity_name,
+                    "attributes": existing_attributes,
+                    "context": request,
+                    "relationships": [
+                        {
+                            "target_entity": relationship_info["related_entity"],
+                            "relationship_type": relationship_info["relationship_type"],
+                        }
+                    ],
+                    "preserve_data": True,
+                },
+            },
+            {
+                "swea_agent": "BackendSWEA",
+                "task_type": "generate_api",  # Update API to include relationship
+                "payload": {
+                    "entity": self.entity_name,
+                    "attributes": existing_attributes,
+                    "context": request,
+                    "relationship_update": True,
+                    "relationships": [relationship_info],
+                    "business_vocabulary": True,
+                    "domain_focus": True,
+                    "semantic_coherence": True,
+                },
+            },
+            {
+                "swea_agent": "FrontendSWEA",
+                "task_type": "generate_ui",
+                "payload": {
+                    "entity": self.entity_name,
+                    "attributes": existing_attributes,
+                    "context": request,
+                    "relationship_update": True,
+                    "relationships": [relationship_info],
+                    "ui_framework": "streamlit",
+                    "features": ["crud_operations", "data_visualization", "user_friendly"],
+                },
+            },
+            {
+                "swea_agent": "TechLeadSWEA",
+                "task_type": "review_and_approve",
+                "payload": {
+                    "entity": self.entity_name,
+                    "context": request,
+                    "system_components": ["database", "backend", "frontend"],
+                    "phase": "phase_1_complete",
+                    "final_review": True,
+                    "relationship_creation": True,
+                },
+            },
+        ]
+        
+        return interpretation
+
     def _interpret_business_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Interpret business request and create SWEA coordination plan with TechLeadSWEA governance"""
         try:
-            # Determine if this is evolution or new generation
-            is_evolution = self._is_evolution_request(payload.get("request", ""))
             request = payload.get("request", "")
+            
+            # First, check if this is a relationship creation request
+            relationship_info = self._detect_relationship_request(request)
+            
+            if relationship_info["is_relationship"]:
+                logger.info(f"🔗 {self.entity_name}BAE: Detected relationship request - {relationship_info['description']}")
+                return self._handle_relationship_request(request, payload.get("context", "academic"), relationship_info)
+            
+            # Determine if this is evolution or new generation
+            is_evolution = self._is_evolution_request(request)
             
             # Handle evolution requests differently than initial generation
             if is_evolution:
@@ -730,6 +901,7 @@ class BaseBae(BaseAgent):
 
     def _extract_attributes_from_request(self, request: str) -> List[str]:
         """Extract attributes from natural language request"""
+        import re
         common_attributes = {
             "name": "name: str",
             "email": "email: str",
@@ -745,13 +917,27 @@ class BaseBae(BaseAgent):
         extracted = []
         request_lower = request.lower()
         for keyword, attribute in common_attributes.items():
-            if keyword in request_lower:
+            # Use word boundary matching to avoid false positives (e.g., "age" in "manage")
+            if re.search(r'\b' + re.escape(keyword) + r'\b', request_lower):
                 extracted.append(attribute)
-        if not extracted:
-            # For initial generation, use default attributes when none are specified
+        
+        # Always add 'id' if not present - it's required for database operations
+        if not any(attr.startswith("id:") for attr in extracted):
+            extracted.insert(0, "id: int")
+        
+        if not extracted or len(extracted) == 1:  # Only id was added
+            # For initial generation, use ONLY the basic attributes when none are specified
             if not self._is_evolution_request(request):
-                logger.info(f"{self.entity_name}BAE: No specific attributes found in request, using default attributes")
-                return self._get_default_attributes()
+                logger.info(f"{self.entity_name}BAE: No specific attributes found in request, using minimal default attributes")
+                # Return only basic entity attributes - don't assume extra fields
+                if self.entity_name.lower() == "student":
+                    return ["id: int", "name: str"]  # Minimal student attributes
+                elif self.entity_name.lower() == "course":
+                    return ["id: int", "name: str"]  # Minimal course attributes  
+                elif self.entity_name.lower() == "teacher":
+                    return ["id: int", "name: str"]  # Minimal teacher attributes
+                else:
+                    return ["id: int", "name: str"]  # Minimal generic attributes
             else:
                 raise ValueError(f"No attributes could be extracted from request: {request}")
         return extracted
@@ -811,12 +997,17 @@ class BaseBae(BaseAgent):
 
     def _get_default_attributes(self) -> List[str]:
         """Get default attributes for this entity type"""
+        # Use entity-specific BAE implementation if available, otherwise use minimal defaults
+        if hasattr(self, '_get_entity_specific_defaults'):
+            return self._get_entity_specific_defaults()
+        
+        # Fallback to minimal attributes - don't assume extra fields
         if self.entity_name.lower() == "student":
-            return ["name: str", "email: str", "age: int"]
+            return ["name: str", "email: str"]  # Removed age - only include if explicitly requested
         elif self.entity_name.lower() == "course":
-            return ["name: str", "code: str", "credits: int"]
+            return ["name: str", "code: str"]
         elif self.entity_name.lower() == "teacher":
-            return ["name: str", "email: str", "department: str"]
+            return ["name: str", "email: str"]
         else:
             return ["name: str", "description: str"]
 
