@@ -733,8 +733,17 @@ Please provide the JSON response with database improvements."""
                 sql_type = self._convert_type_hint_to_sql(typ)
                 new_columns.append(f"{name} {sql_type}")
 
-            # Add ID column if not present
-            if not any("id" in col.lower() for col in new_columns):
+            # Add ID primary key if not explicitly defined (avoid false positives like 'employee_id')
+            def _has_primary_key(cols: List[str]) -> bool:
+                """Detect if a standalone 'id' primary key column already exists."""
+                for col_def in cols:
+                    # Extract first token (column name) before any whitespace
+                    first_token = col_def.strip().split()[0].lower()
+                    if first_token == "id":
+                        return True
+                return False
+
+            if not _has_primary_key(new_columns):
                 new_columns.insert(0, "id INTEGER PRIMARY KEY AUTOINCREMENT")
 
             # Generate SQL code for TechLeadSWEA validation
