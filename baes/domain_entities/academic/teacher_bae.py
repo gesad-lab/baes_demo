@@ -56,11 +56,6 @@ class TeacherBae(BaseBae):
             "name: str",
             "employee_id: str",
             "department: str",
-            "subjects: List[str]",
-            "email: str",
-            "phone: str",
-            "qualifications: List[str]",
-            "specialization: str",
         ]
 
     def _get_business_rules(self) -> List[str]:
