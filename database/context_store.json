@@ -11,7 +11,7 @@
             "name: str"
           ],
           "context": "academic",
-          "generated_at": "2025-07-02T15:05:54.971972",
+          "generated_at": "2025-07-03T16:06:08.004942",
           "business_rules": [
             "Registration number must be unique within institution",
             "Email must be valid and unique",
@@ -34,7 +34,7 @@
             ],
             "is_evolution": false,
             "request_type": "generation",
-            "business_context": "Create a student entity with a name",
+            "business_context": "Create a student entity with basic fields",
             "semantic_coherence": true,
             "domain_knowledge_preserved": true,
             "interpreted_intent": "create_student_management_system",
@@ -43,18 +43,18 @@
               "setup_crud"
             ],
             "business_vocabulary": [
-              "Student",
-              "Academic",
-              "Age",
-              "estudante",
-              "discente",
-              "Email",
-              "Id",
-              "Learning",
               "student",
+              "discente",
+              "Age",
+              "Course",
               "Entity",
+              "estudante",
+              "Name",
               "aluno",
-              "Name"
+              "Academic",
+              "Id",
+              "Student",
+              "Learning"
             ],
             "entity_focus": "Student",
             "swea_coordination": [
@@ -67,7 +67,7 @@
                     "id: int",
                     "name: str"
                   ],
-                  "context": "Create a student entity with a name",
+                  "context": "Create a student entity with basic fields",
                   "is_evolution": false,
                   "business_requirements": {
                     "domain_focus": true,
@@ -86,7 +86,7 @@
                     "id: int",
                     "name: str"
                   ],
-                  "context": "Create a student entity with a name",
+                  "context": "Create a student entity with basic fields",
                   "preserve_data": false,
                   "business_rules": true
                 }
@@ -100,7 +100,7 @@
                     "id: int",
                     "name: str"
                   ],
-                  "context": "Create a student entity with a name",
+                  "context": "Create a student entity with basic fields",
                   "business_vocabulary": true,
                   "domain_focus": true,
                   "semantic_coherence": true
@@ -115,7 +115,7 @@
                     "id: int",
                     "name: str"
                   ],
-                  "context": "Create a student entity with a name",
+                  "context": "Create a student entity with basic fields",
                   "crud_operations": true,
                   "business_vocabulary": true,
                   "domain_focus": true,
@@ -131,7 +131,7 @@
                     "id: int",
                     "name: str"
                   ],
-                  "context": "Create a student entity with a name",
+                  "context": "Create a student entity with basic fields",
                   "ui_framework": "streamlit",
                   "features": [
                     "crud_operations",
@@ -145,7 +145,7 @@
                 "task_type": "review_and_approve",
                 "payload": {
                   "entity": "Student",
-                  "context": "Create a student entity with a name",
+                  "context": "Create a student entity with basic fields",
                   "system_components": [
                     "database",
                     "backend",
@@ -168,11 +168,10 @@
           "entity": "Course",
           "attributes": [
             "id: int",
-            "name: str",
             "course: str"
           ],
           "context": "academic",
-          "generated_at": "2025-07-02T15:05:33.321576",
+          "generated_at": "2025-07-02T15:16:23.915886",
           "business_rules": [
             "Course code must be unique within institution",
             "Credits must be positive integer",
@@ -187,17 +186,15 @@
             "domain": "academic",
             "attributes": [
               "id: int",
-              "name: str",
               "course: str"
             ],
             "extracted_attributes": [
               "id: int",
-              "name: str",
               "course: str"
             ],
             "is_evolution": false,
             "request_type": "generation",
-            "business_context": "Create a course entity with a name",
+            "business_context": "Add a course entity to the system",
             "semantic_coherence": true,
             "domain_knowledge_preserved": true,
             "interpreted_intent": "create_course_management_system",
@@ -206,17 +203,16 @@
               "setup_crud"
             ],
             "business_vocabulary": [
-              "subject",
               "Course",
               "disciplina",
-              "Academic",
-              "curso",
               "Id",
-              "Learning",
-              "mat\u00e9ria",
               "course",
-              "Entity",
-              "Name"
+              "Academic",
+              "mat\u00e9ria",
+              "curso",
+              "subject",
+              "Learning",
+              "Entity"
             ],
             "entity_focus": "Course",
             "swea_coordination": [
@@ -227,10 +223,9 @@
                   "entity": "Course",
                   "attributes": [
                     "id: int",
-                    "name: str",
                     "course: str"
                   ],
-                  "context": "Create a course entity with a name",
+                  "context": "Add a course entity to the system",
                   "is_evolution": false,
                   "business_requirements": {
                     "domain_focus": true,
@@ -247,10 +242,9 @@
                   "entity": "Course",
                   "attributes": [
                     "id: int",
-                    "name: str",
                     "course: str"
                   ],
-                  "context": "Create a course entity with a name",
+                  "context": "Add a course entity to the system",
                   "preserve_data": false,
                   "business_rules": true
                 }
@@ -262,10 +256,9 @@
                   "entity": "Course",
                   "attributes": [
                     "id: int",
-                    "name: str",
                     "course: str"
                   ],
-                  "context": "Create a course entity with a name",
+                  "context": "Add a course entity to the system",
                   "business_vocabulary": true,
                   "domain_focus": true,
                   "semantic_coherence": true
@@ -278,10 +271,9 @@
                   "entity": "Course",
                   "attributes": [
                     "id: int",
-                    "name: str",
                     "course: str"
                   ],
-                  "context": "Create a course entity with a name",
+                  "context": "Add a course entity to the system",
                   "crud_operations": true,
                   "business_vocabulary": true,
                   "domain_focus": true,
@@ -295,10 +287,9 @@
                   "entity": "Course",
                   "attributes": [
                     "id: int",
-                    "name: str",
                     "course: str"
                   ],
-                  "context": "Create a course entity with a name",
+                  "context": "Add a course entity to the system",
                   "ui_framework": "streamlit",
                   "features": [
                     "crud_operations",
@@ -312,7 +303,7 @@
                 "task_type": "review_and_approve",
                 "payload": {
                   "entity": "Course",
-                  "context": "Create a course entity with a name",
+                  "context": "Add a course entity to the system",
                   "system_components": [
                     "database",
                     "backend",
@@ -339,7 +330,7 @@
             "name: str"
           ],
           "context": "academic",
-          "generated_at": "2025-07-02T15:05:54.971972",
+          "generated_at": "2025-07-03T16:06:08.004942",
           "business_rules": [
             "Registration number must be unique within institution",
             "Email must be valid and unique",
@@ -362,7 +353,7 @@
             ],
             "is_evolution": false,
             "request_type": "generation",
-            "business_context": "Create a student entity with a name",
+            "business_context": "Create a student entity with basic fields",
             "semantic_coherence": true,
             "domain_knowledge_preserved": true,
             "interpreted_intent": "create_student_management_system",
@@ -371,18 +362,18 @@
               "setup_crud"
             ],
             "business_vocabulary": [
-              "Student",
-              "Academic",
-              "Age",
-              "estudante",
-              "discente",
-              "Email",
-              "Id",
-              "Learning",
               "student",
+              "discente",
+              "Age",
+              "Course",
               "Entity",
+              "estudante",
+              "Name",
               "aluno",
-              "Name"
+              "Academic",
+              "Id",
+              "Student",
+              "Learning"
             ],
             "entity_focus": "Student",
             "swea_coordination": [
@@ -395,7 +386,7 @@
                     "id: int",
                     "name: str"
                   ],
-                  "context": "Create a student entity with a name",
+                  "context": "Create a student entity with basic fields",
                   "is_evolution": false,
                   "business_requirements": {
                     "domain_focus": true,
@@ -414,7 +405,7 @@
                     "id: int",
                     "name: str"
                   ],
-                  "context": "Create a student entity with a name",
+                  "context": "Create a student entity with basic fields",
                   "preserve_data": false,
                   "business_rules": true
                 }
@@ -428,7 +419,7 @@
                     "id: int",
                     "name: str"
                   ],
-                  "context": "Create a student entity with a name",
+                  "context": "Create a student entity with basic fields",
                   "business_vocabulary": true,
                   "domain_focus": true,
                   "semantic_coherence": true
@@ -443,7 +434,7 @@
                     "id: int",
                     "name: str"
                   ],
-                  "context": "Create a student entity with a name",
+                  "context": "Create a student entity with basic fields",
                   "crud_operations": true,
                   "business_vocabulary": true,
                   "domain_focus": true,
@@ -459,7 +450,7 @@
                     "id: int",
                     "name: str"
                   ],
-                  "context": "Create a student entity with a name",
+                  "context": "Create a student entity with basic fields",
                   "ui_framework": "streamlit",
                   "features": [
                     "crud_operations",
@@ -473,7 +464,7 @@
                 "task_type": "review_and_approve",
                 "payload": {
                   "entity": "Student",
-                  "context": "Create a student entity with a name",
+                  "context": "Create a student entity with basic fields",
                   "system_components": [
                     "database",
                     "backend",
@@ -494,11 +485,10 @@
           "entity": "Course",
           "attributes": [
             "id: int",
-            "name: str",
             "course: str"
           ],
           "context": "academic",
-          "generated_at": "2025-07-02T15:05:33.321576",
+          "generated_at": "2025-07-02T15:16:23.915886",
           "business_rules": [
             "Course code must be unique within institution",
             "Credits must be positive integer",
@@ -513,17 +503,15 @@
             "domain": "academic",
             "attributes": [
               "id: int",
-              "name: str",
               "course: str"
             ],
             "extracted_attributes": [
               "id: int",
-              "name: str",
               "course: str"
             ],
             "is_evolution": false,
             "request_type": "generation",
-            "business_context": "Create a course entity with a name",
+            "business_context": "Add a course entity to the system",
             "semantic_coherence": true,
             "domain_knowledge_preserved": true,
             "interpreted_intent": "create_course_management_system",
@@ -532,17 +520,16 @@
               "setup_crud"
             ],
             "business_vocabulary": [
-              "subject",
               "Course",
               "disciplina",
-              "Academic",
-              "curso",
               "Id",
-              "Learning",
-              "mat\u00e9ria",
               "course",
-              "Entity",
-              "Name"
+              "Academic",
+              "mat\u00e9ria",
+              "curso",
+              "subject",
+              "Learning",
+              "Entity"
             ],
             "entity_focus": "Course",
             "swea_coordination": [
@@ -553,10 +540,9 @@
                   "entity": "Course",
                   "attributes": [
                     "id: int",
-                    "name: str",
                     "course: str"
                   ],
-                  "context": "Create a course entity with a name",
+                  "context": "Add a course entity to the system",
                   "is_evolution": false,
                   "business_requirements": {
                     "domain_focus": true,
@@ -573,10 +559,9 @@
                   "entity": "Course",
                   "attributes": [
                     "id: int",
-                    "name: str",
                     "course: str"
                   ],
-                  "context": "Create a course entity with a name",
+                  "context": "Add a course entity to the system",
                   "preserve_data": false,
                   "business_rules": true
                 }
@@ -588,10 +573,9 @@
                   "entity": "Course",
                   "attributes": [
                     "id: int",
-                    "name: str",
                     "course: str"
                   ],
-                  "context": "Create a course entity with a name",
+                  "context": "Add a course entity to the system",
                   "business_vocabulary": true,
                   "domain_focus": true,
                   "semantic_coherence": true
@@ -604,10 +588,9 @@
                   "entity": "Course",
                   "attributes": [
                     "id: int",
-                    "name: str",
                     "course: str"
                   ],
-                  "context": "Create a course entity with a name",
+                  "context": "Add a course entity to the system",
                   "crud_operations": true,
                   "business_vocabulary": true,
                   "domain_focus": true,
@@ -621,10 +604,9 @@
                   "entity": "Course",
                   "attributes": [
                     "id: int",
-                    "name: str",
                     "course: str"
                   ],
-                  "context": "Create a course entity with a name",
+                  "context": "Add a course entity to the system",
                   "ui_framework": "streamlit",
                   "features": [
                     "crud_operations",
@@ -638,7 +620,7 @@
                 "task_type": "review_and_approve",
                 "payload": {
                   "entity": "Course",
-                  "context": "Create a course entity with a name",
+                  "context": "Add a course entity to the system",
                   "system_components": [
                     "database",
                     "backend",
@@ -663,7 +645,7 @@
       "knowledge": {
         "entity": "Student",
         "context": "academic",
-        "timestamp": "2025-07-02T15:05:54.972222",
+        "timestamp": "2025-07-03T16:06:08.005197",
         "interpretation": {
           "entity": "Student",
           "domain": "academic",
@@ -677,7 +659,7 @@
           ],
           "is_evolution": false,
           "request_type": "generation",
-          "business_context": "Create a student entity with a name",
+          "business_context": "Create a student entity with basic fields",
           "semantic_coherence": true,
           "domain_knowledge_preserved": true,
           "interpreted_intent": "create_student_management_system",
@@ -686,18 +668,18 @@
             "setup_crud"
           ],
           "business_vocabulary": [
-            "Student",
-            "Academic",
-            "Age",
-            "estudante",
-            "discente",
-            "Email",
-            "Id",
-            "Learning",
             "student",
+            "discente",
+            "Age",
+            "Course",
             "Entity",
+            "estudante",
+            "Name",
             "aluno",
-            "Name"
+            "Academic",
+            "Id",
+            "Student",
+            "Learning"
           ],
           "entity_focus": "Student",
           "swea_coordination": [
@@ -710,7 +692,7 @@
                   "id: int",
                   "name: str"
                 ],
-                "context": "Create a student entity with a name",
+                "context": "Create a student entity with basic fields",
                 "is_evolution": false,
                 "business_requirements": {
                   "domain_focus": true,
@@ -729,7 +711,7 @@
                   "id: int",
                   "name: str"
                 ],
-                "context": "Create a student entity with a name",
+                "context": "Create a student entity with basic fields",
                 "preserve_data": false,
                 "business_rules": true
               }
@@ -743,7 +725,7 @@
                   "id: int",
                   "name: str"
                 ],
-                "context": "Create a student entity with a name",
+                "context": "Create a student entity with basic fields",
                 "business_vocabulary": true,
                 "domain_focus": true,
                 "semantic_coherence": true
@@ -758,7 +740,7 @@
                   "id: int",
                   "name: str"
                 ],
-                "context": "Create a student entity with a name",
+                "context": "Create a student entity with basic fields",
                 "crud_operations": true,
                 "business_vocabulary": true,
                 "domain_focus": true,
@@ -774,7 +756,7 @@
                   "id: int",
                   "name: str"
                 ],
-                "context": "Create a student entity with a name",
+                "context": "Create a student entity with basic fields",
                 "ui_framework": "streamlit",
                 "features": [
                   "crud_operations",
@@ -788,7 +770,7 @@
               "task_type": "review_and_approve",
               "payload": {
                 "entity": "Student",
-                "context": "Create a student entity with a name",
+                "context": "Create a student entity with basic fields",
                 "system_components": [
                   "database",
                   "backend",
@@ -805,30 +787,28 @@
           "name: str"
         ]
       },
-      "timestamp": "2025-07-02T15:05:54.972226"
+      "timestamp": "2025-07-03T16:06:08.005201"
     },
     "course": {
       "entity": "course",
       "knowledge": {
         "entity": "Course",
         "context": "academic",
-        "timestamp": "2025-07-02T15:05:33.321829",
+        "timestamp": "2025-07-02T15:16:23.916103",
         "interpretation": {
           "entity": "Course",
           "domain": "academic",
           "attributes": [
             "id: int",
-            "name: str",
             "course: str"
           ],
           "extracted_attributes": [
             "id: int",
-            "name: str",
             "course: str"
           ],
           "is_evolution": false,
           "request_type": "generation",
-          "business_context": "Create a course entity with a name",
+          "business_context": "Add a course entity to the system",
           "semantic_coherence": true,
           "domain_knowledge_preserved": true,
           "interpreted_intent": "create_course_management_system",
@@ -837,17 +817,16 @@
             "setup_crud"
           ],
           "business_vocabulary": [
-            "subject",
             "Course",
             "disciplina",
-            "Academic",
-            "curso",
             "Id",
-            "Learning",
-            "mat\u00e9ria",
             "course",
-            "Entity",
-            "Name"
+            "Academic",
+            "mat\u00e9ria",
+            "curso",
+            "subject",
+            "Learning",
+            "Entity"
           ],
           "entity_focus": "Course",
           "swea_coordination": [
@@ -858,10 +837,9 @@
                 "entity": "Course",
                 "attributes": [
                   "id: int",
-                  "name: str",
                   "course: str"
                 ],
-                "context": "Create a course entity with a name",
+                "context": "Add a course entity to the system",
                 "is_evolution": false,
                 "business_requirements": {
                   "domain_focus": true,
@@ -878,10 +856,9 @@
                 "entity": "Course",
                 "attributes": [
                   "id: int",
-                  "name: str",
                   "course: str"
                 ],
-                "context": "Create a course entity with a name",
+                "context": "Add a course entity to the system",
                 "preserve_data": false,
                 "business_rules": true
               }
@@ -893,10 +870,9 @@
                 "entity": "Course",
                 "attributes": [
                   "id: int",
-                  "name: str",
                   "course: str"
                 ],
-                "context": "Create a course entity with a name",
+                "context": "Add a course entity to the system",
                 "business_vocabulary": true,
                 "domain_focus": true,
                 "semantic_coherence": true
@@ -909,10 +885,9 @@
                 "entity": "Course",
                 "attributes": [
                   "id: int",
-                  "name: str",
                   "course: str"
                 ],
-                "context": "Create a course entity with a name",
+                "context": "Add a course entity to the system",
                 "crud_operations": true,
                 "business_vocabulary": true,
                 "domain_focus": true,
@@ -926,10 +901,9 @@
                 "entity": "Course",
                 "attributes": [
                   "id: int",
-                  "name: str",
                   "course: str"
                 ],
-                "context": "Create a course entity with a name",
+                "context": "Add a course entity to the system",
                 "ui_framework": "streamlit",
                 "features": [
                   "crud_operations",
@@ -943,7 +917,7 @@
               "task_type": "review_and_approve",
               "payload": {
                 "entity": "Course",
-                "context": "Create a course entity with a name",
+                "context": "Add a course entity to the system",
                 "system_components": [
                   "database",
                   "backend",
@@ -957,12 +931,11 @@
         },
         "current_attributes": [
           "id: int",
-          "name: str",
           "course: str"
         ]
       },
-      "timestamp": "2025-07-02T15:05:33.321834"
+      "timestamp": "2025-07-02T15:16:23.916108"
     }
   },
-  "last_saved": "2025-07-02T15:05:54.973060"
+  "last_saved": "2025-07-03T16:06:08.006096"
 }

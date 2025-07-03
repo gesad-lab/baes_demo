@@ -235,11 +235,11 @@ class BAEConversationalCLI:
     def get_user_input(self) -> str:
         """Get user input with context-aware prompt"""
         if self.context == "initial":
-            prompt = "🏢 HBE"
+            prompt = "🏢 HBE/HSWE"
         elif self.context == "evolving":
-            prompt = "🔄 HBE"
+            prompt = "🔄 HBE/HSWE"
         else:
-            prompt = "🛠️  HBE"
+            prompt = "🛠️  HBE/HSWE"
 
         try:
             return input(f"{prompt}> ").strip()
