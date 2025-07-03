@@ -58,7 +58,22 @@ class BackendSWEA(BaseAgent):
         techlead_feedback = payload.get("techlead_feedback", [])
         previous_errors = payload.get("previous_errors", [])
         retry_count = payload.get("retry_count", 0)
-        prompt = self._build_api_prompt(entity, attributes, context, techlead_feedback, previous_errors, retry_count)
+        
+        # Evolution metadata (defaults for initial generation)
+        is_evolution: bool = payload.get("is_evolution", False)
+        new_attributes: List[str] = payload.get("new_attributes", [])
+        
+        # Build prompt with evolution-aware instructions
+        prompt = self._build_api_prompt(
+            entity,
+            attributes,
+            context,
+            techlead_feedback,
+            previous_errors,
+            retry_count,
+            is_evolution,
+            new_attributes,
+        )
         code = self.llm_client.generate_code_with_domain_focus(
             prompt, code_type="FastAPI Routes", entity_context={"entity": entity, "attributes": attributes}
         )
@@ -75,7 +90,7 @@ class BackendSWEA(BaseAgent):
 
     def _build_model_prompt(self, entity: str, attributes: List[str], context: str, 
                            techlead_feedback: List[str] = None, previous_errors: List[str] = None, 
-                           retry_count: int = 0) -> str:
+                           retry_count: int = 0, is_evolution: bool = False, new_attributes: List[str] = None) -> str:
         feedback_section = ""
         if techlead_feedback or previous_errors:
             feedback_section = "\n\nCRITICAL FEEDBACK TO INCORPORATE:\n"
@@ -92,16 +107,21 @@ class BackendSWEA(BaseAgent):
         retry_info = ""
         if retry_count > 0:
             retry_info = f"\nThis is retry attempt #{retry_count}. Please ensure you address the feedback above."
+
+        # All attributes optional instruction for PoC
+        optional_fields_instruction = (
+            "\nIMPORTANT: For this proof of concept, EVERY attribute listed below MUST be declared as Optional in the Pydantic model and default to None.\n"
+        )
         
         return f"""
-Generate a Pydantic model for the {entity} entity with the following attributes:
+Generate a Pydantic model for the {entity} entity with the following attributes (ALL OPTIONAL):
 {attributes}
-Context: {context}{feedback_section}{retry_info}
+Context: {context}{feedback_section}{retry_info}{optional_fields_instruction}
 
 REQUIREMENTS:
 - Use proper type hints and validation
+- Declare every field as Optional[<type>] = None
 - No fallback or placeholder logic
-- Raise errors for any missing or invalid data
 - Use only the specified attributes
 - No extra fields
 - Must include 'from pydantic import BaseModel' import
@@ -111,7 +131,7 @@ REQUIREMENTS:
 
     def _build_api_prompt(self, entity: str, attributes: List[str], context: str,
                           techlead_feedback: List[str] = None, previous_errors: List[str] = None,
-                          retry_count: int = 0) -> str:
+                          retry_count: int = 0, is_evolution: bool = False, new_attributes: List[str] = None) -> str:
         feedback_section = ""
         if techlead_feedback or previous_errors:
             feedback_section = "\n\nCRITICAL FEEDBACK TO INCORPORATE:\n"
@@ -128,6 +148,11 @@ REQUIREMENTS:
         retry_info = ""
         if retry_count > 0:
             retry_info = f"\nThis is retry attempt #{retry_count}. Please ensure you address the feedback above."
+
+        # All attributes optional instruction for PoC
+        optional_fields_instruction = (
+            "\nIMPORTANT: For this proof of concept, EVERY attribute listed below MUST be declared as Optional in the Pydantic models (Create, Update, Response) and default to None.\n"
+        )
         
         # Format attributes list for clearer display
         attributes_display = "\n".join([f"- {attr}" for attr in attributes])
@@ -136,7 +161,7 @@ REQUIREMENTS:
         return f"""
 Generate FastAPI router code for the {entity} entity with EXACTLY these attributes and NO OTHERS:
 {attributes_display}
-Context: {context}{feedback_section}{retry_info}
+Context: {context}{feedback_section}{retry_info}{optional_fields_instruction}
 
 CRITICAL REQUIREMENTS (ALL MUST BE IMPLEMENTED):
 - Use APIRouter with correct prefix: prefix="/api/{entity_lower}s"
@@ -144,7 +169,7 @@ CRITICAL REQUIREMENTS (ALL MUST BE IMPLEMENTED):
 - Use ONLY the attributes listed above - DO NOT ADD EXTRA FIELDS
 - Router endpoints should be: /, /{{id}}, etc. (not full paths)
 - No fallback or placeholder logic
-- Raise errors for any missing or invalid data
+- ALL Pydantic models MUST declare every attribute as Optional[<type>] = None (including Response model)
 - Use generic database path: app/database/baes_system.db
 
 CRITICAL ROUTER CONFIGURATION:
@@ -155,7 +180,7 @@ CRITICAL ROUTER CONFIGURATION:
 CRITICAL PYDANTIC MODELS (ONLY USE SPECIFIED ATTRIBUTES):
 - {entity}Create: Only the attributes listed above (NEVER include id field, no extra fields)
 - {entity}Update: Only the attributes listed above as Optional fields (NEVER include id field, no extra fields)  
-- {entity}Response: Include id: int plus the attributes listed above (no extra fields)
+- {entity}Response: All attributes, but new attributes (added during evolution) must be Optional and default to None
 - IMPORTANT: The 'id' field is auto-generated by the database and should NEVER be included in Create or Update models
 - DO NOT add any fields not explicitly specified in the attributes list
 
