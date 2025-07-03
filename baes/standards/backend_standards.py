@@ -129,17 +129,24 @@ class BackendStandards(BaseStandards):
             "inheritance": "class EntityBase(BaseModel):",
             "field_definition": "field_name: field_type",
             "required_fields": ["proper type hints", "field definitions"],
+            "exclude_fields": ["id"],  # id should never be in base model
         },
-        "create_model": {"inheritance": "class EntityCreate(EntityBase):", "pattern": "pass"},
+        "create_model": {
+            "inheritance": "class EntityCreate(EntityBase):", 
+            "pattern": "pass",
+            "exclude_fields": ["id"],  # id should never be in create model - auto-generated
+        },
         "update_model": {
             "inheritance": "class EntityUpdate(BaseModel):",
             "fields": "same as base but all optional",
             "pattern": "field_name: Optional[field_type] = None",
+            "exclude_fields": ["id"],  # id should never be in update model - immutable
         },
         "response_model": {
             "inheritance": "class EntityResponse(EntityBase):",
             "additional_fields": ["id: int"],
             "config": "class Config:\n    from_attributes = True",
+            "include_fields": ["id"],  # id should only be in response model
         },
     }
 
@@ -329,6 +336,79 @@ class BackendStandards(BaseStandards):
         }
 
     @classmethod
+    def validate_pydantic_models(cls, code: str, entity: str) -> Dict[str, Any]:
+        """
+        Validate Pydantic model structure, especially id field handling.
+        """
+        issues = []
+        suggestions = []
+        
+        # Check if id field is incorrectly included in Create model
+        import re
+        create_model_pattern = rf"class\s+{entity}Create\s*\([^)]*\):(.*?)(?=class|\Z)"
+        create_match = re.search(create_model_pattern, code, re.DOTALL)
+        
+        if create_match:
+            create_content = create_match.group(1)
+            # Only check the actual model content, not subsequent classes
+            model_lines = []
+            for line in create_content.split('\n'):
+                if line.strip() and not line.startswith('class '):
+                    model_lines.append(line)
+                elif line.startswith('class '):
+                    break
+            create_model_content = '\n'.join(model_lines)
+            
+            if re.search(r'\bid\s*:', create_model_content):
+                issues.append(f"{entity}Create model should not include 'id' field - it's auto-generated")
+                suggestions.append(f"Remove 'id' field from {entity}Create model")
+        
+        # Check if id field is incorrectly included in Update model
+        update_model_pattern = rf"class\s+{entity}Update\s*\([^)]*\):(.*?)(?=class|\Z)"
+        update_match = re.search(update_model_pattern, code, re.DOTALL)
+        
+        if update_match:
+            update_content = update_match.group(1)
+            # Only check the actual model content, not subsequent classes
+            model_lines = []
+            for line in update_content.split('\n'):
+                if line.strip() and not line.startswith('class '):
+                    model_lines.append(line)
+                elif line.startswith('class '):
+                    break
+            update_model_content = '\n'.join(model_lines)
+            
+            if re.search(r'\bid\s*:', update_model_content):
+                issues.append(f"{entity}Update model should not include 'id' field - it's immutable")
+                suggestions.append(f"Remove 'id' field from {entity}Update model")
+        
+        # Check if id field is missing from Response model
+        response_model_pattern = rf"class\s+{entity}Response\s*\([^)]*\):(.*?)(?=class|\Z)"
+        response_match = re.search(response_model_pattern, code, re.DOTALL)
+        
+        if response_match:
+            response_content = response_match.group(1)
+            # Only check the actual model content, not subsequent classes
+            model_lines = []
+            for line in response_content.split('\n'):
+                if line.strip() and not line.startswith('class '):
+                    model_lines.append(line)
+                elif line.startswith('class '):
+                    break
+            response_model_content = '\n'.join(model_lines)
+            
+            if not re.search(r'\bid\s*:\s*int', response_model_content):
+                issues.append(f"{entity}Response model should include 'id: int' field")
+                suggestions.append(f"Add 'id: int' field to {entity}Response model")
+        
+        return {
+            "is_valid": len(issues) == 0,
+            "issues": issues,
+            "suggestions": suggestions,
+            "priority": "CRITICAL"
+        }
+
+    @classmethod
     def get_backend_validation(cls, code: str, entity: str) -> Dict[str, Any]:
         """
         Run comprehensive backend validation against all standards.
@@ -341,6 +421,7 @@ class BackendStandards(BaseStandards):
         status_validation = cls.validate_http_status_codes(code)
         error_validation = cls.validate_error_handling(code)
         api_validation = cls.validate_api_completeness(code, entity)
+        models_validation = cls.validate_pydantic_models(code, entity)
 
         # Run base validations
         base_validation = cls.get_comprehensive_validation(code)
@@ -351,6 +432,7 @@ class BackendStandards(BaseStandards):
             + status_validation["issues"]
             + error_validation["issues"]
             + api_validation["issues"]
+            + models_validation["issues"]
             + base_validation["issues"]
         )
 
@@ -359,6 +441,7 @@ class BackendStandards(BaseStandards):
             + status_validation["suggestions"]
             + error_validation["suggestions"]
             + api_validation["suggestions"]
+            + models_validation["suggestions"]
             + base_validation["suggestions"]
         )
 
@@ -376,6 +459,7 @@ class BackendStandards(BaseStandards):
                 "http_status_codes": status_validation,
                 "error_handling": error_validation,
                 "api_completeness": api_validation,
+                "pydantic_models": models_validation,
                 "base_standards": base_validation,
             },
             "entity": entity,

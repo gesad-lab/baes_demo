@@ -226,11 +226,15 @@ COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and 
             else:
                 parsed_attributes.append({"name": str(attr), "type": "str"})
 
-        # Build form fields section
+        # Build form fields section - exclude 'id' field as it should be auto-generated
         form_fields = []
         for attr in parsed_attributes:
             field_name = attr["name"]
             field_type = attr["type"].lower()
+
+            # Skip the 'id' field - it should be auto-generated, not user-editable
+            if field_name.lower() == "id":
+                continue
 
             if field_type in ["email"]:
                 form_fields.append(
@@ -249,11 +253,15 @@ COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and 
                     f'    {field_name} = st.text_input("{field_name.title()}", key="{field_name}_input")'
                 )
 
-        # Build validation logic
+        # Build validation logic - exclude 'id' field
         validation_rules = []
         for attr in parsed_attributes:
             field_name = attr["name"]
             field_type = attr["type"].lower()
+
+            # Skip the 'id' field - it should be auto-generated, not validated by user
+            if field_name.lower() == "id":
+                continue
 
             if field_type == "email":
                 validation_rules.append(f'    if {field_name} and "@" not in {field_name}:')
@@ -264,10 +272,13 @@ COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and 
                 validation_rules.append(f'        st.error("{field_name.title()} is required")')
                 validation_rules.append("        return")
 
-        # Build data dictionary
+        # Build data dictionary - exclude 'id' field
         data_dict_parts = []
         for attr in parsed_attributes:
             field_name = attr["name"]
+            # Skip the 'id' field - it should be auto-generated, not sent in create requests
+            if field_name.lower() == "id":
+                continue
             data_dict_parts.append(f'"{field_name}": {field_name}')
         data_dict = "{" + ", ".join(data_dict_parts) + "}"
 
@@ -321,6 +332,12 @@ CRITICAL REQUIREMENTS - Your code MUST include ALL of the following:
    - import requests
    - from typing import List, Dict, Any, Optional
 
+7. **CRITICAL: ID field handling**
+   - NEVER include 'id' field in create/update forms (it's auto-generated)
+   - NEVER include 'id' in data dictionaries sent to API
+   - Display 'id' as read-only text in edit forms only
+   - The 'id' field should NEVER be user-editable
+
 Entity: {entity}
 Attributes: {attributes}
 Context: {context}
@@ -338,6 +355,7 @@ CRITICAL OUTPUT FORMAT:
 - Start directly with import statements
 - Include complete CRUD functionality
 - Use proper error handling with response.raise_for_status()
+- NEVER include 'id' field in forms or data dictionaries
 """
         return prompt
 
@@ -960,11 +978,15 @@ API_PORT = os.getenv("REALWORLD_FASTAPI_PORT", "8000")
 API_BASE_URL = f"http://localhost:{API_PORT}"'''
     
     def _generate_form_fields_template(self, attributes: List[Dict[str, str]]) -> str:
-        """Generate form fields template based on attributes (DRY)"""
+        """Generate form fields template based on attributes (DRY) - excludes id field"""
         form_fields = []
         for attr in attributes:
             field_name = attr["name"]
             field_type = attr["type"].lower()
+            
+            # Skip the 'id' field - it should be auto-generated, not user-editable
+            if field_name.lower() == "id":
+                continue
             
             if field_type in ["email"]:
                 form_fields.append(f'        {field_name} = st.text_input("{field_name.title()}", key="{field_name}_input")')
@@ -978,11 +1000,15 @@ API_BASE_URL = f"http://localhost:{API_PORT}"'''
         return '\n'.join(form_fields)
     
     def _generate_validation_template(self, attributes: List[Dict[str, str]]) -> str:
-        """Generate validation template based on attributes (DRY)"""
+        """Generate validation template based on attributes (DRY) - excludes id field"""
         validation_rules = []
         for attr in attributes:
             field_name = attr["name"]
             field_type = attr["type"].lower()
+            
+            # Skip the 'id' field - it should be auto-generated, not validated by user
+            if field_name.lower() == "id":
+                continue
             
             if field_type == "email":
                 validation_rules.append(f'            if {field_name} and "@" not in {field_name}:')
@@ -1168,31 +1194,43 @@ if __name__ == "__main__":
         def _is_list_type(t: str) -> bool:
             return t.lower().startswith("list") or "[" in t.lower()
 
-        # Build data dictionary for create form – convert list-like fields
+        # Build data dictionary for create form – convert list-like fields, exclude 'id' field
         data_dict_parts = []
         for attr in attributes_meta:
             name = attr["name"]
             atype = attr.get("type", "str")
+            # Skip the 'id' field - it should be auto-generated, not sent in create requests
+            if name.lower() == "id":
+                continue
             if _is_list_type(atype):
                 data_dict_parts.append(f'"{name}": {name}.split(",")')
             else:
                 data_dict_parts.append(f'"{name}": {name}')
         data_dict = "{" + ", ".join(data_dict_parts) + "}"
 
-        # Build edit form fields (pre-populated)
+        # Build edit form fields (pre-populated) - exclude 'id' field from editable fields
         edit_form_fields_lines = []
+        # First, display the ID as read-only
+        edit_form_fields_lines.append('            st.write(f"**ID:** {st.session_state.edit_' + entity.lower() + '_id}")')
+        
         for attr in attributes_meta:
             name = attr["name"]
+            # Skip the 'id' field - it should be displayed as read-only above, not editable
+            if name.lower() == "id":
+                continue
             # 12 spaces indentation to align with code inside the "with st.form" block
             edit_form_fields_lines.append(
                 f'            {name}_edit = st.text_input("{name.title().replace("_"," ")}", value=edit_data.get("{name}", ""), key="{name}_edit")'
             )
         edit_form_fields = "\n".join(edit_form_fields_lines)
 
-        # Build edit validation rules
+        # Build edit validation rules - exclude 'id' field
         edit_validation_lines = []
         for attr in attributes_meta:
             name = attr["name"]
+            # Skip the 'id' field - it should not be validated as it's not editable
+            if name.lower() == "id":
+                continue
             # 16 spaces indent to align inside 'if submitted:' block
             edit_validation_lines.append(f'                if not {name}_edit:')
             edit_validation_lines.append(
@@ -1201,11 +1239,14 @@ if __name__ == "__main__":
             edit_validation_lines.append("                    return")
         edit_validation = "\n".join(edit_validation_lines)
 
-        # Build edit data dict – convert list-like fields
+        # Build edit data dict – convert list-like fields, exclude 'id' field
         edit_data_dict_parts = []
         for attr in attributes_meta:
             name = attr["name"]
             atype = attr.get("type", "str")
+            # Skip the 'id' field - it should not be sent in update requests
+            if name.lower() == "id":
+                continue
             if _is_list_type(atype):
                 edit_data_dict_parts.append(f'"{name}": {name}_edit.split(",")')
             else:
