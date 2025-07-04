@@ -1,0 +1,2 @@
+**No Silent Fallbacks Principle**
+All generator components (BAEs and SWEAs) must strictly adhere to the user's request. If a request is ambiguous or required information like entity attributes cannot be clearly determined, the component **must raise an explicit error**. Do not invent, substitute, or use default/placeholder values as a fallback. The system should fail loudly rather than generate an artifact the user did not explicitly ask for. This ensures the generated system is always a direct and precise translation of the user's instructions.
