@@ -979,7 +979,7 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
             "form_fields": self._generate_form_fields_template(attributes),
             "validation": self._generate_validation_template(attributes),
             "crud_operations": self._generate_crud_operations_template(entity, entity_lower),
-            "main_function": self._generate_main_function_template(entity),
+            "main_function": self._generate_main_function_template(entity, attributes),
             "attributes": attributes,
         }
         
@@ -988,6 +988,7 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
     def _generate_imports_template(self) -> str:
         """Generate standard imports template (DRY)"""
         return '''import os
+import json
 import streamlit as st
 import requests
 from typing import List, Dict, Any, Optional'''
@@ -1012,20 +1013,22 @@ API_BASE_URL = f"http://localhost:{API_PORT}"'''
                 continue
 
             if is_fk and related_entity:
+                related_entity_lower = related_entity.lower()
+                descriptive_field = attr.get("descriptive_field", "name")
                 # Generate dropdown/selectbox for foreign key relationship
                 form_fields.append(
                     f"""        # Foreign key: {related_entity}
         try:
-            {related_entity}_resp = requests.get(f"{{API_BASE_URL}}/api/{related_entity}s/")
-            {related_entity}_resp.raise_for_status()
-            {related_entity}_data = {related_entity}_resp.json()
-            {related_entity}_options = {{}}
-            for item in {related_entity}_data:
-                {related_entity}_options[item['id']] = item.get('name', str(item['id']))
+            {related_entity_lower}_resp = requests.get(f"{{API_BASE_URL}}/api/{related_entity_lower}s/")
+            {related_entity_lower}_resp.raise_for_status()
+            {related_entity_lower}_data = {related_entity_lower}_resp.json()
+            {related_entity_lower}_options = {{}}
+            for item in {related_entity_lower}_data:
+                {related_entity_lower}_options[item['id']] = item.get('{descriptive_field}', str(item['id']))
         except requests.exceptions.RequestException:
-            {related_entity}_options = {{}}
+            {related_entity_lower}_options = {{}}
             st.error('Failed to load {related_entity} options')
-        {field_name} = st.selectbox("{related_entity.title()}", options=list({related_entity}_options.keys()), format_func=lambda o: {related_entity}_options.get(o, str(o)))
+        {field_name} = st.selectbox("{related_entity.title()}", options=list({related_entity_lower}_options.keys()), format_func=lambda o: {related_entity_lower}_options.get(o, str(o)))
 """
                 )
             else:
@@ -1121,9 +1124,63 @@ def delete_{entity_lower}(id: int) -> bool:
         st.error(f"Error deleting {entity_lower}: {{e}}")
         return False'''
     
-    def _generate_main_function_template(self, entity: str) -> str:
+    def _generate_main_function_template(self, entity: str, attributes: List[Dict[str, str]]) -> str:
         """Generate main function template (DRY)"""
         entity_lower = entity.lower()
+
+        # Find a descriptive attribute for the expander title
+        descriptive_attr = "id"
+        for attr in attributes:
+            attr_name = attr.get("name", "").lower()
+            if attr_name == "name":
+                descriptive_attr = attr["name"]
+                break
+            if attr_name == "title":
+                descriptive_attr = attr["name"]
+            if attr_name == "description" and descriptive_attr == "id":
+                descriptive_attr = attr["name"]
+
+        # Generate code to fetch data for all foreign keys
+        fk_fetches = []
+        for attr in attributes:
+            if attr.get("is_foreign_key"):
+                related_entity = attr["related_entity"]
+                related_entity_lower = related_entity.lower()
+                descriptive_field = attr.get("descriptive_field", "name")
+                fk_fetches.append(f'''    # Fetch related data for {related_entity}
+    try:
+        {related_entity_lower}_resp = requests.get(f"{{API_BASE_URL}}/api/{related_entity_lower}s/")
+        {related_entity_lower}_resp.raise_for_status()
+        {related_entity_lower}_data = {related_entity_lower}_resp.json()
+        {related_entity_lower}_options = {{item['id']: item.get('{descriptive_field}', str(item['id'])) for item in {related_entity_lower}_data}}
+    except (requests.exceptions.RequestException, json.JSONDecodeError):
+        {related_entity_lower}_options = {{}}
+        st.warning('Failed to load {related_entity} options')''')
+        fk_fetch_block = "\\n".join(fk_fetches)
+
+        # Generate the item display logic
+        item_display_lines = []
+        indent = " " * 20  # 16 (col1) + 4
+        for attr in attributes:
+            attr_name = attr["name"]
+            if attr_name.lower() == 'id':
+                continue
+
+            if attr.get("is_foreign_key"):
+                related_entity = attr["related_entity"]
+                related_entity_lower = related_entity.lower()
+                options_map_name = f"{related_entity_lower}_options"
+                item_display_lines.append(
+                    f"{indent}if '{attr_name}' in {entity_lower}:\n{indent}    related_name = {options_map_name}.get({entity_lower}['{attr_name}'], f\"ID: {{{entity_lower}['{attr_name}']}}\")\n{indent}    st.write(f\"**{related_entity.title()}:** {{related_name}}\")"
+                )
+            else:
+                item_display_lines.append(
+                    f"{indent}if '{attr_name}' in {entity_lower}:\n{indent}    st.write(f\"**{attr_name.replace('_', ' ').title()}:** {{{entity_lower}['{attr_name}']}}\")"
+                )
+        item_display_block = "\n".join(item_display_lines)
+        if not item_display_block.strip():
+            item_display_block = indent + "pass"
+
         return f'''def main():
     """Main {entity} management interface."""
     st.title("{entity} Management")
@@ -1147,17 +1204,17 @@ def show_{entity_lower}_list():
     if st.button("🔄 Refresh", key="refresh_list"):
         st.rerun()
     
+    {fk_fetch_block}
+    
     {entity_lower}s = get_{entity_lower}s()
     
     if {entity_lower}s:
         for {entity_lower} in {entity_lower}s:
-            with st.expander(f"{entity} ID: {{{entity_lower}['id']}}"):
+            with st.expander(f"{entity.title()}: {{{entity_lower}.get('{descriptive_attr}', {entity_lower}.get('id', 'N/A'))}}"):
                 col1, col2, col3 = st.columns([3, 1, 1])
                 
                 with col1:
-                    for key, value in {entity_lower}.items():
-                        if key != 'id':
-                            st.write(f"**{{key.title()}}:** {{value}}")
+{item_display_block}
                 
                 with col2:
                     if st.button("✏️ Edit", key=f"edit_{{{entity_lower}['id']}}"):
@@ -1271,22 +1328,18 @@ if __name__ == "__main__":
                 continue
             # 12 spaces indentation to align with code inside the "with st.form" block
             if is_fk and related_entity:
-                edit_form_fields_lines.append(
-                    f'            # Foreign key: {related_entity}\n'
-                    f'            try:\n'
-                    f'                {related_entity}_resp = requests.get(f"{{API_BASE_URL}}/api/{related_entity}s/")\n'
-                    f'                {related_entity}_resp.raise_for_status()\n'
-                    f'                {related_entity}_data = {related_entity}_resp.json()\n'
-                    f'                {related_entity}_options = {{}}\n'
-                    f'                for item in {related_entity}_data:\n'
-                    f'                    {related_entity}_options[item[\'id\']] = item.get(\'name\', str(item[\'id\']))'
-                )
-                edit_form_fields_lines.append(
-                    f'            except requests.exceptions.RequestException:\n'
-                    f'                {related_entity}_options = {{}}\n'
-                    f'                st.error("Failed to load {related_entity} options")\n'
-                    f'            {name}_edit = st.selectbox("{related_entity.title()}", options=list({related_entity}_options.keys()), index=0 if edit_data.get("{name}") is None else list({related_entity}_options.keys()).index(edit_data.get("{name}")), format_func=lambda o: {related_entity}_options.get(o, str(o)))\n'
-                )
+                edit_form_fields_lines.append(f"""            # Foreign key: {related_entity}
+            try:
+                {related_entity}_resp = requests.get(f"{{API_BASE_URL}}/api/{related_entity}s/")
+                {related_entity}_resp.raise_for_status()
+                {related_entity}_data = {related_entity}_resp.json()
+                {related_entity}_options = {{}}
+                for item in {related_entity}_data:
+                    {related_entity}_options[item['id']] = item.get('name', str(item['id']))
+            except requests.exceptions.RequestException:
+                {related_entity}_options = {{}}
+                st.error("Failed to load {related_entity} options")
+            {name}_edit = st.selectbox("{related_entity.title()}", options=list({related_entity}_options.keys()), index=0 if edit_data.get("{name}") is None else list({related_entity}_options.keys()).index(edit_data.get("{name}")), format_func=lambda o: {related_entity}_options.get(o, str(o)))""")
             else:
                 edit_form_fields_lines.append(
                     f'            {name}_edit = st.text_input("{name.title().replace("_"," ")}", value=edit_data.get("{name}", ""), key="{name}_edit")'
