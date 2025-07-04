@@ -228,27 +228,36 @@ class BaseBae(BaseAgent):
         
         # For relationship creation, we don't change attributes of the entity
         # We just add a foreign key relationship
-        existing_attributes: List[str] = []
+        existing_attributes_raw: List[Any] = []
         if self.current_schema and self.current_schema.get("attributes"):
-            existing_attributes = self.current_schema["attributes"]
+            existing_attributes_raw = self.current_schema["attributes"]
         else:
             # If no current schema, try to load it or use default attributes
             self._load_stored_schema()
             if self.current_schema and self.current_schema.get("attributes"):
-                existing_attributes = self.current_schema["attributes"]
+                existing_attributes_raw = self.current_schema["attributes"]
             else:
-                existing_attributes = self._get_default_attributes()
+                existing_attributes_raw = self._get_default_attributes()
 
+        existing_attributes = self._normalize_attributes(existing_attributes_raw)
         # ------------------------------------------------------------------
         # 🔗 Include foreign-key attribute so Backend/Frontend SWEAs generate
         #     proper models, API fields and form inputs.  Without this the UI
         #     will miss the relationship field even though the DB column
         #     exists (issue reported by user).
         # ------------------------------------------------------------------
-        foreign_key_attr = f"{related_entity.lower()}_id: int"
+        foreign_key_attr_name = f"{related_entity.lower()}_id"
+        foreign_key_attr = {
+            "name": foreign_key_attr_name,
+            "type": "int",
+            "is_foreign_key": True,
+            "related_entity": related_entity.capitalize(),
+            "descriptive_field": "name",  # Default assumption
+        }
 
-        # Ensure we do not duplicate if attribute already present (case-insensitive)
-        if all(foreign_key_attr.split(":")[0].strip() != attr.split(":")[0].strip() for attr in existing_attributes):
+
+        # Ensure we do not duplicate if attribute already present
+        if not any(attr.get("name") == foreign_key_attr_name for attr in existing_attributes):
             updated_attributes = existing_attributes + [foreign_key_attr]
         else:
             updated_attributes = existing_attributes
@@ -351,21 +360,44 @@ class BaseBae(BaseAgent):
         
         return interpretation
 
+    def _build_interpretation_prompt(self, request: str, context: str) -> str:
+        """Builds a prompt for the LLM to interpret the business request."""
+        return f"""
+        As a BAE (Business Autonomous Entity), analyze the following request in the context of '{context}':
+
+        Request: "{request}"
+
+        Identify the main entity, its attributes (with types), and the requested operations (create, read, update, delete).
+        Return a JSON object with the following structure:
+        {{
+            "entity_focus": "EntityName",
+            "attributes_mentioned": [
+                {{"name": "attribute_name", "type": "attribute_type"}}
+            ],
+            "requested_operations": ["operation1", "operation2"],
+            "business_vocabulary": ["term1", "term2"],
+            "is_evolution_request": false
+        }}
+        """
+
     def _interpret_business_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Interpret business request and create SWEA coordination plan with TechLeadSWEA governance"""
         try:
             request = payload.get("request", "")
-            
+            context = payload.get("context", "academic")
+
             # First, check if this is a relationship creation request
             relationship_info = self._detect_relationship_request(request)
-            
+
             if relationship_info["is_relationship"]:
-                logger.info(f"🔗 {self.entity_name}BAE: Detected relationship request - {relationship_info['description']}")
-                return self._handle_relationship_request(request, payload.get("context", "academic"), relationship_info)
-            
+                logger.info(
+                    f"🔗 {self.entity_name}BAE: Detected relationship request - {relationship_info['description']}"
+                )
+                return self._handle_relationship_request(request, context, relationship_info)
+
             # Determine if this is evolution or new generation
             is_evolution = self._is_evolution_request(request)
-            
+
             # Handle evolution requests differently than initial generation
             if is_evolution:
                 # For evolution, we need to preserve existing attributes
@@ -373,26 +405,30 @@ class BaseBae(BaseAgent):
                 if self.current_schema:
                     current_schema = self.current_schema
                     if is_debug_mode():
-                        logger.info(f"🔍 {self.entity_name}BAE: Using cached schema with {len(current_schema.get('attributes', []))} attributes: {current_schema.get('attributes', [])}")
+                        logger.info(
+                            f"🔍 {self.entity_name}BAE: Using cached schema with {len(current_schema.get('attributes', []))} attributes: {current_schema.get('attributes', [])}"
+                        )
                 else:
                     # Try to load from memory/context store
                     logger.info(f"🔍 {self.entity_name}BAE: Loading stored schema for evolution...")
                     self._load_stored_schema()
                     current_schema = self.current_schema or {"attributes": []}
                     if is_debug_mode():
-                        logger.info(f"🔍 {self.entity_name}BAE: Loaded schema with {len(current_schema.get('attributes', []))} attributes: {current_schema.get('attributes', [])}")
-                
+                        logger.info(
+                            f"🔍 {self.entity_name}BAE: Loaded schema with {len(current_schema.get('attributes', []))} attributes: {current_schema.get('attributes', [])}"
+                        )
+
                 # Use specialized evolution handling
                 evolution_result = self._handle_evolution_request(
-                    request, payload.get("context", "academic"), current_schema
+                    request, context, current_schema
                 )
-                
+
                 if evolution_result:
                     # Use the evolution result which properly preserves existing attributes
                     extracted_attributes = evolution_result.get("extracted_attributes", [])
                     interpretation = {
                         "entity": self.entity_name,
-                        "domain": getattr(self, 'domain', 'academic'),
+                        "domain": getattr(self, "domain", "academic"),
                         "attributes": extracted_attributes,
                         "extracted_attributes": extracted_attributes,  # Add for consistency
                         "is_evolution": True,
@@ -400,8 +436,13 @@ class BaseBae(BaseAgent):
                         "business_context": request,
                         "semantic_coherence": True,
                         "domain_knowledge_preserved": True,
-                        "interpreted_intent": evolution_result.get("interpreted_intent", f"evolve_{self.entity_name.lower()}_management_system"),
-                        "domain_operations": evolution_result.get("domain_operations", ["evolve_entity", "update_schema"]),
+                        "interpreted_intent": evolution_result.get(
+                            "interpreted_intent",
+                            f"evolve_{self.entity_name.lower()}_management_system",
+                        ),
+                        "domain_operations": evolution_result.get(
+                            "domain_operations", ["evolve_entity", "update_schema"]
+                        ),
                         "business_vocabulary": self._extract_business_vocabulary(),
                         "entity_focus": self.entity_name,
                         # Include evolution-specific metadata
@@ -414,7 +455,7 @@ class BaseBae(BaseAgent):
                     extracted_attributes = self._extract_attributes_from_request(request)
                     interpretation = {
                         "entity": self.entity_name,
-                        "domain": getattr(self, 'domain', 'academic'),
+                        "domain": getattr(self, "domain", "academic"),
                         "attributes": extracted_attributes,
                         "extracted_attributes": extracted_attributes,  # Add for consistency
                         "is_evolution": True,
@@ -428,22 +469,39 @@ class BaseBae(BaseAgent):
                         "entity_focus": self.entity_name,
                     }
             else:
-                # For initial generation, use standard attribute extraction
-                extracted_attributes = self._extract_attributes_from_request(request)
-                interpretation = {
+                # This is for initial generation from business request
+                prompt = self._build_interpretation_prompt(request, context)
+                interpretation_str = self.llm.generate_response(prompt)
+
+                try:
+                    interpretation = json.loads(self._clean_json_response(interpretation_str))
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse JSON from LLM response: {interpretation_str}")
+                    # Create a fallback interpretation
+                    interpretation = {
+                        "entity_focus": self.entity_name,
+                        "attributes_mentioned": self._get_default_attributes(),
+                        "requested_operations": ["create", "read", "update", "delete"],
+                        "business_vocabulary": [],
+                        "is_evolution_request": False,
+                    }
+
+                # Get attributes, with fallback to default
+                raw_attributes = interpretation.get("attributes_mentioned")
+                if not raw_attributes:
+                    raw_attributes = self._get_default_attributes()
+                attributes = self._normalize_attributes(raw_attributes)
+                extracted_attributes = attributes
+
+                # Store the latest schema after successful interpretation
+                self.current_schema = {
                     "entity": self.entity_name,
-                    "domain": getattr(self, 'domain', 'academic'),
-                    "attributes": extracted_attributes,
-                    "extracted_attributes": extracted_attributes,  # Add for consistency
-                    "is_evolution": False,
-                    "request_type": "generation",
-                    "business_context": request,
-                    "semantic_coherence": True,
-                    "domain_knowledge_preserved": True,
-                    "interpreted_intent": f"create_{self.entity_name.lower()}_management_system",
-                    "domain_operations": ["create_entity", "setup_crud"],
-                    "business_vocabulary": self._extract_business_vocabulary(),
-                    "entity_focus": self.entity_name,
+                    "attributes": attributes,
+                    "context": context,
+                    "generated_at": datetime.now().isoformat(),
+                    "business_rules": self._get_business_rules(),
+                    "is_evolution": is_evolution,
+                    "interpretation": interpretation,  # Store full interpretation for debugging
                 }
 
             # Create comprehensive coordination plan with TechLeadSWEA governance
@@ -539,14 +597,14 @@ class BaseBae(BaseAgent):
                 }
 
             # Preserve domain knowledge for reusability
-            self._update_domain_knowledge(request, extracted_attributes)
+            self._update_domain_knowledge(context, extracted_attributes)
             
             # CRITICAL: Update current schema with the latest attributes for future evolution requests
             # This ensures the next evolution request can access the current attributes
             updated_schema = {
                 "entity": self.entity_name,
                 "attributes": extracted_attributes,
-                "context": payload.get("context", "academic"),
+                "context": context,
                 "generated_at": datetime.now().isoformat(),
                 "business_rules": self._get_business_rules(),
                 "is_evolution": is_evolution,
@@ -567,12 +625,14 @@ class BaseBae(BaseAgent):
                 # Preserve domain knowledge with updated attributes
                 domain_knowledge_data = {
                     "entity": self.entity_name,
-                    "context": payload.get("context", "academic"),
+                    "context": context,
                     "timestamp": datetime.now().isoformat(),
                     "interpretation": interpretation,
                     "current_attributes": extracted_attributes,
                 }
-                context_store.preserve_domain_knowledge(self.entity_name.lower(), domain_knowledge_data)
+                context_store.preserve_domain_knowledge(
+                    self.entity_name.lower(), domain_knowledge_data
+                )
                 
                 # Also update agent memory in context store
                 context_store.update_agent_memory_key(self.name, "current_schema", updated_schema)
@@ -651,7 +711,7 @@ class BaseBae(BaseAgent):
         return errors
 
     def _handle_evolution_request(
-        self, business_request: str, context: str, current_schema: Dict[str, Any]
+        self, business_request: str, context: str, current_attributes: List[str]
     ) -> Dict[str, Any]:
         """Handle evolution requests that modify existing entities"""
         current_attributes = current_schema.get("attributes", [])
@@ -1009,8 +1069,11 @@ class BaseBae(BaseAgent):
             or (has_include and has_attribute_keyword)
         )
 
-    def _get_default_attributes(self) -> List[str]:
-        """Get default attributes for this entity type"""
+    def _get_default_attributes(self) -> List[Any]:
+        """
+        Get default attributes for this domain entity.
+        Must be implemented by concrete BAEs.
+        """
         # Use entity-specific BAE implementation if available, otherwise use minimal defaults
         if hasattr(self, '_get_entity_specific_defaults'):
             return self._get_entity_specific_defaults()
@@ -1169,13 +1232,25 @@ class BaseBae(BaseAgent):
         ]
 
     def _generate_schema(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate Pydantic schema maintaining domain entity focus"""
-        attributes = payload.get("attributes", self._get_default_attributes())
+        """Generate schema based on attributes and context"""
         context = payload.get("context", "academic")
+        
+        # Normalize attributes to the new dictionary format
+        raw_attributes = payload.get("attributes", self._get_default_attributes())
+        attributes = self._normalize_attributes(raw_attributes)
+
+        schema = {
+            "entity": self.entity_name,
+            "code": "", # Will be filled by LLM
+            "attributes": attributes,
+            "context": context,
+            "business_rules": self._get_business_rules(),
+            "generated_at": datetime.now().isoformat(),
+        }
 
         prompt = f"""
         Generate a Pydantic model for {self.entity_name} entity with these attributes:
-        {', '.join(attributes)}
+        {', '.join([f"{attr['name']}: {attr['type']}" for attr in attributes])}
 
         Context: {context}
         Business Rules: {'; '.join(self._get_business_rules())}
@@ -1192,21 +1267,13 @@ class BaseBae(BaseAgent):
         """
 
         schema_code = self.llm.generate_domain_entity_response(prompt, self.entity_name)
+        schema["code"] = schema_code
 
-        schema_info = {
-            "entity": self.entity_name,
-            "code": schema_code,
-            "attributes": attributes,
-            "context": context,
-            "business_rules": self._get_business_rules(),
-            "generated_at": datetime.now().isoformat(),
-        }
-
-        self.current_schema = schema_info
-        self.update_memory("current_schema", schema_info)
+        self.current_schema = schema
+        self.update_memory("current_schema", schema)
         self._update_domain_knowledge(context, attributes)
 
-        return schema_info
+        return schema
 
     def _evolve_schema(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Evolve schema while preserving domain knowledge and semantic coherence"""
@@ -1395,23 +1462,20 @@ class BaseBae(BaseAgent):
             }
 
     def _get_domain_info(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Get comprehensive domain information for this BAE"""
+        """Return comprehensive information about the domain entity"""
         return {
-            "entity": self.entity_name,
+            "entity_name": self.entity_name,
+            "domain": getattr(self, "domain", "N/A"),
             "domain_keywords": self.domain_keywords,
-            "default_attributes": self._get_default_attributes(),
             "business_rules": self._get_business_rules(),
+            "default_attributes": self._get_default_attributes(),
             "current_schema": self.current_schema,
-            "context_configurations": self.context_configurations,
             "domain_knowledge": self.domain_knowledge,
-            "memory_summary": {
-                "total_interactions": len(self.memory.get("interactions", [])),
-                "last_schema_update": self.current_schema.get("generated_at", "never"),
-            },
+            "supported_tasks": list(self.handle(None, {}).get("supported_tasks", [])),
         }
 
     def _update_domain_knowledge(self, context: str, attributes: List[str]):
-        """Update domain knowledge for reusability"""
+        """Update domain knowledge store with new schema"""
         if context not in self.domain_knowledge:
             self.domain_knowledge[context] = {}
 

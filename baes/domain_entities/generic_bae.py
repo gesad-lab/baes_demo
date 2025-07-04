@@ -128,7 +128,8 @@ class GenericBae(BaseAgent):
             self.current_entity = detected_entity
 
         # Extract attributes and create domain-focused plan
-        attributes = interpretation.get("attributes_mentioned", self._get_default_attributes())
+        raw_attributes = interpretation.get("attributes_mentioned", self._get_default_attributes())
+        attributes = self._normalize_attributes(raw_attributes)
         business_vocab = interpretation.get("business_vocabulary", self.business_vocabulary)
 
         # Create SWEA coordination plan with correct entity focus
@@ -185,7 +186,7 @@ class GenericBae(BaseAgent):
         )
 
     def _create_initial_generation_plan(
-        self, attributes: List[str], context: str, business_vocab: List[str], entity: str
+        self, attributes: List[Dict[str, Any]], context: str, business_vocab: List[str], entity: str
     ) -> List[Dict[str, Any]]:
         """Create SWEA coordination plan with correct entity focus"""
 
@@ -258,36 +259,18 @@ class GenericBae(BaseAgent):
 
     def _pluralize_entity(self, entity: str) -> str:
         """Simple pluralization for common entities"""
-        if entity.endswith("y"):
-            return entity[:-1] + "ies"
-        elif entity.endswith(("s", "sh", "ch", "x", "z")):
-            return entity + "es"
-        else:
-            return entity + "s"
+        return entity.rstrip("s") + "ies" if entity.endswith("y") else entity + "s"
 
-    def _get_default_attributes(self) -> List[str]:
-        """Get default attributes based on current entity"""
-        entity_defaults = {
-            "Student": ["name: str", "registration_number: str", "course: str"],
-            "Book": ["title: str", "author: str", "ISBN: str"],
-            "Course": ["name: str", "code: str", "credits: int"],
-            "Teacher": ["name: str", "department: str", "email: str"],
-        }
-        return entity_defaults.get(self.current_entity, ["name: str", "id: str"])
+    def _get_default_attributes(self) -> List[Dict[str, Any]]:
+        """Get default attributes for a generic entity"""
+        return [
+            {"name": "name", "type": "str"},
+            {"name": "description", "type": "str"},
+        ]
 
     def _initialize_business_vocabulary(self) -> List[str]:
-        """Initialize entity-agnostic business vocabulary"""
-        return [
-            "entity",
-            "domain",
-            "business",
-            "academic",
-            "management",
-            "system",
-            "operations",
-            "data",
-            "information",
-        ]
+        """Initialize generic business vocabulary"""
+        return ["entity", "item", "record", "data", "system"]
 
     def _initialize_domain_knowledge(self):
         """Initialize domain knowledge for the entity"""
@@ -355,7 +338,7 @@ class GenericBae(BaseAgent):
         )
 
     def _update_domain_knowledge_from_request(
-        self, request: str, attributes: List[str], context: str
+        self, request: str, attributes: List[Dict[str, Any]], context: str
     ):
         """Update domain knowledge based on business request"""
         if self.current_entity not in self.domain_knowledge:

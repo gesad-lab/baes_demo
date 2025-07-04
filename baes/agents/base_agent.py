@@ -189,6 +189,27 @@ class BaseAgent(ABC):
         self.log_interaction(task, {}, response, success=True)
         return response
 
+    def _normalize_attributes(self, attributes: List[Any]) -> List[Dict[str, Any]]:
+        """Normalize attributes to a consistent dict format."""
+        if not attributes:
+            return []
+        
+        # If the first item is a dictionary, assume all are in the new format
+        if isinstance(attributes[0], dict):
+            return attributes
+
+        normalized_attrs = []
+        for attr in attributes:
+            if isinstance(attr, str):
+                parts = attr.split(":")
+                name = parts[0].strip()
+                attr_type = parts[1].strip() if len(parts) > 1 else "str"
+                normalized_attrs.append({"name": name, "type": attr_type})
+            else:
+                # Handle unexpected formats gracefully
+                normalized_attrs.append({"name": str(attr), "type": "str"})
+        return normalized_attrs
+
     def __str__(self) -> str:
         return f"{self.agent_type}({self.name}): {self.role}"
 

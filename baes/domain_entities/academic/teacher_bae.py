@@ -1,5 +1,5 @@
 import logging
-from typing import List
+from typing import List, Dict, Any
 
 from ..base_bae import BaseBae
 
@@ -50,12 +50,12 @@ class TeacherBae(BaseBae):
             "education",
         ]
 
-    def _get_default_attributes(self) -> List[str]:
+    def _get_default_attributes(self) -> List[Dict[str, Any]]:
         """Get default attributes for Teacher domain entity"""
         return [
-            "name: str",
-            "employee_id: str",
-            "department: str",
+            {"name": "name", "type": "str"},
+            {"name": "employee_id", "type": "str"},
+            {"name": "department", "type": "str"},
         ]
 
     def _get_business_rules(self) -> List[str]:
