@@ -230,6 +230,14 @@ class BAEConversationalCLI:
             "auto_restart_on_entity_changes": True,  # For PoC: auto-restart servers after entity changes
         }
         self.conversation_history = []
+
+        # removing the context_store.json file
+        if Path("database/context_store.json").exists():
+            Path("database/context_store.json").unlink()
+        # removing the bae_session.json file
+        if Path("bae_session.json").exists():
+            Path("bae_session.json").unlink()
+
         print("🆕 Starting fresh session")
 
     def get_user_input(self) -> str:
