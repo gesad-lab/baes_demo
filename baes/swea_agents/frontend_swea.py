@@ -669,6 +669,9 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
             # Clean LLM response to remove markdown formatting (DRY principle)
             code = self._clean_llm_response(response_text)
 
+            # Sanitize unsupported Streamlit arguments
+            code = self._sanitize_ui_code(code)
+
             # NOTE: st.set_page_config is NOT required in entity pages as they are imported into main app
 
             if "API_BASE_URL" not in code:
@@ -731,6 +734,9 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
                 # Build Streamlit UI code based on attributes (DRY template)
                 code = self._create_streamlit_ui_code(entity, parsed_attributes, context)
 
+                # Sanitize unsupported Streamlit arguments (template shouldn't produce, but keep safe)
+                code = self._sanitize_ui_code(code)
+
             # Write the generated code to the managed system
             file_path = self._write_to_managed_system(entity, code)
 
@@ -759,6 +765,9 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
 
             # Create comprehensive Streamlit UI
             code = self._create_streamlit_ui_code(entity, parsed_attributes, context)
+
+            # Sanitize unsupported Streamlit arguments (template shouldn't produce, but keep safe)
+            code = self._sanitize_ui_code(code)
 
             return {
                 "success": True,
@@ -855,19 +864,31 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
             return self.create_error_response("fix_issues", str(e), "fix_error")
 
     def _parse_attributes(self, attributes: List[str]) -> List[Dict[str, str]]:
-        """Parse attributes to handle different formats"""
+        """Parse attributes to handle different formats and detect foreign keys"""
         parsed_attributes = []
         for attr in attributes:
             if isinstance(attr, str):
                 if ":" in attr:
                     name, attr_type = attr.split(":", 1)
-                    parsed_attributes.append({"name": name.strip(), "type": attr_type.strip()})
+                    attr_dict = {"name": name.strip(), "type": attr_type.strip()}
                 else:
-                    parsed_attributes.append({"name": attr.strip(), "type": "str"})
+                    attr_dict = {"name": attr.strip(), "type": "str"}
             elif isinstance(attr, dict):
-                parsed_attributes.append(attr)
+                # Ensure a copy so we don't mutate original
+                attr_dict = {**attr}
             else:
-                parsed_attributes.append({"name": str(attr), "type": "str"})
+                attr_dict = {"name": str(attr), "type": "str"}
+
+            # Detect foreign key attributes (e.g., course_id)
+            name_lower = attr_dict["name"].lower()
+            if name_lower != "id" and name_lower.endswith("_id"):
+                related_entity = name_lower[:-3]  # strip _id -> course
+                attr_dict["is_foreign_key"] = True
+                attr_dict["related_entity"] = related_entity
+            else:
+                attr_dict["is_foreign_key"] = False
+
+            parsed_attributes.append(attr_dict)
         return parsed_attributes
 
     def _create_streamlit_ui_code(
@@ -978,25 +999,53 @@ API_PORT = os.getenv("REALWORLD_FASTAPI_PORT", "8000")
 API_BASE_URL = f"http://localhost:{API_PORT}"'''
     
     def _generate_form_fields_template(self, attributes: List[Dict[str, str]]) -> str:
-        """Generate form fields template based on attributes (DRY) - excludes id field"""
+        """Generate form fields template based on attributes (DRY) - excludes primary id, builds dropdown for foreign keys"""
         form_fields = []
         for attr in attributes:
             field_name = attr["name"]
-            field_type = attr["type"].lower()
-            
-            # Skip the 'id' field - it should be auto-generated, not user-editable
+            field_type = attr.get("type", "str").lower()
+            is_fk = attr.get("is_foreign_key", False)
+            related_entity = attr.get("related_entity", "")
+
+            # Skip the primary 'id' field - auto-generated
             if field_name.lower() == "id":
                 continue
-            
-            if field_type in ["email"]:
-                form_fields.append(f'        {field_name} = st.text_input("{field_name.title()}", key="{field_name}_input")')
-            elif field_type in ["int", "integer"]:
-                form_fields.append(f'        {field_name} = st.number_input("{field_name.title()}", min_value=0, key="{field_name}_input")')
-            elif field_type in ["date"]:
-                form_fields.append(f'        {field_name} = st.date_input("{field_name.title()}", key="{field_name}_input")')
+
+            if is_fk and related_entity:
+                # Generate dropdown/selectbox for foreign key relationship
+                form_fields.append(
+                    f"""        # Foreign key: {related_entity}
+        try:
+            {related_entity}_resp = requests.get(f"{{API_BASE_URL}}/api/{related_entity}s/")
+            {related_entity}_resp.raise_for_status()
+            {related_entity}_data = {related_entity}_resp.json()
+            {related_entity}_options = {{}}
+            for item in {related_entity}_data:
+                {related_entity}_options[item['id']] = item.get('name', str(item['id']))
+        except requests.exceptions.RequestException:
+            {related_entity}_options = {{}}
+            st.error('Failed to load {related_entity} options')
+        {field_name} = st.selectbox("{related_entity.title()}", options=list({related_entity}_options.keys()), format_func=lambda o: {related_entity}_options.get(o, str(o)))
+"""
+                )
             else:
-                form_fields.append(f'        {field_name} = st.text_input("{field_name.title()}", key="{field_name}_input")')
-        
+                if field_type in ["email"]:
+                    form_fields.append(
+                        f'        {field_name} = st.text_input("{field_name.title()}", key="{field_name}_input")'
+                    )
+                elif field_type in ["int", "integer"]:
+                    form_fields.append(
+                        f'        {field_name} = st.number_input("{field_name.title()}", min_value=0, key="{field_name}_input")'
+                    )
+                elif field_type in ["date"]:
+                    form_fields.append(
+                        f'        {field_name} = st.date_input("{field_name.title()}", key="{field_name}_input")'
+                    )
+                else:
+                    form_fields.append(
+                        f'        {field_name} = st.text_input("{field_name.title()}", key="{field_name}_input")'
+                    )
+
         return '\n'.join(form_fields)
     
     def _generate_validation_template(self, attributes: List[Dict[str, str]]) -> str:
@@ -1004,7 +1053,7 @@ API_BASE_URL = f"http://localhost:{API_PORT}"'''
         validation_rules = []
         for attr in attributes:
             field_name = attr["name"]
-            field_type = attr["type"].lower()
+            field_type = attr.get("type", "str").lower()
             
             # Skip the 'id' field - it should be auto-generated, not validated by user
             if field_name.lower() == "id":
@@ -1215,13 +1264,33 @@ if __name__ == "__main__":
         
         for attr in attributes_meta:
             name = attr["name"]
+            is_fk = attr.get("is_foreign_key", False)
+            related_entity = attr.get("related_entity", "")
             # Skip the 'id' field - it should be displayed as read-only above, not editable
             if name.lower() == "id":
                 continue
             # 12 spaces indentation to align with code inside the "with st.form" block
-            edit_form_fields_lines.append(
-                f'            {name}_edit = st.text_input("{name.title().replace("_"," ")}", value=edit_data.get("{name}", ""), key="{name}_edit")'
-            )
+            if is_fk and related_entity:
+                edit_form_fields_lines.append(
+                    f'            # Foreign key: {related_entity}\n'
+                    f'            try:\n'
+                    f'                {related_entity}_resp = requests.get(f"{{API_BASE_URL}}/api/{related_entity}s/")\n'
+                    f'                {related_entity}_resp.raise_for_status()\n'
+                    f'                {related_entity}_data = {related_entity}_resp.json()\n'
+                    f'                {related_entity}_options = {{}}\n'
+                    f'                for item in {related_entity}_data:\n'
+                    f'                    {related_entity}_options[item[\'id\']] = item.get(\'name\', str(item[\'id\']))'
+                )
+                edit_form_fields_lines.append(
+                    f'            except requests.exceptions.RequestException:\n'
+                    f'                {related_entity}_options = {{}}\n'
+                    f'                st.error("Failed to load {related_entity} options")\n'
+                    f'            {name}_edit = st.selectbox("{related_entity.title()}", options=list({related_entity}_options.keys()), index=0 if edit_data.get("{name}") is None else list({related_entity}_options.keys()).index(edit_data.get("{name}")), format_func=lambda o: {related_entity}_options.get(o, str(o)))\n'
+                )
+            else:
+                edit_form_fields_lines.append(
+                    f'            {name}_edit = st.text_input("{name.title().replace("_"," ")}", value=edit_data.get("{name}", ""), key="{name}_edit")'
+                )
         edit_form_fields = "\n".join(edit_form_fields_lines)
 
         # Build edit validation rules - exclude 'id' field
@@ -1334,6 +1403,14 @@ if __name__ == "__main__":
             logger.debug(f"   Original length: {len(response_text)} chars")
             logger.debug(f"   Cleaned length: {len(code)} chars")
         
+        return code
+
+    def _sanitize_ui_code(self, code: str) -> str:
+        """Remove Streamlit arguments that are not supported in current version."""
+        import re
+        # Remove , required=True or required = True occurrences inside function calls
+        code = re.sub(r"\s*,\s*required\s*=\s*True", "", code)
+        code = re.sub(r"required\s*=\s*True\s*,", "", code)
         return code
 
 

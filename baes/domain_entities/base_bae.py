@@ -228,7 +228,7 @@ class BaseBae(BaseAgent):
         
         # For relationship creation, we don't change attributes of the entity
         # We just add a foreign key relationship
-        existing_attributes = []
+        existing_attributes: List[str] = []
         if self.current_schema and self.current_schema.get("attributes"):
             existing_attributes = self.current_schema["attributes"]
         else:
@@ -238,14 +238,28 @@ class BaseBae(BaseAgent):
                 existing_attributes = self.current_schema["attributes"]
             else:
                 existing_attributes = self._get_default_attributes()
+
+        # ------------------------------------------------------------------
+        # 🔗 Include foreign-key attribute so Backend/Frontend SWEAs generate
+        #     proper models, API fields and form inputs.  Without this the UI
+        #     will miss the relationship field even though the DB column
+        #     exists (issue reported by user).
+        # ------------------------------------------------------------------
+        foreign_key_attr = f"{related_entity.lower()}_id: int"
+
+        # Ensure we do not duplicate if attribute already present (case-insensitive)
+        if all(foreign_key_attr.split(":")[0].strip() != attr.split(":")[0].strip() for attr in existing_attributes):
+            updated_attributes = existing_attributes + [foreign_key_attr]
+        else:
+            updated_attributes = existing_attributes
         
         # The relationship will be added by DatabaseSWEA._create_relationships
         # but the entity attributes should remain the same
         interpretation = {
             "entity": self.entity_name,
             "domain": getattr(self, 'domain', 'academic'),
-            "attributes": existing_attributes,  # Preserve existing attributes
-            "extracted_attributes": existing_attributes,
+            "attributes": updated_attributes,  # Include FK attribute for code generation
+            "extracted_attributes": updated_attributes,
             "is_evolution": False,  # This is relationship creation, not evolution
             "request_type": "relationship",
             "business_context": request,
@@ -265,7 +279,7 @@ class BaseBae(BaseAgent):
                 "task_type": "coordinate_system_generation",
                 "payload": {
                     "entity": self.entity_name,
-                    "attributes": existing_attributes,
+                    "attributes": updated_attributes,
                     "context": request,
                     "is_evolution": False,
                     "is_relationship": True,
@@ -283,7 +297,7 @@ class BaseBae(BaseAgent):
                 "task_type": "create_relationships",  # Use relationship creation task
                 "payload": {
                     "entity": self.entity_name,
-                    "attributes": existing_attributes,
+                    "attributes": updated_attributes,
                     "context": request,
                     "relationships": [
                         {
@@ -299,7 +313,7 @@ class BaseBae(BaseAgent):
                 "task_type": "generate_api",  # Update API to include relationship
                 "payload": {
                     "entity": self.entity_name,
-                    "attributes": existing_attributes,
+                    "attributes": updated_attributes,
                     "context": request,
                     "relationship_update": True,
                     "relationships": [relationship_info],
@@ -313,7 +327,7 @@ class BaseBae(BaseAgent):
                 "task_type": "generate_ui",
                 "payload": {
                     "entity": self.entity_name,
-                    "attributes": existing_attributes,
+                    "attributes": updated_attributes,
                     "context": request,
                     "relationship_update": True,
                     "relationships": [relationship_info],
