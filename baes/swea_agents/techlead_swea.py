@@ -56,6 +56,8 @@ class TechLeadSWEA(BaseAgent):
         "make_tech_decision": "_make_tech_decision",
         "assess_system_health": "_assess_system_health",
         "hybrid_coordination": "_hybrid_coordination",
+        "verify_user_request_compliance": "_verify_user_request_compliance",
+        "verify_artifact_compliance": "_verify_artifact_compliance",
     }
 
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -78,6 +80,10 @@ class TechLeadSWEA(BaseAgent):
             return self._manage_quality_gate(payload)
         elif task == "hybrid_coordination":
             return self._hybrid_coordination(payload)
+        elif task == "verify_user_request_compliance":
+            return self._verify_user_request_compliance(payload)
+        elif task == "verify_artifact_compliance":
+            return self._verify_artifact_compliance(payload)
         else:
             return {"error": f"Unknown TechLeadSWEA task: {task}", "success": False}
 
@@ -92,8 +98,34 @@ class TechLeadSWEA(BaseAgent):
             context = payload.get("context", "")
             is_evolution = payload.get("is_evolution", False)
             business_requirements = payload.get("business_requirements", {})
+            user_request = payload.get("user_request", "")  # Add user request to payload
+            
             if is_debug_mode():
                 logger.info("🧠 TechLeadSWEA: Coordinating system generation for %s entity", entity)
+            
+            # NEW: Verify user request compliance before proceeding
+            if user_request:
+                compliance_result = self._verify_user_request_compliance({
+                    "entity": entity,
+                    "user_request": user_request,
+                    "extracted_attributes": attributes,
+                    "context": context
+                })
+                
+                if not compliance_result.get("success", True):
+                    logger.warning(f"❌ TechLeadSWEA: User request compliance verification failed for {entity}")
+                    return {
+                        "success": False,
+                        "error": "User request compliance verification failed",
+                        "compliance_issues": compliance_result.get("issues", []),
+                        "suggestions": compliance_result.get("suggestions", []),
+                        "compliance_score": compliance_result.get("compliance_score", 0.0),
+                        "technical_governance": False,
+                    }
+                else:
+                    logger.info(f"✅ TechLeadSWEA: User request compliance verified for {entity}")
+                    logger.info(f"   📊 Compliance score: {compliance_result.get('compliance_score', 0.0):.2f}")
+            
             # Analyze technical requirements and create enhanced coordination plan
             technical_analysis = self._analyze_technical_requirements(
                 entity, attributes, context, is_evolution
@@ -111,6 +143,7 @@ class TechLeadSWEA(BaseAgent):
                 "attributes": attributes,
                 "context": context,
                 "is_evolution": is_evolution,
+                "user_request": user_request,  # Store user request for reference
                 "technical_analysis": technical_analysis,
                 "quality_gates": quality_gates,
                 "enhanced_plan": enhanced_plan,
@@ -136,6 +169,7 @@ class TechLeadSWEA(BaseAgent):
                     "quality_gates": quality_gates,
                     "governance_strategy": "centralized_technical_oversight",
                     "approval_workflow": "sequential_with_quality_gates",
+                    "user_request_verified": bool(user_request),  # Indicate if verification was performed
                 },
                 "message": f"Technical coordination plan established for {entity}",
                 "technical_governance": True,
@@ -2250,3 +2284,277 @@ class TechLeadSWEA(BaseAgent):
             for key, value in kwargs.items():
                 if value is not None:
                     logger.info("   📋 %s: %s", key.replace("_", " ").title(), value)
+
+    def _verify_user_request_compliance(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Verify that extracted attributes match the user's original request.
+        
+        This verification ensures that the system correctly interpreted the user's
+        natural language request and extracted the appropriate attributes.
+        """
+        try:
+            entity = payload.get("entity", "Unknown")
+            user_request = payload.get("user_request", "")
+            extracted_attributes = payload.get("extracted_attributes", [])
+            context = payload.get("context", "academic")
+            
+            logger.info(f"🔍 TechLeadSWEA: Verifying user request compliance for {entity}")
+            logger.info(f"   📝 User request: {user_request}")
+            logger.info(f"   📋 Extracted attributes: {extracted_attributes}")
+            
+            if not user_request:
+                return {
+                    "success": False,
+                    "compliance_score": 0.0,
+                    "issues": ["No user request provided for verification"],
+                    "suggestions": ["Provide the original user request for verification"],
+                    "verification_type": "user_request_compliance"
+                }
+            
+            if not extracted_attributes:
+                return {
+                    "success": False,
+                    "compliance_score": 0.0,
+                    "issues": ["No attributes extracted from user request"],
+                    "suggestions": ["Check BAE attribute extraction logic"],
+                    "verification_type": "user_request_compliance"
+                }
+            
+            # Analyze user request for expected attributes
+            expected_attributes = self._analyze_user_request_for_attributes(user_request, entity, context)
+            
+            # Compare extracted attributes with expected attributes
+            compliance_result = self._compare_attributes_compliance(
+                expected_attributes, extracted_attributes, user_request
+            )
+            
+            # Generate detailed compliance report
+            compliance_report = {
+                "success": compliance_result["is_compliant"],
+                "compliance_score": compliance_result["compliance_score"],
+                "user_request": user_request,
+                "expected_attributes": expected_attributes,
+                "extracted_attributes": extracted_attributes,
+                "missing_attributes": compliance_result["missing_attributes"],
+                "extra_attributes": compliance_result["extra_attributes"],
+                "issues": compliance_result["issues"],
+                "suggestions": compliance_result["suggestions"],
+                "verification_type": "user_request_compliance",
+                "entity": entity,
+                "context": context
+            }
+            
+            if compliance_result["is_compliant"]:
+                logger.info(f"✅ TechLeadSWEA: User request compliance verified for {entity}")
+                logger.info(f"   📊 Compliance score: {compliance_result['compliance_score']:.2f}")
+            else:
+                logger.warning(f"❌ TechLeadSWEA: User request compliance issues for {entity}")
+                for issue in compliance_result["issues"][:3]:
+                    logger.warning(f"   - {issue}")
+            
+            return compliance_report
+            
+        except Exception as e:
+            logger.error(f"❌ TechLeadSWEA: User request compliance verification failed: {str(e)}")
+            return {
+                "success": False,
+                "compliance_score": 0.0,
+                "issues": [f"Verification process failed: {str(e)}"],
+                "suggestions": ["Retry the verification process"],
+                "verification_type": "user_request_compliance"
+            }
+
+    def _analyze_user_request_for_attributes(self, user_request: str, entity: str, context: str) -> List[Dict[str, Any]]:
+        """
+        Analyze user request to determine expected attributes.
+        
+        Uses LLM to intelligently parse the user's natural language request
+        and extract the attributes they intended to include.
+        """
+        try:
+            prompt = f"""
+            As a TechLeadSWEA, analyze this user request to determine what attributes they want for the {entity} entity.
+
+            USER REQUEST: "{user_request}"
+            ENTITY: {entity}
+            CONTEXT: {context}
+
+            Extract the attributes that the user explicitly requested or implied.
+            Consider:
+            1. Explicitly mentioned attributes (e.g., "with name and email")
+            2. Implied attributes based on context (e.g., "student" implies basic student fields)
+            3. Business domain requirements for the entity type
+            4. Common attributes for the given context
+
+            Return a JSON list of attribute objects:
+            [
+                {{"name": "attribute_name", "type": "attribute_type", "source": "explicit|implied|domain"}},
+                ...
+            ]
+
+            Examples:
+            - "Create a student with name and email" → [{{"name": "name", "type": "str", "source": "explicit"}}, {{"name": "email", "type": "str", "source": "explicit"}}]
+            - "Add age to student" → [{{"name": "age", "type": "int", "source": "explicit"}}]
+            - "Create a course" → [{{"name": "name", "type": "str", "source": "domain"}}, {{"name": "code", "type": "str", "source": "domain"}}]
+
+            Focus on what the user actually requested, not what might be useful.
+            """
+
+            response = self.llm_client.generate_response(
+                prompt,
+                system_prompt="You are a TechLeadSWEA analyzing user requests for attribute extraction. Be precise and conservative - only include attributes that are clearly requested or domain-essential."
+            )
+            
+            # Parse LLM response
+            try:
+                import json
+                cleaned_response = self._clean_json_response(response)
+                expected_attributes = json.loads(cleaned_response)
+                
+                if not isinstance(expected_attributes, list):
+                    logger.warning(f"LLM response is not a list: {type(expected_attributes)}")
+                    return []
+                
+                return expected_attributes
+                
+            except json.JSONDecodeError as e:
+                logger.warning(f"Failed to parse LLM response as JSON: {e}")
+                # Fallback: extract attributes using simple pattern matching
+                return self._fallback_attribute_extraction(user_request, entity)
+                
+        except Exception as e:
+            logger.error(f"Failed to analyze user request: {e}")
+            return self._fallback_attribute_extraction(user_request, entity)
+
+    def _fallback_attribute_extraction(self, user_request: str, entity: str) -> List[Dict[str, Any]]:
+        """
+        Fallback method for attribute extraction using simple pattern matching.
+        """
+        import re
+        
+        # Common attribute patterns
+        attribute_patterns = {
+            "name": r"\bname\b",
+            "email": r"\bemail\b", 
+            "age": r"\bage\b",
+            "phone": r"\bphone\b",
+            "address": r"\baddress\b",
+            "course": r"\bcourse\b",
+            "code": r"\bcode\b",
+            "credits": r"\bcredits\b",
+            "department": r"\bdepartment\b"
+        }
+        
+        extracted = []
+        user_request_lower = user_request.lower()
+        
+        for attr_name, pattern in attribute_patterns.items():
+            if re.search(pattern, user_request_lower):
+                # Determine type based on attribute name
+                attr_type = "str"
+                if attr_name in ["age", "credits"]:
+                    attr_type = "int"
+                elif attr_name in ["gpa", "grade"]:
+                    attr_type = "float"
+                
+                extracted.append({
+                    "name": attr_name,
+                    "type": attr_type,
+                    "source": "pattern_match"
+                })
+        
+        return extracted
+
+    def _compare_attributes_compliance(self, expected_attributes: List[Dict[str, Any]], 
+                                     extracted_attributes: List[Dict[str, Any]], 
+                                     user_request: str) -> Dict[str, Any]:
+        """
+        Compare expected attributes with extracted attributes to determine compliance.
+        """
+        try:
+            # Normalize attribute lists for comparison
+            expected_names = {attr.get("name", "").strip().lower() for attr in expected_attributes}
+            actual_names = {attr.get("name", "").strip().lower() for attr in extracted_attributes}
+            
+            # Find missing and extra attributes
+            missing_attributes = expected_names - actual_names
+            extra_attributes = actual_names - expected_names
+            
+            # Calculate compliance score
+            total_expected = len(expected_names)
+            total_extracted = len(actual_names)
+            matched_attributes = len(expected_names & actual_names)
+            
+            if total_expected == 0:
+                compliance_score = 1.0 if total_actual == 0 else 0.0
+            else:
+                # Calculate base compliance score
+                base_score = matched_attributes / total_expected
+                # Penalize extra attributes more severely
+                extra_penalty = len(extra_attributes) * 0.3  # 30% penalty per extra attribute
+                compliance_score = max(0.0, base_score - extra_penalty)
+            
+            # Determine if compliant
+            is_compliant = compliance_score >= 0.8 and len(missing_attributes) == 0 and len(extra_attributes) == 0
+            
+            # Generate issues and suggestions
+            issues = []
+            suggestions = []
+            artifact_issues = {}
+            
+            if missing_attributes:
+                issues.append(f"Missing attributes in generated artifacts: {', '.join(missing_attributes)}")
+                suggestions.append(f"Regenerate artifacts to include missing attributes: {', '.join(missing_attributes)}")
+                artifact_issues["missing_attributes"] = list(missing_attributes)
+            
+            if extra_attributes:
+                issues.append(f"Extra attributes in generated artifacts not requested: {', '.join(extra_attributes)}")
+                suggestions.append(f"Consider removing extra attributes: {', '.join(extra_attributes)}")
+                artifact_issues["extra_attributes"] = list(extra_attributes)
+            
+            if compliance_score < 0.8:
+                issues.append(f"Low artifact compliance score: {compliance_score:.2f} (expected >= 0.8)")
+                suggestions.append("Review artifact generation to better match user intent")
+                artifact_issues["low_compliance_score"] = compliance_score
+            
+            # Check for artifact-specific issues
+            for artifact_type, artifact_data in generated_artifacts.items():
+                if isinstance(artifact_data, dict) and not artifact_data.get("success", True):
+                    error_msg = artifact_data.get("error", f"{artifact_type} generation failed")
+                    artifact_issues[f"{artifact_type}_generation_failed"] = error_msg
+                    issues.append(error_msg)
+                    suggestions.append(f"Fix {artifact_type} generation issues")
+                    # Mark as non-compliant if any artifact failed
+                    is_compliant = False
+            
+            if not issues:
+                issues = []
+                suggestions = ["Artifact compliance verified successfully"]
+            
+            return {
+                "is_compliant": is_compliant,
+                "compliance_score": compliance_score,
+                "missing_attributes": list(missing_attributes),
+                "extra_attributes": list(extra_attributes),
+                "matched_attributes": matched_attributes,
+                "total_expected": total_expected,
+                "total_actual": total_actual,
+                "issues": issues,
+                "suggestions": suggestions,
+                "artifact_issues": artifact_issues
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to compare artifact compliance: {e}")
+            return {
+                "is_compliant": False,
+                "compliance_score": 0.0,
+                "missing_attributes": [],
+                "extra_attributes": [],
+                "matched_attributes": 0,
+                "total_expected": 0,
+                "total_actual": 0,
+                "issues": [f"Artifact compliance comparison failed: {str(e)}"],
+                "suggestions": ["Retry artifact compliance verification"],
+                "artifact_issues": {}
+            }

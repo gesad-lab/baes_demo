@@ -199,6 +199,14 @@ COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and 
     }
 
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle frontend SWEA tasks. Always use the full attribute list from the payload."""
+        attributes = payload.get("attributes")
+        if not attributes or not isinstance(attributes, list):
+            raise ValueError("FrontendSWEA requires a non-empty attribute list in the payload.")
+        for attr in attributes:
+            if not isinstance(attr, dict) or "name" not in attr or "type" not in attr:
+                raise ValueError(f"Invalid attribute format in FrontendSWEA: {attr}")
+
         if task not in self._SUPPORTED_TASKS:
             return self.create_error_response(
                 task,
@@ -520,24 +528,8 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
 
         except Exception as e:
             logger.error(f"❌ FrontendSWEA: Feedback interpretation failed: {e}")
-            # Return a basic interpretation structure as fallback
-            return {
-                "ui_improvements": {
-                    "missing_components": [
-                        "API_BASE_URL",
-                        "response.raise_for_status",
-                    ],
-                    "required_patterns": ["proper error handling", "form validation"],
-                    "user_experience": ["clear error messages", "success feedback"],
-                },
-                "form_fields": [],
-                "validation_rules": [],
-                "api_integration": {
-                    "base_url": 'API_BASE_URL = "http://localhost:8000"',
-                    "endpoints": {},
-                    "error_handling": ["try/except blocks", "response.raise_for_status"],
-                },
-            }
+            # Do not return a fallback. Raise an error to make failure explicit.
+            raise FrontendGenerationError(f"Failed to interpret feedback for UI generation: {e}") from e
 
     def _get_structured_feedback_injection(
         self, entity: str, swea_agent: str, task_type: str
@@ -618,7 +610,11 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
 
             if not attributes:
                 # Fallback to basic attributes if none provided
-                attributes = ["name:str", "email:str"]
+                # attributes = ["name:str", "email:str"]
+                # NO FALLBACK: If no attributes are found after interpretation, it's an error.
+                raise FrontendGenerationError(
+                    "No attributes were found in the feedback interpretation. Cannot generate UI."
+                )
 
             # Build the improved prompt
             prompt = self._build_prompt(entity, attributes, context)
@@ -728,9 +724,12 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
                     f"🎨 FrontendSWEA: Generating fresh UI code for {entity} using template generator"
                 )
 
-                # Parse attributes to structured list
+                # Parse attributes to structured list - CRITICAL: Use exact attributes from payload
                 parsed_attributes = self._parse_attributes(attributes)
-
+                
+                # Validate that we're using the exact attributes provided
+                logger.info(f"🔍 FrontendSWEA: Using exact attributes: {parsed_attributes}")
+                
                 # Build Streamlit UI code based on attributes (DRY template)
                 code = self._create_streamlit_ui_code(entity, parsed_attributes, context)
 
@@ -1007,6 +1006,7 @@ API_BASE_URL = f"http://localhost:{API_PORT}"'''
             field_type = attr.get("type", "str").lower()
             is_fk = attr.get("is_foreign_key", False)
             related_entity = attr.get("related_entity", "")
+            descriptive_field = attr.get("descriptive_field", "name")
 
             # Skip the primary 'id' field - auto-generated
             if field_name.lower() == "id":
@@ -1014,22 +1014,17 @@ API_BASE_URL = f"http://localhost:{API_PORT}"'''
 
             if is_fk and related_entity:
                 related_entity_lower = related_entity.lower()
-                descriptive_field = attr.get("descriptive_field", "name")
-                # Generate dropdown/selectbox for foreign key relationship
                 form_fields.append(
-                    f"""        # Foreign key: {related_entity}
-        try:
-            {related_entity_lower}_resp = requests.get(f"{{API_BASE_URL}}/api/{related_entity_lower}s/")
-            {related_entity_lower}_resp.raise_for_status()
-            {related_entity_lower}_data = {related_entity_lower}_resp.json()
-            {related_entity_lower}_options = {{}}
-            for item in {related_entity_lower}_data:
-                {related_entity_lower}_options[item['id']] = item.get('{descriptive_field}', str(item['id']))
-        except requests.exceptions.RequestException:
-            {related_entity_lower}_options = {{}}
-            st.error('Failed to load {related_entity} options')
-        {field_name} = st.selectbox("{related_entity.title()}", options=list({related_entity_lower}_options.keys()), format_func=lambda o: {related_entity_lower}_options.get(o, str(o)))
-"""
+                    f"        # Foreign key: {related_entity}\n"
+                    f"        try:\n"
+                    f"            {related_entity_lower}_resp = requests.get(f'{{API_BASE_URL}}/api/{related_entity_lower}s/')\n"
+                    f"            {related_entity_lower}_resp.raise_for_status()\n"
+                    f"            {related_entity_lower}_data = {related_entity_lower}_resp.json()\n"
+                    f"            {related_entity_lower}_options = {{item['id']: item.get('{descriptive_field}', str(item['id'])) for item in {related_entity_lower}_data}}\n"
+                    f"        except (requests.exceptions.RequestException, json.JSONDecodeError):\n"
+                    f"            {related_entity_lower}_options = {{}}\n"
+                    f"            st.error('Failed to load {related_entity} options')\n"
+                    f"        {field_name} = st.selectbox(\"{related_entity.title()}\", options=list({related_entity_lower}_options.keys()), format_func=lambda o: {related_entity_lower}_options.get(o, str(o)))\n"
                 )
             else:
                 if field_type in ["email"]:
@@ -1048,7 +1043,6 @@ API_BASE_URL = f"http://localhost:{API_PORT}"'''
                     form_fields.append(
                         f'        {field_name} = st.text_input("{field_name.title()}", key="{field_name}_input")'
                     )
-
         return '\n'.join(form_fields)
     
     def _generate_validation_template(self, attributes: List[Dict[str, str]]) -> str:
@@ -1147,16 +1141,8 @@ def delete_{entity_lower}(id: int) -> bool:
                 related_entity = attr["related_entity"]
                 related_entity_lower = related_entity.lower()
                 descriptive_field = attr.get("descriptive_field", "name")
-                fk_fetches.append(f'''    # Fetch related data for {related_entity}
-    try:
-        {related_entity_lower}_resp = requests.get(f"{{API_BASE_URL}}/api/{related_entity_lower}s/")
-        {related_entity_lower}_resp.raise_for_status()
-        {related_entity_lower}_data = {related_entity_lower}_resp.json()
-        {related_entity_lower}_options = {{item['id']: item.get('{descriptive_field}', str(item['id'])) for item in {related_entity_lower}_data}}
-    except (requests.exceptions.RequestException, json.JSONDecodeError):
-        {related_entity_lower}_options = {{}}
-        st.warning('Failed to load {related_entity} options')''')
-        fk_fetch_block = "\\n".join(fk_fetches)
+                fk_fetches.append(f'''    # Fetch related data for {related_entity}\n    try:\n        {related_entity_lower}_resp = requests.get(f"{{API_BASE_URL}}/api/{related_entity_lower}s/")\n        {related_entity_lower}_resp.raise_for_status()\n        {related_entity_lower}_data = {related_entity_lower}_resp.json()\n        {related_entity_lower}_options = {{item['id']: item.get('{descriptive_field}', str(item['id'])) for item in {related_entity_lower}_data}}\n    except (requests.exceptions.RequestException, json.JSONDecodeError):\n        {related_entity_lower}_options = {{}}\n        st.warning('Failed to load {related_entity} options')''')
+        fk_fetch_block = "\n".join(fk_fetches)
 
         # Generate the item display logic
         item_display_lines = []
@@ -1165,17 +1151,17 @@ def delete_{entity_lower}(id: int) -> bool:
             attr_name = attr["name"]
             if attr_name.lower() == 'id':
                 continue
-
             if attr.get("is_foreign_key"):
                 related_entity = attr["related_entity"]
                 related_entity_lower = related_entity.lower()
                 options_map_name = f"{related_entity_lower}_options"
+                descriptive_field = attr.get("descriptive_field", "name")
                 item_display_lines.append(
-                    f"{indent}if '{attr_name}' in {entity_lower}:\n{indent}    related_name = {options_map_name}.get({entity_lower}['{attr_name}'], f\"ID: {{{entity_lower}['{attr_name}']}}\")\n{indent}    st.write(f\"**{related_entity.title()}:** {{related_name}}\")"
+                    f"{indent}if '{attr_name}' in {entity_lower}:\n{indent}    related_name = {options_map_name}.get({entity_lower}['{attr_name}'], f'ID: {{{entity_lower}['{attr_name}']}}')\n{indent}    st.write(f'**{related_entity.title()}:** {{related_name}}')"
                 )
             else:
                 item_display_lines.append(
-                    f"{indent}if '{attr_name}' in {entity_lower}:\n{indent}    st.write(f\"**{attr_name.replace('_', ' ').title()}:** {{{entity_lower}['{attr_name}']}}\")"
+                    f"{indent}if '{attr_name}' in {entity_lower}:\n{indent}    st.write(f'**{attr_name.replace('_', ' ').title()}:** {{{entity_lower}['{attr_name}']}}')"
                 )
         item_display_block = "\n".join(item_display_lines)
         if not item_display_block.strip():
@@ -1186,7 +1172,7 @@ def delete_{entity_lower}(id: int) -> bool:
     st.title("{entity} Management")
     
     # Create tabs for different operations
-    tab1, tab2, tab3 = st.tabs(["📋 List {entity}s", "➕ Add {entity}", "✏️ Edit {entity}"])
+    tab1, tab2, tab3 = st.tabs(["List {entity}s", "Add {entity}", "Edit {entity}"])
     
     with tab1:
         show_{entity_lower}_list()
@@ -1201,7 +1187,7 @@ def show_{entity_lower}_list():
     """Display list of {entity}s."""
     st.header("All {entity}s")
     
-    if st.button("🔄 Refresh", key="refresh_list"):
+    if st.button("Refresh", key="refresh_list"):
         st.rerun()
     
     {fk_fetch_block}
@@ -1217,13 +1203,13 @@ def show_{entity_lower}_list():
 {item_display_block}
                 
                 with col2:
-                    if st.button("✏️ Edit", key=f"edit_{{{entity_lower}['id']}}"):
+                    if st.button("Edit", key=f"edit_{{{entity_lower}['id']}}"):
                         st.session_state.edit_{entity_lower}_id = {entity_lower}['id']
                         st.session_state.edit_{entity_lower}_data = {entity_lower}
                         st.rerun()
                 
                 with col3:
-                    if st.button("🗑️ Delete", key=f"delete_{{{entity_lower}['id']}}"):
+                    if st.button("Delete", key=f"delete_{{{entity_lower}['id']}}"):
                         if delete_{entity_lower}({entity_lower}['id']):
                             st.rerun()
     else:
@@ -1236,7 +1222,7 @@ def show_{entity_lower}_form():
     with st.form("add_{entity_lower}_form"):
 {{form_fields}}
         
-        submitted = st.form_submit_button("➕ Add {entity}")
+        submitted = st.form_submit_button("Add {entity}")
         
         if submitted:
 {{validation}}
@@ -1259,7 +1245,7 @@ def show_{entity_lower}_edit():
             
 {{edit_form_fields}}
             
-            submitted = st.form_submit_button("💾 Update {entity}")
+            submitted = st.form_submit_button("Update {entity}")
             
             if submitted:
 {{edit_validation}}
@@ -1275,7 +1261,7 @@ def show_{entity_lower}_edit():
                         del st.session_state[f"edit_{entity_lower}_data"]
                     st.rerun()
         
-        if st.button("❌ Cancel Edit"):
+        if st.button("Cancel Edit"):
             if f"edit_{entity_lower}_id" in st.session_state:
                 del st.session_state[f"edit_{entity_lower}_id"]
             if f"edit_{entity_lower}_data" in st.session_state:

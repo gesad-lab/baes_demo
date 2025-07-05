@@ -1729,18 +1729,6 @@ VALIDATION HELPERS FOR {entity.upper()}:
                         
                         attributes.append(f"{field_name}: {field_type}")
         
-        # If still no attributes, use minimal defaults - don't assume extra fields
-        if not attributes:
-            entity_lower = entity.lower()
-            if entity_lower == "student":
-                attributes = ["name: str", "email: str"]  # Removed age - only include if explicitly requested
-            elif entity_lower == "course":
-                attributes = ["name: str", "code: str"]  # Removed credits
-            elif entity_lower == "teacher":
-                attributes = ["name: str", "email: str"]  # Removed department
-            else:
-                attributes = ["name: str", "description: str", "created_at: str"]
-        
         return list(set(attributes))  # Remove duplicates
 
     def _get_validation_helpers(self, entity: str, attributes: List[str]) -> str:
@@ -2178,10 +2166,14 @@ VALIDATION HELPERS FOR {entity.upper()}:
                 return attributes
             else:
                 logger.warning(f"TestSWEA: No BAE found for {entity} or BAE missing _get_default_attributes method")
-                return ["name: str", "description: str", "created_at: str"]
+                # return ["name: str", "description: str", "created_at: str"]
+                raise TestGenerationError(
+                    f"Could not retrieve attributes from BAE for entity '{entity}'. BAE may not be registered or properly configured."
+                )
         except Exception as e:
             logger.error(f"TestSWEA: Error getting attributes from BAE for {entity}: {e}")
-            return ["name: str", "description: str", "created_at: str"]
+            # return ["name: str", "description: str", "created_at: str"]
+            raise TestGenerationError(f"Failed to get attributes from BAE for '{entity}': {e}") from e
 
     def _generate_simple_test_data(self, entity: str, attributes: List[str]) -> Dict[str, Any]:
         """Generate simple test data that matches the actual model structure."""

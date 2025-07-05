@@ -203,6 +203,13 @@ COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and 
     }
 
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle database SWEA tasks. Always use the full attribute list from the payload."""
+        attributes = payload.get("attributes")
+        if not attributes or not isinstance(attributes, list):
+            raise ValueError("DatabaseSWEA requires a non-empty attribute list in the payload.")
+        for attr in attributes:
+            if not isinstance(attr, dict) or "name" not in attr or "type" not in attr:
+                raise ValueError(f"Invalid attribute format in DatabaseSWEA: {attr}")
         if task not in self._SUPPORTED_TASKS:
             return self.create_error_response(
                 task,
@@ -216,7 +223,7 @@ COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and 
             return self.create_error_response(task, str(e), "execution_error")
 
     def _interpret_feedback_for_database_setup(
-        self, feedback: List[str], entity: str, original_attributes: List[str]
+        self, feedback: List[str], entity: str, original_attributes: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
         Generic feedback interpretation using LLM to understand what database changes are needed.
@@ -265,7 +272,10 @@ Interpret the feedback and provide specific database setup improvements in JSON 
 
 RESPONSE FORMAT (JSON only):
 {{
-    "attributes": ["list", "of", "final", "attributes", "with", "types"],
+    "attributes": [
+        {{"name": "attribute_name", "type": "attribute_type"}},
+        {{"name": "another_attribute", "type": "another_type"}}
+    ],
     "additional_requirements": ["any", "new", "requirements", "identified"],
     "constraints": ["database", "constraints", "to", "add"],
     "modifications": ["specific", "changes", "to", "make"],
@@ -401,38 +411,6 @@ Please provide the JSON response with database improvements."""
             logger.warning(f"DatabaseSWEA: Failed to get structured feedback injection: {str(e)}")
             return ""
 
-    def _extract_attributes_from_text(
-        self, response_text: str, original_attributes: List[str]
-    ) -> Dict[str, Any]:
-        """Fallback method to extract attributes from LLM text response when JSON parsing fails"""
-        # Type validation to avoid AttributeError on non-string response
-        if not isinstance(response_text, str):
-            raise DatabaseGenerationError(
-                f"LLM response expected str but got {type(response_text)}"
-            )
-
-        if is_debug_mode():
-            logger.debug("DatabaseSWEA raw fallback text preview: %.120s", repr(response_text))
-
-        attributes = original_attributes.copy()
-        modifications = []
-
-        # Look for common patterns in the response
-        lines = response_text.lower().split("\n")
-        for line in lines:
-            if "add" in line and ("field" in line or "column" in line or "attribute" in line):
-                modifications.append(f"Suggested addition from text: {line.strip()}")
-            elif "remove" in line and ("field" in line or "column" in line or "attribute" in line):
-                modifications.append(f"Suggested removal from text: {line.strip()}")
-
-        return {
-            "attributes": attributes,
-            "additional_requirements": [],
-            "constraints": [],
-            "modifications": modifications,
-            "explanation": "Extracted information from text response (JSON parsing failed)",
-        }
-
     def _validate_interpretation_structure(self, interpretation: Dict[str, Any]) -> Dict[str, Any]:
         """Ensure interpretation has correct structure with proper data types"""
         validated = {
@@ -443,27 +421,29 @@ Please provide the JSON response with database improvements."""
             "explanation": interpretation.get("explanation", "No explanation provided"),
         }
 
-        # Normalize attributes to consistent string format
+        # Normalize attributes to consistent dictionary format
         raw_attributes = interpretation.get("attributes", [])
         logger.debug(
             f"DatabaseSWEA: Processing {len(raw_attributes)} attributes with types: {[type(attr) for attr in raw_attributes]}"
         )
 
         for attr in raw_attributes:
-            if isinstance(attr, dict):
-                # Convert dict to "name:type" string format
-                name = attr.get("name", "field")
-                typ = attr.get("type", "str")
-                validated["attributes"].append(f"{name}:{typ}")
-                logger.debug(f"DatabaseSWEA: Converted dict attribute to string: {name}:{typ}")
-            elif isinstance(attr, str):
+            if isinstance(attr, dict) and "name" in attr and "type" in attr:
+                # Already in the correct format
                 validated["attributes"].append(attr)
+                logger.debug(f"DatabaseSWEA: Kept dictionary attribute: {attr}")
+            elif isinstance(attr, str):
+                # Convert "name:type" string to dictionary format
+                if ":" in attr:
+                    name, typ = [p.strip() for p in attr.split(":", 1)]
+                else:
+                    name, typ = attr.strip(), "str"
+                attr_dict = {"name": name, "type": typ}
+                validated["attributes"].append(attr_dict)
+                logger.debug(f"DatabaseSWEA: Converted string attribute to dictionary: {attr_dict}")
             else:
-                # Fallback - convert to string
-                str_attr = str(attr)
-                validated["attributes"].append(str_attr)
                 logger.warning(
-                    f"DatabaseSWEA: Converted unexpected attribute type {type(attr)} to string: {str_attr}"
+                    f"DatabaseSWEA: Skipping unrecognized attribute format {type(attr)}: {attr}"
                 )
 
         # Ensure other fields are lists of strings
@@ -476,207 +456,149 @@ Please provide the JSON response with database improvements."""
         )
         return validated
 
-    def _create_fallback_database(self, entity: str, db_file: str) -> Dict[str, Any]:
-        """Create a basic fallback database when interpretation fails"""
-        try:
-            # Create basic table with minimal schema
-            table_name = entity.lower() + "s"
-            basic_columns = [
-                "id INTEGER PRIMARY KEY AUTOINCREMENT",
-                "name TEXT NOT NULL",
-                "email TEXT",
-                "created_at TEXT DEFAULT CURRENT_TIMESTAMP",
-            ]
-            columns_sql_str = ", ".join(basic_columns)
-
-            with sqlite3.connect(db_file) as conn:
-                cursor = conn.cursor()
-                cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
-                cursor.execute(f"CREATE TABLE {table_name} ({columns_sql_str})")
-                conn.commit()
-
-            result = {
-                "database_path": db_file,
-                "table": table_name,
-                "columns": basic_columns,
-                "managed_system": True,
-                "fallback_used": True,
-                "improvements_applied": {
-                    "attributes": ["name:str", "email:str", "created_at:str"],
-                    "additional_requirements": [],
-                    "constraints": [],
-                    "modifications": ["Used fallback schema due to interpretation error"],
-                    "explanation": "Fallback database created with basic schema",
-                },
-            }
-
-            logger.info(f"DatabaseSWEA: Created fallback database for {entity} at {db_file}")
-            return result
-
-        except Exception as e:
-            logger.error(f"DatabaseSWEA: Fallback database creation failed: {e}")
-            raise
-
     def _apply_database_improvements(
         self, interpretation: Dict[str, Any], entity: str, db_file: str
     ) -> Dict[str, Any]:
-        """Apply the interpreted improvements to the database setup"""
+        """Apply the interpreted improvements to the database setup, preserving data if table exists."""
         try:
-            # Validate and normalize interpretation structure (Phase 1 fix)
             interpretation = self._validate_interpretation_structure(interpretation)
-
             attributes = interpretation.get("attributes", [])
             additional_requirements = interpretation.get("additional_requirements", [])
             constraints = interpretation.get("constraints", [])
             modifications = interpretation.get("modifications", [])
-
-            # Map Python types → SQLite
-            type_map = {
-                "str": "TEXT",
-                "int": "INTEGER",
-                "float": "REAL",
-                "date": "TEXT",
-                "bool": "INTEGER",
-            }
-
-            # Build column definitions - always start with ID column
-            columns_sql: List[str] = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
-
-            for attr in attributes:
-                # Robust attribute processing (Phase 1 fix)
-                if isinstance(attr, dict):
-                    # LLM returned structured attribute info
-                    name = attr.get("name", "unknown_field")
-                    typ = attr.get("type", "str")
-                    logger.debug(f"DatabaseSWEA: Processing dict attribute: {name}:{typ}")
-                elif isinstance(attr, str):
-                    # Traditional string format
-                    if ":" in attr:
-                        name, typ = [p.strip() for p in attr.split(":", 1)]
-                    else:
-                        name, typ = attr.strip(), "str"
-                    logger.debug(f"DatabaseSWEA: Processing string attribute: {name}:{typ}")
-                else:
-                    # Fallback for unexpected formats (Phase 1 fix)
-                    logger.warning(
-                        f"DatabaseSWEA: Unexpected attribute format: {attr} (type: {type(attr)})"
-                    )
-                    name, typ = str(attr), "str"
-
-                # Sanitize field name
-                name = name.replace(" ", "_").lower()
-                
-                # Skip 'id' field since it's already added as PRIMARY KEY
-                if name == 'id':
-                    logger.debug(f"DatabaseSWEA: Skipping 'id' attribute - already handled as PRIMARY KEY")
-                    continue
-                
-                sql_type = type_map.get(typ.replace("Optional[", "").replace("]", ""), "TEXT")
-                columns_sql.append(f"{name} {sql_type}")
-
-            columns_sql_str = ", ".join(columns_sql)
             table_name = entity.lower() + "s"
 
             with sqlite3.connect(db_file) as conn:
                 cursor = conn.cursor()
+                cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+                table_exists = cursor.fetchone() is not None
 
-                # Drop and recreate table to apply all changes
-                # In production, this would use ALTER TABLE for data preservation
-                cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
-                cursor.execute(f"CREATE TABLE {table_name} ({columns_sql_str})")
-
-                # Apply additional constraints if specified
-                for constraint in constraints:
-                    try:
-                        cursor.execute(constraint)
-                        logger.info(f"Applied database constraint: {constraint}")
-                    except Exception as e:
-                        logger.warning(f"Could not apply constraint '{constraint}': {e}")
-
-                conn.commit()
-
-            result = {
-                "database_path": db_file,
-                "table": table_name,
-                "columns": columns_sql,
-                "tables_created": [table_name],  # Add this for TechLeadSWEA validation
-                "managed_system": True,
-                "improvements_applied": {
-                    "attributes": attributes,
-                    "additional_requirements": additional_requirements,
-                    "constraints": constraints,
-                    "modifications": modifications,
-                    "explanation": interpretation.get("explanation", "No explanation provided"),
-                },
-            }
-
-            logger.info(
-                f"DatabaseSWEA applied improvements based on feedback: {interpretation.get('explanation', 'No explanation')}"
-            )
-            return result
-
+            if table_exists:
+                logger.info(f"Table {table_name} exists. Using migration logic to preserve data.")
+                # Use migration logic to preserve data
+                return self._apply_schema_migration(interpretation, entity, db_file)
+            else:
+                # Table does not exist, safe to create
+                # Map Python types → SQLite
+                type_map = {
+                    "str": "TEXT",
+                    "int": "INTEGER",
+                    "float": "REAL",
+                    "date": "TEXT",
+                    "bool": "INTEGER",
+                }
+                columns_sql: List[str] = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
+                for attr in attributes:
+                    if isinstance(attr, dict):
+                        name = attr.get("name", "unknown_field")
+                        typ = attr.get("type", "str")
+                    elif isinstance(attr, str):
+                        if ":" in attr:
+                            name, typ = [p.strip() for p in attr.split(":", 1)]
+                        else:
+                            name, typ = attr.strip(), "str"
+                    else:
+                        name, typ = str(attr), "str"
+                    name = name.replace(" ", "_").lower()
+                    if name == 'id':
+                        continue
+                    sql_type = type_map.get(typ.replace("Optional[", "").replace("]", ""), "TEXT")
+                    columns_sql.append(f"{name} {sql_type}")
+                columns_sql_str = ", ".join(columns_sql)
+                with sqlite3.connect(db_file) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(f"CREATE TABLE {table_name} ({columns_sql_str})")
+                    for constraint in constraints:
+                        try:
+                            cursor.execute(constraint)
+                            logger.info(f"Applied database constraint: {constraint}")
+                        except Exception as e:
+                            logger.warning(f"Could not apply constraint '{constraint}': {e}")
+                    conn.commit()
+                result = {
+                    "database_path": db_file,
+                    "table": table_name,
+                    "columns": columns_sql,
+                    "tables_created": [table_name],
+                    "managed_system": True,
+                    "improvements_applied": {
+                        "attributes": attributes,
+                        "additional_requirements": additional_requirements,
+                        "constraints": constraints,
+                        "modifications": modifications,
+                        "explanation": interpretation.get("explanation", "No explanation provided"),
+                    },
+                }
+                logger.info(f"DatabaseSWEA applied improvements (new table created): {interpretation.get('explanation', 'No explanation')}")
+                return result
         except Exception as e:
             logger.error(f"Failed to apply database improvements: {e}")
             logger.error(f"Interpretation data: {interpretation}")
-            logger.error(
-                f"Attribute types: {[type(attr) for attr in interpretation.get('attributes', [])]}"
-            )
-
-            # Provide fallback database creation with basic schema (Phase 1 fix)
-            logger.info("DatabaseSWEA: Attempting fallback database creation...")
-            return self._create_fallback_database(entity, db_file)
+            logger.error(f"Attribute types: {[type(attr) for attr in interpretation.get('attributes', [])]}")
+            raise DatabaseGenerationError(f"Failed to apply database improvements for {entity}: {e}") from e
 
     # ------------------------------------------------------------------
     def _setup_database(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Create SQLite database and a basic table for the entity with feedback-aware improvements."""
+        """Create SQLite database and a basic table for the entity with feedback-aware improvements. Only create if not exists."""
         entity = payload.get("entity", "Student")
-        attributes: List[str] = payload.get("attributes", [])
-
-        # Extract feedback information from payload
+        attributes: List[Dict[str, Any]] = payload.get("attributes", [])
         techlead_feedback = payload.get("techlead_feedback", [])
         previous_errors = payload.get("previous_errors", [])
         expected_output = payload.get("expected_output", "")
-
-        # Combine all feedback sources
         all_feedback = []
         if techlead_feedback:
-            all_feedback.extend(
-                techlead_feedback if isinstance(techlead_feedback, list) else [techlead_feedback]
-            )
+            all_feedback.extend(techlead_feedback if isinstance(techlead_feedback, list) else [techlead_feedback])
         if previous_errors:
-            all_feedback.extend(
-                previous_errors if isinstance(previous_errors, list) else [previous_errors]
-            )
+            all_feedback.extend(previous_errors if isinstance(previous_errors, list) else [previous_errors])
         if expected_output:
             all_feedback.append(f"Expected output: {expected_output}")
-
-        # Use managed system database path
         managed_system_path = self.managed_system_manager.managed_system_path
         db_file = payload.get(
             "database_path", str(managed_system_path / "app" / "database" / "baes_system.db")
         )
         os.makedirs(os.path.dirname(db_file), exist_ok=True)
-
-        # Interpret feedback generically using LLM
+        table_name = entity.lower() + "s"
+        with sqlite3.connect(db_file) as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+            table_exists = cursor.fetchone() is not None
+        if table_exists:
+            logger.info(f"Table {table_name} already exists. Skipping creation to preserve data.")
+            # For evolution requests, we need to ensure the response structure is consistent
+            result = {
+                "database_path": db_file, 
+                "table": table_name, 
+                "managed_system": True, 
+                "skipped_creation": True, 
+                "tables_created": [table_name],  # Include existing table in tables_created
+                "columns": [],  # Add empty columns list for consistency
+                "code": f"-- Table {table_name} already exists, no changes made",  # Add code field for TechLeadSWEA
+                "file_path": f"database_{entity.lower()}_{int(time.time())}.sql"  # Add file_path for TechLeadSWEA
+            }
+            self.managed_system_manager.ensure_managed_system_structure()
+            logger.info(f"Managed system database already exists at {db_file}, no changes made.")
+            return self.create_success_response("setup_database", result)
+        # Table does not exist, proceed to create
         interpretation = self._interpret_feedback_for_database_setup(
             all_feedback, entity, attributes
         )
-
-        # Apply the interpreted improvements
         result = self._apply_database_improvements(interpretation, entity, db_file)
-
-        # Ensure managed system structure is updated
         self.managed_system_manager.ensure_managed_system_structure()
-
         logger.info(
-            f"Managed system database created/updated at {db_file} with feedback-aware improvements"
+            f"Managed system database created at {db_file} with feedback-aware improvements"
         )
         return self.create_success_response("setup_database", result)
 
     def _migrate_schema(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Migrate database schema for entity evolution"""
+        """Migrate schema by merging new attributes with existing ones, preserving all fields."""
+        entity = payload.get("entity")
+        attributes = payload.get("attributes")
+        if not attributes or not isinstance(attributes, list):
+            raise ValueError("_migrate_schema requires a non-empty attribute list.")
+        for attr in attributes:
+            if not isinstance(attr, dict) or "name" not in attr or "type" not in attr:
+                raise ValueError(f"Invalid attribute format in _migrate_schema: {attr}")
         try:
-            entity = payload.get("entity", "Student")
             new_attributes = payload.get("attributes", [])
             feedback = payload.get("feedback", [])
 
@@ -685,9 +607,9 @@ Please provide the JSON response with database improvements."""
             db_file = self.managed_system_manager.managed_system_path / "app" / "database" / "baes_system.db"
             table_name = entity.lower() + "s"
             
-            # Get current schema from database
+            # Get current schema from database and convert to list of dictionaries
             current_schema_from_db = self._get_current_table_schema(str(db_file), table_name)
-            current_attributes = []
+            current_attributes_dicts = []
             type_map_reverse = {"TEXT": "str", "INTEGER": "int", "REAL": "float"}
             
             logger.info(f"📊 Current table schema for {table_name}: {current_schema_from_db}")
@@ -698,14 +620,18 @@ Please provide the JSON response with database improvements."""
                 if name == 'id': continue
                 sql_type = parts[1]
                 py_type = type_map_reverse.get(sql_type, "str")
-                current_attributes.append(f"{name}:{py_type}")
+                current_attributes_dicts.append({"name": name, "type": py_type})
             
-            # DEBUG: Log the extracted current attributes
-            logger.info(f"🔍 DEBUG - current_attributes from DB: {current_attributes}")
+            logger.info(f"🔍 DEBUG - current_attributes from DB: {current_attributes_dicts}")
             logger.info(f"🔍 DEBUG - new_attributes from request: {new_attributes}")
 
-            # Merge current and new attributes, preserving existing ones
-            all_attributes = list(dict.fromkeys(current_attributes + new_attributes))
+            # Merge current and new attributes, ensuring new attributes overwrite old ones
+            merged_attributes = {attr['name']: attr for attr in current_attributes_dicts}
+            for attr in new_attributes:
+                if isinstance(attr, dict) and 'name' in attr:
+                    merged_attributes[attr['name']] = attr
+
+            all_attributes = list(merged_attributes.values())
             logger.info(f"🔗 Merged attributes for migration: {all_attributes}")
             
             interpretation = self._interpret_feedback_for_database_setup(
@@ -713,20 +639,17 @@ Please provide the JSON response with database improvements."""
             )
             interpretation = self._validate_interpretation_structure(interpretation)
             
-            # DEBUG: Log what the LLM interpretation returned
             logger.info(f"🔍 DEBUG - LLM interpretation result: {interpretation}")
 
             result = self._apply_schema_migration(interpretation, entity, str(db_file))
 
             logger.info(f"✅ DatabaseSWEA: Schema migration completed successfully for {entity}")
             
-            # Extract SQL code for TechLeadSWEA validation
             sql_code = result.get("code", "")
             
-            # Return result with 'code' field for TechLeadSWEA validation
             return self.create_success_response("migrate_schema", {
                 **result,
-                "code": sql_code,  # TechLeadSWEA expects this field
+                "code": sql_code,
                 "file_path": f"migration_{entity.lower()}_{int(time.time())}.sql"
             })
 
@@ -1037,14 +960,14 @@ if __name__ == "__main__":
             
             new_columns_map = {}
             for attr in new_attributes:
-                if isinstance(attr, str):
+                if isinstance(attr, dict):
+                    name = attr.get("name", "unknown_field")
+                    typ = attr.get("type", "str")
+                elif isinstance(attr, str):
                     if ":" in attr:
                         name, typ = [p.strip() for p in attr.split(":", 1)]
                     else:
                         name, typ = attr.strip(), "str"
-                elif isinstance(attr, dict):
-                    name = attr.get("name", "unknown_field")
-                    typ = attr.get("type", "str")
                 else:
                     continue
 

@@ -31,6 +31,13 @@ class BackendSWEA(BaseAgent):
         return self._managed_system_manager
 
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle backend SWEA tasks. Always use the full attribute list from the payload."""
+        attributes = payload.get("attributes")
+        if not attributes or not isinstance(attributes, list):
+            raise ValueError("BackendSWEA requires a non-empty attribute list in the payload.")
+        for attr in attributes:
+            if not isinstance(attr, dict) or "name" not in attr or "type" not in attr:
+                raise ValueError(f"Invalid attribute format in BackendSWEA: {attr}")
         if task not in self._SUPPORTED_TASKS:
             return self.create_error_response(
                 task,
@@ -58,11 +65,8 @@ class BackendSWEA(BaseAgent):
         techlead_feedback = payload.get("techlead_feedback", [])
         previous_errors = payload.get("previous_errors", [])
         retry_count = payload.get("retry_count", 0)
-        
-        # Evolution metadata (defaults for initial generation)
         is_evolution: bool = payload.get("is_evolution", False)
         new_attributes: List[str] = payload.get("new_attributes", [])
-        
         # Build prompt with evolution-aware instructions
         prompt = self._build_api_prompt(
             entity,
@@ -79,10 +83,7 @@ class BackendSWEA(BaseAgent):
         )
         if not code or not isinstance(code, str):
             raise RuntimeError(f"LLM did not return valid API code for {entity}.")
-        
-        # Use the proper managed system manager to write route files
         file_path = self.managed_system_manager.write_entity_artifact(entity, "routes", code)
-        
         return self.create_success_response(
             "generate_api",
             {"file_path": file_path, "code": code, "entity": entity, "attributes": attributes},

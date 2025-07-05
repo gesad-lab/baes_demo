@@ -360,307 +360,423 @@ class BaseBae(BaseAgent):
         
         return interpretation
 
-    def _build_interpretation_prompt(self, request: str, context: str) -> str:
-        """Builds a prompt for the LLM to interpret the business request."""
+    def _build_unified_interpretation_prompt(self, request: str, context: str) -> str:
+        """Builds a context-aware unified prompt for LLM to interpret any type of business request."""
+        
+        # Get current system state information
+        existing_entities_info = self._get_existing_entities_context()
+        current_entity_info = self._get_current_entity_context()
+        
+        # Build context section for the prompt
+        context_info = self._build_context_information(existing_entities_info, current_entity_info)
+        
         return f"""
-        As a BAE (Business Autonomous Entity), analyze the following request in the context of '{context}':
+        As a {self.entity_name} BAE (Business Autonomous Entity), analyze this request in the context of '{context}':
 
         Request: "{request}"
 
-        Identify the main entity, its attributes (with types), and the requested operations (create, read, update, delete).
-        Return a JSON object with the following structure:
+        SYSTEM CONTEXT INFORMATION:
+        {context_info}
+
+        CRITICAL INSTRUCTIONS:
+        1. If the {self.entity_name} entity ALREADY EXISTS and has current attributes, this is likely an EVOLUTION operation
+        2. If the request mentions "add", "include", "append" to an existing entity, use operation_type="evolve"
+        3. If the {self.entity_name} entity does NOT exist, this is a CREATE operation
+        4. For evolution operations, PRESERVE all existing attributes and only add/modify/remove as requested
+        5. For create operations, include all necessary attributes for a complete entity
+
+        Determine the operation type and extract all relevant information. Return a JSON object with:
+
         {{
-            "entity_focus": "EntityName",
-            "attributes_mentioned": [
+            "operation_type": "create|evolve|remove|modify|relationship",
+            "entity": "{self.entity_name}",
+            "attributes": [
                 {{"name": "attribute_name", "type": "attribute_type"}}
             ],
-            "requested_operations": ["operation1", "operation2"],
+            "new_attributes": [
+                {{"name": "new_attr_name", "type": "new_attr_type"}}
+            ],
+            "removed_attributes": ["attr_name_to_remove"],
+            "modified_attributes": [
+                {{"old": "old_attr: old_type", "new": "new_attr: new_type"}}
+            ],
             "business_vocabulary": ["term1", "term2"],
-            "is_evolution_request": false
+            "requested_operations": ["create", "read", "update", "delete"],
+            "confidence": 0.0-1.0,
+            "reasoning": "brief explanation of the interpretation including why you chose create vs evolve",
+            "is_evolution": true/false,
+            "evolution_type": "addition|removal|modification|complex",
+            "entity_exists": true/false
         }}
+
+        OPERATION TYPE GUIDELINES:
+        - "create": Entity does not exist OR request asks to create from scratch
+        - "evolve": Entity exists AND request asks to add/modify existing entity
+        - "remove": Request asks to remove attributes from existing entity
+        - "modify": Request asks to change existing attributes (rename, change type)
+        - "relationship": Request asks to connect entities
+
+        ATTRIBUTE HANDLING:
+        - For "create": populate "attributes" with ALL required fields for the entity
+        - For "evolve": populate "new_attributes" with ONLY the fields to add, existing preserved automatically
+        - For "remove": populate "removed_attributes" with fields to remove
+        - For "modify": populate "modified_attributes" with field changes
+        - Always include "id: int" as the first attribute for database operations (auto-generated)
+        - Use appropriate types: str, int, float, date, datetime, bool
         """
 
     def _interpret_business_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Interpret business request and create SWEA coordination plan with TechLeadSWEA governance"""
+        """Unified business request interpretation using LLM for all request types"""
         try:
             request = payload.get("request", "")
             context = payload.get("context", "academic")
 
-            # First, check if this is a relationship creation request
+            # First, check if this is a relationship creation request (keep existing logic)
             relationship_info = self._detect_relationship_request(request)
-
             if relationship_info["is_relationship"]:
                 logger.info(
                     f"🔗 {self.entity_name}BAE: Detected relationship request - {relationship_info['description']}"
                 )
                 return self._handle_relationship_request(request, context, relationship_info)
 
-            # Determine if this is evolution or new generation
-            is_evolution = self._is_evolution_request(request)
+            # Use unified LLM interpretation for all other requests
+            prompt = self._build_unified_interpretation_prompt(request, context)
+            interpretation_str = self.llm.generate_response(prompt)
 
-            # Handle evolution requests differently than initial generation
-            if is_evolution:
-                # For evolution, we need to preserve existing attributes
-                # Load current schema if available
-                if self.current_schema:
-                    current_schema = self.current_schema
-                    if is_debug_mode():
-                        logger.info(
-                            f"🔍 {self.entity_name}BAE: Using cached schema with {len(current_schema.get('attributes', []))} attributes: {current_schema.get('attributes', [])}"
-                        )
-                else:
-                    # Try to load from memory/context store
-                    logger.info(f"🔍 {self.entity_name}BAE: Loading stored schema for evolution...")
-                    self._load_stored_schema()
-                    current_schema = self.current_schema or {"attributes": []}
-                    if is_debug_mode():
-                        logger.info(
-                            f"🔍 {self.entity_name}BAE: Loaded schema with {len(current_schema.get('attributes', []))} attributes: {current_schema.get('attributes', [])}"
-                        )
-
-                # Use specialized evolution handling
-                evolution_result = self._handle_evolution_request(
-                    request, context, current_schema
-                )
-
-                if evolution_result:
-                    # Use the evolution result which properly preserves existing attributes
-                    extracted_attributes = evolution_result.get("extracted_attributes", [])
-                    interpretation = {
-                        "entity": self.entity_name,
-                        "domain": getattr(self, "domain", "academic"),
-                        "attributes": extracted_attributes,
-                        "extracted_attributes": extracted_attributes,  # Add for consistency
-                        "is_evolution": True,
-                        "request_type": "evolution",
-                        "business_context": request,
-                        "semantic_coherence": True,
-                        "domain_knowledge_preserved": True,
-                        "interpreted_intent": evolution_result.get(
-                            "interpreted_intent",
-                            f"evolve_{self.entity_name.lower()}_management_system",
-                        ),
-                        "domain_operations": evolution_result.get(
-                            "domain_operations", ["evolve_entity", "update_schema"]
-                        ),
-                        "business_vocabulary": self._extract_business_vocabulary(),
-                        "entity_focus": self.entity_name,
-                        # Include evolution-specific metadata
-                        "new_attributes": evolution_result.get("new_attributes", []),
-                        "existing_attributes": evolution_result.get("existing_attributes", []),
-                        "evolution_type": evolution_result.get("evolution_type", "addition"),
-                    }
-                else:
-                    # Fallback if evolution handling fails
-                    extracted_attributes = self._extract_attributes_from_request(request)
-                    interpretation = {
-                        "entity": self.entity_name,
-                        "domain": getattr(self, "domain", "academic"),
-                        "attributes": extracted_attributes,
-                        "extracted_attributes": extracted_attributes,  # Add for consistency
-                        "is_evolution": True,
-                        "request_type": "evolution",
-                        "business_context": request,
-                        "semantic_coherence": True,
-                        "domain_knowledge_preserved": True,
-                        "interpreted_intent": f"evolve_{self.entity_name.lower()}_management_system",
-                        "domain_operations": ["evolve_entity", "update_schema"],
-                        "business_vocabulary": self._extract_business_vocabulary(),
-                        "entity_focus": self.entity_name,
-                    }
-            else:
-                # This is for initial generation from business request
-                prompt = self._build_interpretation_prompt(request, context)
-                interpretation_str = self.llm.generate_response(prompt)
-
-                try:
-                    interpretation = json.loads(self._clean_json_response(interpretation_str))
-                except json.JSONDecodeError:
-                    logger.error(f"Failed to parse JSON from LLM response: {interpretation_str}")
-                    # Create a fallback interpretation
-                    interpretation = {
-                        "entity_focus": self.entity_name,
-                        "attributes_mentioned": self._get_default_attributes(),
-                        "requested_operations": ["create", "read", "update", "delete"],
-                        "business_vocabulary": [],
-                        "is_evolution_request": False,
-                    }
-
-                # Get attributes, with fallback to default
-                raw_attributes = interpretation.get("attributes_mentioned")
-                if not raw_attributes:
-                    raw_attributes = self._get_default_attributes()
-                attributes = self._normalize_attributes(raw_attributes)
-                extracted_attributes = attributes
-
-                # Store the latest schema after successful interpretation
-                self.current_schema = {
+            try:
+                interpretation = json.loads(self._clean_json_response(interpretation_str))
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse JSON from LLM response: {interpretation_str}")
+                # Create a fallback interpretation
+                interpretation = {
+                    "operation_type": "create",
                     "entity": self.entity_name,
-                    "attributes": attributes,
-                    "context": context,
-                    "generated_at": datetime.now().isoformat(),
-                    "business_rules": self._get_business_rules(),
-                    "is_evolution": is_evolution,
-                    "interpretation": interpretation,  # Store full interpretation for debugging
+                    "attributes": self._get_default_attributes(),
+                    "new_attributes": [],
+                    "removed_attributes": [],
+                    "modified_attributes": [],
+                    "business_vocabulary": [],
+                    "requested_operations": ["create", "read", "update", "delete"],
+                    "confidence": 0.0,
+                    "reasoning": "Fallback interpretation due to LLM parsing error",
+                    "is_evolution": False,
+                    "evolution_type": "none"
                 }
 
-            # Create comprehensive coordination plan with TechLeadSWEA governance
-            interpretation["swea_coordination"] = [
-                {
-                    "swea_agent": "TechLeadSWEA",
-                    "task_type": "coordinate_system_generation",
-                    "payload": {
-                        "entity": self.entity_name,
-                        "attributes": extracted_attributes,
-                        "context": request,
-                        "is_evolution": is_evolution,
-                        "business_requirements": {
-                            "domain_focus": True,
-                            "semantic_coherence": True,
-                            "quality_gates": True,
-                            "technical_governance": True,
-                        },
-                    },
-                },
-                {
-                    "swea_agent": "DatabaseSWEA",
-                    "task_type": "migrate_schema" if is_evolution else "setup_database",
-                    "payload": {
-                        "entity": self.entity_name,
-                        "attributes": extracted_attributes,
-                        "context": request,
-                        "preserve_data": is_evolution,
-                        "business_rules": True,
-                    },
-                },
-                {
-                    "swea_agent": "BackendSWEA",
-                    "task_type": "generate_model",
-                    "payload": {
-                        "entity": self.entity_name,
-                        "attributes": extracted_attributes,
-                        "context": request,
-                        "business_vocabulary": True,
-                        "domain_focus": True,
-                        "semantic_coherence": True,
-                    },
-                },
-                {
-                    "swea_agent": "BackendSWEA",
-                    "task_type": "generate_api",
-                    "payload": {
-                        "entity": self.entity_name,
-                        "attributes": extracted_attributes,
-                        "context": request,
-                        "crud_operations": True,
-                        "business_vocabulary": True,
-                        "domain_focus": True,
-                        "semantic_coherence": True,
-                    },
-                },
-                {
-                    "swea_agent": "FrontendSWEA",
-                    "task_type": "generate_ui",
-                    "payload": {
-                        "entity": self.entity_name,
-                        "attributes": extracted_attributes,
-                        "context": request,
-                        "ui_framework": "streamlit",
-                        "features": ["crud_operations", "data_visualization", "user_friendly"],
-                    },
-                },
-                {
-                    "swea_agent": "TechLeadSWEA",
-                    "task_type": "review_and_approve",
-                    "payload": {
-                        "entity": self.entity_name,
-                        "context": request,
-                        "system_components": ["database", "backend", "frontend"],
-                        "phase": "phase_1_complete",
-                        "final_review": True,
-                    },
-                },
-            ]
+            # Process the interpretation based on operation type
+            return self._process_unified_interpretation(interpretation, request, context)
 
-            # Validate coordination plan before returning
-            validation_errors = self._validate_coordination_plan(
-                interpretation["swea_coordination"]
-            )
-            if validation_errors:
-                logger.error(
-                    f"❌ {self.entity_name}BAE: Coordination plan validation failed: {validation_errors}"
-                )
-                return {
-                    "error": f"Coordination plan validation failed: {validation_errors}",
-                    "entity": self.entity_name,
-                    "validation_errors": validation_errors,
-                }
+        except Exception as e:
+            logger.error(f"Error in unified interpretation: {str(e)}")
+            return {
+                "success": False,
+                "error": "INTERPRETATION_ERROR",
+                "message": f"Failed to interpret business request: {str(e)}",
+                "entity": self.entity_name
+            }
 
-            # Preserve domain knowledge for reusability
-            self._update_domain_knowledge(context, extracted_attributes)
+    def _process_unified_interpretation(self, interpretation: Dict[str, Any], request: str, context: str) -> Dict[str, Any]:
+        """Process the unified LLM interpretation and create appropriate coordination plan"""
+        operation_type = interpretation.get("operation_type", "create")
+        is_evolution = interpretation.get("is_evolution", False)
+        entity_exists = interpretation.get("entity_exists", False)
+        
+        # Enhanced logic: if entity exists but operation_type is still "create", force it to "evolve"
+        if entity_exists and operation_type == "create":
+            # Check if this is actually an evolution request based on keywords
+            evolution_keywords = ["add", "include", "append", "insert", "extend"]
+            if any(keyword in request.lower() for keyword in evolution_keywords):
+                logger.info(f"🔄 {self.entity_name}BAE: Correcting operation_type from 'create' to 'evolve' - entity exists and request contains evolution keywords")
+                operation_type = "evolve"
+                is_evolution = True
+                interpretation["operation_type"] = "evolve"
+                interpretation["is_evolution"] = True
+                interpretation["evolution_type"] = "addition"
+        
+        # Extract and normalize attributes based on operation type
+        if operation_type == "create":
+            # Initial generation - use all attributes
+            raw_attributes = interpretation.get("attributes", [])
+            if not raw_attributes:
+                raw_attributes = self._get_default_attributes()
+            extracted_attributes = self._normalize_attributes(raw_attributes)
             
-            # CRITICAL: Update current schema with the latest attributes for future evolution requests
-            # This ensures the next evolution request can access the current attributes
-            updated_schema = {
+            # Store the schema for future reference
+            self.current_schema = {
                 "entity": self.entity_name,
                 "attributes": extracted_attributes,
                 "context": context,
                 "generated_at": datetime.now().isoformat(),
                 "business_rules": self._get_business_rules(),
-                "is_evolution": is_evolution,
-                "interpretation": interpretation,  # Store full interpretation for debugging
+                "is_evolution": False,
+                "interpretation": interpretation,
             }
             
-            # Save to both current_schema and memory
-            self.current_schema = updated_schema
-            self.update_memory("current_schema", updated_schema)
+        elif operation_type in ["evolve", "remove", "modify"]:
+            # Evolution - load current schema and apply changes
+            self._load_stored_schema()
+            current_attributes = self.current_schema.get("attributes", []) if self.current_schema else []
             
-            # Also save to context store for persistence across BAE instances
-            try:
-                context_store_path = os.environ.get(
-                    "BAE_CONTEXT_STORE_PATH", "database/context_store.json"
-                )
-                context_store = ContextStore(context_store_path)
-                
-                # Preserve domain knowledge with updated attributes
-                domain_knowledge_data = {
+            # If no current attributes found but entity exists, try to get from database
+            if not current_attributes and entity_exists:
+                current_entity_context = self._get_current_entity_context()
+                if current_entity_context.get("exists", False):
+                    current_attributes = current_entity_context.get("attributes", [])
+                    logger.info(f"📥 {self.entity_name}BAE: Loaded {len(current_attributes)} attributes from {current_entity_context.get('source', 'unknown')}")
+            
+            # Apply evolution changes
+            extracted_attributes = self._apply_evolution_changes(
+                current_attributes, interpretation, operation_type
+            )
+            
+            # Log the evolution for transparency
+            logger.info(f"🔄 {self.entity_name}BAE: Evolution operation - {operation_type}")
+            logger.info(f"   📊 Current attributes: {len(current_attributes)} -> {[attr.get('name', str(attr)) for attr in current_attributes]}")
+            logger.info(f"   ➕ Final attributes: {len(extracted_attributes)} -> {[attr.get('name', str(attr)) for attr in extracted_attributes]}")
+            
+            # Update schema
+            if self.current_schema:
+                self.current_schema["attributes"] = extracted_attributes
+                self.current_schema["is_evolution"] = True
+                self.current_schema["last_modified"] = datetime.now().isoformat()
+            else:
+                self.current_schema = {
                     "entity": self.entity_name,
+                    "attributes": extracted_attributes,
                     "context": context,
-                    "timestamp": datetime.now().isoformat(),
+                    "generated_at": datetime.now().isoformat(),
+                    "business_rules": self._get_business_rules(),
+                    "is_evolution": True,
                     "interpretation": interpretation,
-                    "current_attributes": extracted_attributes,
                 }
-                context_store.preserve_domain_knowledge(
-                    self.entity_name.lower(), domain_knowledge_data
-                )
+        else:
+            # Unknown operation type - fallback to create
+            raw_attributes = interpretation.get("attributes", self._get_default_attributes())
+            extracted_attributes = self._normalize_attributes(raw_attributes)
+
+        # Create the interpretation result
+        result = {
+            "entity": self.entity_name,
+            "domain": getattr(self, "domain", "academic"),
+            "attributes": extracted_attributes,
+            "extracted_attributes": extracted_attributes,
+            "is_evolution": is_evolution,
+            "request_type": operation_type,
+            "business_context": request,
+            "semantic_coherence": True,
+            "domain_knowledge_preserved": True,
+            "interpreted_intent": f"{operation_type}_{self.entity_name.lower()}_management_system",
+            "domain_operations": [f"{operation_type}_entity", "update_schema"],
+            "business_vocabulary": interpretation.get("business_vocabulary", []),
+            "entity_focus": self.entity_name,
+            "confidence": interpretation.get("confidence", 0.0),
+            "reasoning": interpretation.get("reasoning", ""),
+            "entity_exists": entity_exists,
+        }
+
+        # Add evolution-specific metadata if applicable
+        if is_evolution:
+            result.update({
+                "new_attributes": interpretation.get("new_attributes", []),
+                "removed_attributes": interpretation.get("removed_attributes", []),
+                "modified_attributes": interpretation.get("modified_attributes", []),
+                "evolution_type": interpretation.get("evolution_type", "addition"),
+            })
+
+        # Create comprehensive coordination plan
+        result["swea_coordination"] = self._create_unified_coordination_plan(
+            extracted_attributes, is_evolution, operation_type
+        )
+
+        return result
+
+    def _apply_evolution_changes(self, current_attributes: List[Dict[str, Any]], 
+                                interpretation: Dict[str, Any], operation_type: str) -> List[Dict[str, Any]]:
+        """Apply evolution changes to current attributes based on LLM interpretation"""
+        result_attributes = current_attributes.copy()
+        
+        logger.debug(f"🔄 Applying {operation_type} evolution changes:")
+        logger.debug(f"   📊 Starting with {len(current_attributes)} current attributes")
+        
+        if operation_type == "evolve":
+            # Add new attributes
+            new_attrs = interpretation.get("new_attributes", [])
+            
+            # If new_attributes is empty but attributes is provided, use attributes as new_attributes
+            # This handles cases where LLM puts evolution attributes in the wrong field
+            if not new_attrs and interpretation.get("attributes"):
+                attrs_from_interpretation = interpretation.get("attributes", [])
+                # Only treat as new attributes if they're not already in current attributes
+                current_attr_names = {attr.get("name", "") for attr in current_attributes if isinstance(attr, dict)}
                 
-                # Also update agent memory in context store
-                context_store.update_agent_memory_key(self.name, "current_schema", updated_schema)
+                potential_new_attrs = []
+                for attr in attrs_from_interpretation:
+                    if isinstance(attr, dict):
+                        attr_name = attr.get("name", "")
+                        if attr_name and attr_name not in current_attr_names:
+                            potential_new_attrs.append(attr)
                 
-                if is_debug_mode():
-                    logger.info(
-                        f"💾 {self.entity_name}BAE: Saved schema with {len(extracted_attributes)} attributes to context store"
-                    )
-                    
-            except Exception as e:
-                logger.warning(f"⚠️  {self.entity_name}BAE: Could not save to context store: {str(e)}")
+                if potential_new_attrs:
+                    new_attrs = potential_new_attrs
+                    logger.info(f"🔄 {operation_type}: Using {len(new_attrs)} attributes from 'attributes' field as new attributes")
+            
+            if new_attrs:
+                new_attrs_normalized = self._normalize_attributes(new_attrs)
+                
+                # Ensure we don't duplicate existing attributes
+                current_attr_names = {attr.get("name", "") for attr in result_attributes if isinstance(attr, dict)}
+                
+                for new_attr in new_attrs_normalized:
+                    attr_name = new_attr.get("name", "")
+                    if attr_name and attr_name not in current_attr_names:
+                        result_attributes.append(new_attr)
+                        logger.debug(f"   ➕ Added new attribute: {attr_name}:{new_attr.get('type', 'str')}")
+                    else:
+                        logger.debug(f"   ⚠️  Skipped duplicate attribute: {attr_name}")
+                        
+        elif operation_type == "remove":
+            # Remove specified attributes (but never remove 'id')
+            removed_attrs = interpretation.get("removed_attributes", [])
+            if removed_attrs:
+                # Filter out 'id' from removal list - it should never be removed
+                filtered_removed_attrs = [attr for attr in removed_attrs if attr != 'id']
+                if len(filtered_removed_attrs) != len(removed_attrs):
+                    logger.warning("⚠️  Prevented removal of 'id' attribute - it's required for database operations")
+                
+                original_count = len(result_attributes)
+                result_attributes = [
+                    attr for attr in result_attributes 
+                    if attr.get("name") not in filtered_removed_attrs
+                ]
+                removed_count = original_count - len(result_attributes)
+                logger.debug(f"   ➖ Removed {removed_count} attributes: {filtered_removed_attrs}")
+                
+        elif operation_type == "modify":
+            # Modify existing attributes (but be careful with 'id')
+            modified_attrs = interpretation.get("modified_attributes", [])
+            for mod in modified_attrs:
+                old_attr = mod.get("old", "")
+                new_attr = mod.get("new", "")
+                if old_attr and new_attr:
+                    # Prevent modification of 'id' attribute
+                    if old_attr.startswith("id:") or old_attr == "id":
+                        logger.warning("⚠️  Prevented modification of 'id' attribute - it's immutable")
+                        continue
+                        
+                    # Find and replace the attribute
+                    for i, attr in enumerate(result_attributes):
+                        if isinstance(attr, dict):
+                            current_attr_repr = f"{attr.get('name')}:{attr.get('type')}"
+                            if current_attr_repr == old_attr:
+                                new_attr_normalized = self._normalize_attributes([new_attr])
+                                if new_attr_normalized:
+                                    result_attributes[i] = new_attr_normalized[0]
+                                    logger.debug(f"   🔄 Modified attribute: {old_attr} -> {new_attr}")
+                                break
+        
+        # CRITICAL: Ensure 'id' attribute is always present and first
+        has_id = any(attr.get("name") == "id" for attr in result_attributes if isinstance(attr, dict))
+        if not has_id:
+            # Add 'id' attribute at the beginning
+            id_attr = {"name": "id", "type": "int"}
+            result_attributes.insert(0, id_attr)
+            logger.debug("   🔧 Added mandatory 'id' attribute")
+        else:
+            # Ensure 'id' is first in the list
+            id_attr = None
+            non_id_attrs = []
+            for attr in result_attributes:
+                if isinstance(attr, dict) and attr.get("name") == "id":
+                    id_attr = attr
+                else:
+                    non_id_attrs.append(attr)
+            
+            if id_attr:
+                result_attributes = [id_attr] + non_id_attrs
+                logger.debug("   🔧 Moved 'id' attribute to first position")
+        
+        logger.debug(f"   📊 Final result: {len(result_attributes)} attributes")
+        return result_attributes
 
-            if is_debug_mode():
-                logger.info(
-                    f"✅ {self.entity_name}BAE: Interpreted request with {len(extracted_attributes)} attributes "
-                    f"and {len(interpretation['swea_coordination'])} SWEA tasks"
-                )
-                logger.info(f"🔍 Current attributes: {extracted_attributes}")
-
-            return interpretation
-
-        except Exception as e:
-            logger.error(f"❌ {self.entity_name}BAE: Error interpreting business request: {str(e)}")
-            return {
-                "error": f"Failed to interpret business request: {str(e)}",
-                "entity": self.entity_name,
-                "details": str(e),
-            }
+    def _create_unified_coordination_plan(self, attributes: List[Dict[str, Any]], 
+                                        is_evolution: bool, operation_type: str) -> List[Dict[str, Any]]:
+        """Create a unified coordination plan for all operation types"""
+        return [
+            {
+                "swea_agent": "TechLeadSWEA",
+                "task_type": "coordinate_system_generation",
+                "payload": {
+                    "entity": self.entity_name,
+                    "attributes": attributes,
+                    "context": f"{operation_type} operation",
+                    "is_evolution": is_evolution,
+                    "business_requirements": {
+                        "domain_focus": True,
+                        "semantic_coherence": True,
+                        "quality_gates": True,
+                        "technical_governance": True,
+                    },
+                },
+            },
+            {
+                "swea_agent": "DatabaseSWEA",
+                "task_type": "migrate_schema" if is_evolution else "setup_database",
+                "payload": {
+                    "entity": self.entity_name,
+                    "attributes": attributes,
+                    "context": f"{operation_type} operation",
+                    "preserve_data": is_evolution,
+                    "business_rules": True,
+                },
+            },
+            {
+                "swea_agent": "BackendSWEA",
+                "task_type": "generate_model",
+                "payload": {
+                    "entity": self.entity_name,
+                    "attributes": attributes,
+                    "context": f"{operation_type} operation",
+                    "business_vocabulary": True,
+                    "domain_focus": True,
+                    "semantic_coherence": True,
+                },
+            },
+            {
+                "swea_agent": "BackendSWEA",
+                "task_type": "generate_api",
+                "payload": {
+                    "entity": self.entity_name,
+                    "attributes": attributes,
+                    "context": f"{operation_type} operation",
+                    "crud_operations": True,
+                    "business_vocabulary": True,
+                    "domain_focus": True,
+                    "semantic_coherence": True,
+                },
+            },
+            {
+                "swea_agent": "FrontendSWEA",
+                "task_type": "generate_ui",
+                "payload": {
+                    "entity": self.entity_name,
+                    "attributes": attributes,
+                    "context": f"{operation_type} operation",
+                    "ui_framework": "streamlit",
+                    "features": ["crud_operations", "data_visualization", "user_friendly"],
+                },
+            },
+            {
+                "swea_agent": "TechLeadSWEA",
+                "task_type": "review_and_approve",
+                "payload": {
+                    "entity": self.entity_name,
+                    "context": f"{operation_type} operation",
+                    "system_components": ["database", "backend", "frontend"],
+                    "phase": "phase_1_complete",
+                    "final_review": True,
+                },
+            },
+        ]
 
     def _validate_coordination_plan(self, coordination_plan: List[Dict[str, Any]]) -> List[str]:
         """
@@ -687,388 +803,6 @@ class BaseBae(BaseAgent):
             elif not task.get("task_type").strip():
                 errors.append(f"{task_prefix}: 'task_type' cannot be empty")
 
-            if "payload" not in task:
-                errors.append(f"{task_prefix}: Missing 'payload'")
-            elif not isinstance(task.get("payload"), dict):
-                errors.append(f"{task_prefix}: 'payload' must be a dictionary")
-            else:
-                # Validate payload content for entity-related tasks
-                payload = task.get("payload", {})
-                task_type = task.get("task_type", "")
-
-                if task_type in [
-                    "generate_model",
-                    "generate_api",
-                    "generate_ui",
-                    "setup_database",
-                    "migrate_schema",
-                ]:
-                    if not payload.get("entity") and not payload.get("entity_name"):
-                        errors.append(
-                            f"{task_prefix}: Entity-related task '{task_type}' missing entity information in payload"
-                        )
-
-        return errors
-
-    def _handle_evolution_request(
-        self, business_request: str, context: str, current_attributes: List[str]
-    ) -> Dict[str, Any]:
-        """Handle evolution requests that modify existing entities"""
-        current_attributes = current_schema.get("attributes", [])
-        request_lower = business_request.lower()
-
-        # Handle different types of evolution
-        if any(
-            keyword in request_lower
-            for keyword in [
-                "add",
-                "include",
-                "extend",
-                "additional",
-                "new",
-                "create",
-                "insert",
-            ]
-        ):
-            return self._handle_addition_evolution(business_request, context, current_attributes)
-        
-        elif any(
-            keyword in request_lower
-            for keyword in [
-                "remove",
-                "delete",
-                "drop",
-                "eliminate",
-            ]
-        ):
-            return self._handle_removal_evolution(business_request, context, current_attributes)
-        
-        elif any(
-            keyword in request_lower
-            for keyword in [
-                "modify",
-                "update",
-                "change",
-                "alter",
-                "rename",
-            ]
-        ):
-            return self._handle_modification_evolution(business_request, context, current_attributes)
-        
-        else:
-            # Handle complex operations or fallback to addition
-            # Check if it might be a complex request with multiple operations
-            has_multiple_ops = (
-                sum(1 for keyword in ["add", "remove", "modify", "change", "update", "delete"] 
-                    if keyword in request_lower) > 1
-            )
-            
-            if has_multiple_ops:
-                return self._handle_complex_evolution(business_request, context, current_attributes)
-            else:
-                # Default to addition evolution for unclear requests
-                return self._handle_addition_evolution(business_request, context, current_attributes)
-
-    def _handle_addition_evolution(
-        self, business_request: str, context: str, current_attributes: List[str]
-    ) -> Dict[str, Any]:
-        """Handle adding new attributes to existing entity"""
-        logger.info(f"🔍 {self.entity_name}BAE: Adding attributes to existing entity")
-        logger.info(f"📋 Current attributes: {current_attributes}")
-        logger.info(f"📝 Request: {business_request}")
-        prompt = f"""
-        As the {self.entity_name} BAE, analyze this attribute addition request:
-
-        Request: "{business_request}"
-        Current {self.entity_name} attributes: {current_attributes}
-
-        Extract ONLY the NEW attributes that should be ADDED to the existing entity.
-        Look for field names like:
-        - "email" or "email address" -> "email: str"
-        - "age" -> "age: int"
-        - "birth date" -> "birth_date: date"
-        - "phone" or "phone number" -> "phone: str"
-
-        Return a simple JSON list of new attributes to add:
-        ["new_attribute1: type", "new_attribute2: type"]
-
-        For example, if the request is "add email address", return: ["email: str"]
-        """
-        response = self.llm.generate_domain_entity_response(prompt, self.entity_name)
-        cleaned_response = self._clean_json_response(response)
-        new_attributes = json.loads(cleaned_response)
-        if not isinstance(new_attributes, list):
-            raise ValueError(f"LLM did not return a list of new attributes: {new_attributes}")
-        # Filter out attributes that already exist
-        existing_attr_names = [attr.split(":")[0].strip() for attr in current_attributes]
-        new_attributes = [attr for attr in new_attributes if attr.split(":")[0].strip() not in existing_attr_names]
-        all_attributes = current_attributes + new_attributes
-        logger.info(f"✅ {self.entity_name}BAE: Addition evolution result:")
-        logger.info(f"   📋 Existing attributes: {current_attributes}")
-        logger.info(f"   🆕 New attributes: {new_attributes}")
-        logger.info(f"   🔄 Combined attributes: {all_attributes}")
-        return {
-            "entity": self.entity_name,
-            "interpreted_intent": f"Add attributes to existing {self.entity_name} entity: {', '.join(new_attributes)}",
-            "extracted_attributes": all_attributes,
-            "new_attributes": new_attributes,
-            "existing_attributes": current_attributes,
-            "domain_operations": ["evolve_entity"],
-            "is_evolution": True,
-            "evolution_type": "addition",
-            "request_type": "evolution",
-            "swea_coordination": self._create_evolution_coordination_plan(all_attributes),
-            "business_vocabulary": [self.entity_name.lower()]
-            + [attr.split(":")[0].strip() for attr in new_attributes],
-            "entity_focus": self.entity_name,
-        }
-
-    def _handle_removal_evolution(
-        self, business_request: str, context: str, current_attributes: List[str]
-    ) -> Dict[str, Any]:
-        """Handle removing attributes from existing entity"""
-        prompt = f"""
-        As the {self.entity_name} BAE, analyze this attribute removal request:
-
-        Request: "{business_request}"
-        Current {self.entity_name} attributes: {current_attributes}
-
-        Identify which attributes should be REMOVED from the entity.
-        Return a simple JSON list of attribute names (without types) to remove:
-        ["attribute_name1", "attribute_name2"]
-
-        For example, if the request is "remove age attribute", return: ["age"]
-        If the request is "remove age and course", return: ["age", "course"]
-        """
-
-        response = self.llm.generate_domain_entity_response(prompt, self.entity_name)
-        cleaned_response = self._clean_json_response(response)
-
-        try:
-            attributes_to_remove = json.loads(cleaned_response)
-            if not isinstance(attributes_to_remove, list):
-                attributes_to_remove = []
-        except json.JSONDecodeError:
-            # Extract attributes manually as fallback
-            attributes_to_remove = []
-            for attr in current_attributes:
-                attr_name = attr.split(":")[0].strip()
-                if attr_name.lower() in business_request.lower():
-                    attributes_to_remove.append(attr_name)
-
-        # Remove specified attributes
-        remaining_attributes = []
-        removed_attributes = []
-
-        for attr in current_attributes:
-            attr_name = attr.split(":")[0].strip()
-            if attr_name not in attributes_to_remove:
-                remaining_attributes.append(attr)
-            else:
-                removed_attributes.append(attr)
-
-        return {
-            "entity": self.entity_name,
-            "interpreted_intent": (
-                f"Remove attributes from {self.entity_name} entity: {', '.join(attributes_to_remove)}"
-            ),
-            "extracted_attributes": remaining_attributes,
-            "removed_attributes": removed_attributes,
-            "existing_attributes": current_attributes,
-            "domain_operations": ["evolve_entity"],
-            "is_evolution": True,
-            "evolution_type": "removal",
-            "request_type": "evolution",
-            "swea_coordination": self._create_evolution_coordination_plan(remaining_attributes),
-            "business_vocabulary": [self.entity_name.lower()],
-            "entity_focus": self.entity_name,
-        }
-
-    def _handle_modification_evolution(
-        self, business_request: str, context: str, current_attributes: List[str]
-    ) -> Dict[str, Any]:
-        """Handle modifying existing attributes"""
-        prompt = f"""
-        As the {self.entity_name} BAE, analyze this attribute modification request:
-
-        Request: "{business_request}"
-        Current {self.entity_name} attributes: {current_attributes}
-
-        Identify what modifications should be made to existing attributes.
-        Return a JSON object with the modifications:
-        {{
-            "modifications": [
-                {{"old": "attribute_name: old_type", "new": "attribute_name: new_type", "change": "description"}},
-                {{"old": "old_name: type", "new": "new_name: type", "change": "rename"}}
-            ]
-        }}
-
-        For example:
-        - "change age from int to str" -> {{"old": "age: int", "new": "age: str", "change": "type_change"}}
-        - "rename registration_number to student_id" -> {{"old": "registration_number: str",
-             "new": "student_id: str",
-             "change": "rename"}}
-        """
-
-        response = self.llm.generate_domain_entity_response(prompt, self.entity_name)
-        cleaned_response = self._clean_json_response(response)
-
-        try:
-            modification_data = json.loads(cleaned_response)
-            modifications = modification_data.get("modifications", [])
-        except json.JSONDecodeError:
-            # Extract modifications manually as fallback
-            modifications = []
-            request_lower = business_request.lower()
-
-            # Handle common modification patterns
-            for attr in current_attributes:
-                attr_name = attr.split(":")[0].strip()
-                attr_type = attr.split(":")[1].strip() if ":" in attr else "str"
-
-                if f"change {attr_name}" in request_lower or f"modify {attr_name}" in request_lower:
-                    if "to str" in request_lower:
-                        modifications.append(
-                            {"old": attr, "new": f"{attr_name}: str", "change": "type_change"}
-                        )
-                    elif "to int" in request_lower:
-                        modifications.append(
-                            {"old": attr, "new": f"{attr_name}: int", "change": "type_change"}
-                        )
-                elif f"rename {attr_name}" in request_lower:
-                    # Extract new name (simplified)
-                    if "to " in request_lower:
-                        new_name = request_lower.split("to ")[1].split()[0]
-                        modifications.append(
-                            {"old": attr, "new": f"{new_name}: {attr_type}", "change": "rename"}
-                        )
-
-        # Apply modifications
-        modified_attributes = current_attributes.copy()
-        modification_summary = []
-
-        for mod in modifications:
-            old_attr = mod.get("old", "")
-            new_attr = mod.get("new", "")
-            change = mod.get("change", "")
-
-            if old_attr in modified_attributes:
-                idx = modified_attributes.index(old_attr)
-                modified_attributes[idx] = new_attr
-                modification_summary.append(f"{change}: {old_attr} -> {new_attr}")
-
-        return {
-            "entity": self.entity_name,
-            "interpreted_intent": (
-                f"Modify attributes in {self.entity_name} entity: {'; '.join(modification_summary)}"
-            ),
-            "extracted_attributes": modified_attributes,
-            "modifications": modifications,
-            "existing_attributes": current_attributes,
-            "domain_operations": ["evolve_entity"],
-            "is_evolution": True,
-            "evolution_type": "modification",
-            "swea_coordination": self._create_evolution_coordination_plan(modified_attributes),
-            "business_vocabulary": [self.entity_name.lower()],
-            "entity_focus": self.entity_name,
-        }
-
-    def _extract_attributes_from_request(self, request: str) -> List[str]:
-        """Extract attributes from natural language request"""
-        import re
-        common_attributes = {
-            "name": "name: str",
-            "email": "email: str",
-            "age": "age: int",
-            "phone": "phone: str",
-            "address": "address: str",
-            "birth": "birth_date: date",
-            "grade": "grade_point_average: float",
-            "registration": "registration_number: str",
-            "course": "course: str",
-            "enrollment": "enrollment_date: date",
-        }
-        extracted = []
-        request_lower = request.lower()
-        for keyword, attribute in common_attributes.items():
-            # Use word boundary matching to avoid false positives (e.g., "age" in "manage")
-            if re.search(r'\b' + re.escape(keyword) + r'\b', request_lower):
-                extracted.append(attribute)
-        
-        # Always add 'id' if not present - it's required for database operations
-        if not any(attr.startswith("id:") for attr in extracted):
-            extracted.insert(0, "id: int")
-        
-        if not extracted or len(extracted) == 1:  # Only id was added
-            # For initial generation, use ONLY the basic attributes when none are specified
-            if not self._is_evolution_request(request):
-                logger.info(f"{self.entity_name}BAE: No specific attributes found in request, using minimal default attributes")
-                # Return only basic entity attributes - don't assume extra fields
-                if self.entity_name.lower() == "student":
-                    return ["id: int", "name: str"]  # Minimal student attributes
-                elif self.entity_name.lower() == "course":
-                    return ["id: int", "name: str"]  # Minimal course attributes  
-                elif self.entity_name.lower() == "teacher":
-                    return ["id: int", "name: str"]  # Minimal teacher attributes
-                else:
-                    return ["id: int", "name: str"]  # Minimal generic attributes
-            else:
-                raise ValueError(f"No attributes could be extracted from request: {request}")
-        return extracted
-
-    def _is_evolution_request(self, request: str) -> bool:
-        """Determine if this is an evolution request"""
-        request_lower = request.lower()
-
-        # Check for attribute evolution keywords
-        evolution_keywords = [
-            "modify",
-            "update",
-            "change",
-            "remove",
-            "delete",
-            "extend",
-            "enhance",
-            "alter",
-            "rename",
-        ]
-
-        # Check for attribute addition patterns (evolution)
-        attribute_addition_patterns = [
-            "add attribute",
-            "add field",
-            "add property",
-            "include attribute",
-            "include field",
-            "add email to",
-            "add phone to",
-            "add address to",
-        ]
-        
-        # Check for "add X as attribute" patterns (more flexible matching)
-        add_as_attribute_patterns = [
-            "as attribute",
-            "as field", 
-            "as property",
-        ]
-
-        # Check for basic "add" + attribute keywords
-        has_add = "add" in request_lower
-        has_attribute_keyword = any(attr_word in request_lower for attr_word in ["attribute", "field", "property", "column"])
-
-        # Additional heuristic: detect "include" statements that mention an attribute/field even if the
-        # exact phrase "include attribute" is not present (e.g. "include the \"email\" attribute").
-        has_include = "include" in request_lower
-
-        # Check for evolution patterns (broadened to catch more natural-language variants)
-        return (
-            any(keyword in request_lower for keyword in evolution_keywords)
-            or any(pattern in request_lower for pattern in attribute_addition_patterns)
-            or any(pattern in request_lower for pattern in add_as_attribute_patterns)
-            or (has_add and has_attribute_keyword)
-            or (has_include and has_attribute_keyword)
-        )
-
     def _get_default_attributes(self) -> List[Any]:
         """
         Get default attributes for this domain entity.
@@ -1080,156 +814,13 @@ class BaseBae(BaseAgent):
         
         # Fallback to minimal attributes - don't assume extra fields
         if self.entity_name.lower() == "student":
-            return ["name: str", "email: str"]  # Removed age - only include if explicitly requested
+            return ["name: str", "email: str"]
         elif self.entity_name.lower() == "course":
             return ["name: str", "code: str"]
         elif self.entity_name.lower() == "teacher":
             return ["name: str", "email: str"]
         else:
             return ["name: str", "description: str"]
-
-    def _handle_complex_evolution(
-        self, business_request: str, context: str, current_attributes: List[str]
-    ) -> Dict[str, Any]:
-        """Handle complex evolution requests with multiple operations"""
-        prompt = f"""
-        As the {self.entity_name} BAE, analyze this complex evolution request that contains multiple operations:
-
-        Request: "{business_request}"
-        Current {self.entity_name} attributes: {current_attributes}
-
-        This request contains multiple operations. Analyze and return a JSON object with:
-        {{
-            "operations": [
-                {{"type": "add", "attributes": ["new_attr: type"]}},
-                {{"type": "remove", "attributes": ["attr_name"]}},
-                {{"type": "modify", "old": "old_attr: old_type", "new": "new_attr: new_type"}}
-            ]
-        }}
-
-        Identify all operations in the request and list them separately.
-        """
-
-        response = self.llm.generate_domain_entity_response(prompt, self.entity_name)
-        cleaned_response = self._clean_json_response(response)
-
-        try:
-            operation_data = json.loads(cleaned_response)
-            operations = operation_data.get("operations", [])
-        except json.JSONDecodeError:
-            # Fallback: parse manually
-            operations = []
-            request_lower = business_request.lower()
-
-            # Simple pattern matching for complex requests
-            if "add" in request_lower and "remove" in request_lower:
-                # Extract add operations
-                if "email" in request_lower:
-                    operations.append({"type": "add", "attributes": ["email: str"]})
-                # Extract remove operations
-                if "age" in request_lower and "remove" in request_lower:
-                    operations.append({"type": "remove", "attributes": ["age"]})
-                # Extract modify operations
-                if (
-                    "change" in request_lower
-                    and "course" in request_lower
-                    and "program" in request_lower
-                ):
-                    operations.append(
-                        {"type": "modify", "old": "course: str", "new": "program: str"}
-                    )
-
-        # Apply operations in sequence
-        result_attributes = current_attributes.copy()
-        operation_summary = []
-
-        for op in operations:
-            op_type = op.get("type", "")
-
-            if op_type == "add":
-                new_attrs = op.get("attributes", [])
-                result_attributes.extend(new_attrs)
-                operation_summary.append(f"Added: {', '.join(new_attrs)}")
-
-            elif op_type == "remove":
-                attrs_to_remove = op.get("attributes", [])
-                for attr_name in attrs_to_remove:
-                    result_attributes = [
-                        attr
-                        for attr in result_attributes
-                        if not attr.split(":")[0].strip() == attr_name
-                    ]
-                operation_summary.append(f"Removed: {', '.join(attrs_to_remove)}")
-
-            elif op_type == "modify":
-                old_attr = op.get("old", "")
-                new_attr = op.get("new", "")
-                if old_attr in result_attributes:
-                    idx = result_attributes.index(old_attr)
-                    result_attributes[idx] = new_attr
-                    operation_summary.append(f"Modified: {old_attr} -> {new_attr}")
-
-        return {
-            "entity": self.entity_name,
-            "interpreted_intent": f"Complex evolution of {self.entity_name} entity: {'; '.join(operation_summary)}",
-            "extracted_attributes": result_attributes,
-            "operations": operations,
-            "existing_attributes": current_attributes,
-            "domain_operations": ["evolve_entity"],
-            "is_evolution": True,
-            "evolution_type": "complex",
-            "swea_coordination": self._create_evolution_coordination_plan(result_attributes),
-            "business_vocabulary": [self.entity_name.lower()],
-            "entity_focus": self.entity_name,
-        }
-
-    def _create_evolution_coordination_plan(self, attributes: List[str]) -> List[Dict[str, Any]]:
-        """Create coordination plan for evolution with given attributes"""
-        return [
-            {
-                "swea_agent": "TechLeadSWEA",
-                "task_type": "coordinate_system_generation",
-                "payload": {
-                    "entity": self.entity_name,
-                    "attributes": attributes,
-                    "is_evolution": True,
-                },
-            },
-            {
-                "swea_agent": "DatabaseSWEA",
-                "task_type": "migrate_schema",
-                "payload": {
-                    "entity": self.entity_name,
-                    "attributes": attributes, 
-                    "is_evolution": True,
-                    "preserve_data": True,
-                },
-            },
-            {
-                "swea_agent": "BackendSWEA",
-                "task_type": "generate_model",
-                "payload": {"attributes": attributes, "is_evolution": True},
-            },
-            {
-                "swea_agent": "BackendSWEA",
-                "task_type": "generate_api",
-                "payload": {"attributes": attributes, "is_evolution": True},
-            },
-            {
-                "swea_agent": "FrontendSWEA",
-                "task_type": "generate_ui",
-                "payload": {"attributes": attributes, "is_evolution": True},
-            },
-            {
-                "swea_agent": "TechLeadSWEA",
-                "task_type": "review_and_approve",
-                "payload": {
-                    "entity": self.entity_name,
-                    "attributes": attributes,
-                    "is_evolution": True,
-                },
-            },
-        ]
 
     def _generate_schema(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Generate schema based on attributes and context"""
@@ -1312,7 +903,7 @@ class BaseBae(BaseAgent):
 
         evolved_code = self.llm.generate_domain_entity_response(prompt, self.entity_name)
 
-        updated_attributes = current_schema.get("attributes", []) + new_attributes
+        updated_attributes = current_schema.get("attributes", []) + self._normalize_attributes(new_attributes)
 
         evolved_schema = {
             "entity": self.entity_name,
@@ -1392,8 +983,7 @@ class BaseBae(BaseAgent):
         artifact_type = payload.get("artifact_type", "")
 
         prompt = f"""
-        As the {self.entity_name} BAE (
-            Business Autonomous Entity), validate this {artifact_type} artifact for domain rule compliance.
+        As the {self.entity_name} BAE (Business Autonomous Entity), validate this {artifact_type} artifact for domain rule compliance.
 
         VALIDATION CONTEXT:
         Entity Focus: {self.entity_name}
@@ -1511,7 +1101,11 @@ class BaseBae(BaseAgent):
         if schema:
             attributes = schema.get("attributes", [])
             for attr in attributes:
-                if ":" in attr:
+                if isinstance(attr, dict):
+                    term = attr.get("name")
+                    if term:
+                        vocabulary.append(term.title())
+                elif isinstance(attr, str) and ":" in attr:
                     term = attr.split(":")[0].strip()
                     vocabulary.append(term.title())
 
@@ -1553,3 +1147,190 @@ class BaseBae(BaseAgent):
         total_reuse = max(total_reuse, 80.0)
 
         return round(total_reuse, 2)
+
+    def _get_existing_entities_context(self) -> Dict[str, Any]:
+        """Get information about all existing entities in the system."""
+        try:
+            # Get entities from context store
+            context_store_path = os.environ.get("BAE_CONTEXT_STORE_PATH", "database/context_store.json")
+            context_store = ContextStore(context_store_path)
+            
+            existing_entities = {}
+            
+            # Get all entities from context store
+            all_entities = context_store.get_entities()
+            for entity_data in all_entities:
+                entity_name = entity_data.get("name", "").lower()
+                entity_info = entity_data.get("data", {})
+                
+                if entity_name and entity_name not in existing_entities:
+                    # Extract attributes if available
+                    attributes = []
+                    if isinstance(entity_info, dict):
+                        # From agent memory schema
+                        if "attributes" in entity_info:
+                            attributes = entity_info.get("attributes", [])
+                        # From domain knowledge
+                        elif "interpretation" in entity_info:
+                            interpretation = entity_info.get("interpretation", {})
+                            attributes = interpretation.get("extracted_attributes", [])
+                    
+                    existing_entities[entity_name] = {
+                        "exists": True,
+                        "attributes": attributes,
+                        "source": entity_data.get("type", "unknown")
+                    }
+            
+            return existing_entities
+            
+        except Exception as e:
+            logger.warning(f"Could not get existing entities context: {e}")
+            return {}
+
+    def _get_current_entity_context(self) -> Dict[str, Any]:
+        """Get detailed information about the current entity being processed."""
+        try:
+            # Check current schema in memory
+            current_schema = self.get_memory("current_schema")
+            if current_schema:
+                return {
+                    "exists": True,
+                    "attributes": current_schema.get("attributes", []),
+                    "context": current_schema.get("context", "academic"),
+                    "last_modified": current_schema.get("last_modified", current_schema.get("generated_at", "unknown")),
+                    "source": "bae_memory"
+                }
+            
+            # Try to load from persistent storage
+            self._load_stored_schema()
+            if self.current_schema:
+                return {
+                    "exists": True,
+                    "attributes": self.current_schema.get("attributes", []),
+                    "context": self.current_schema.get("context", "academic"),
+                    "last_modified": self.current_schema.get("last_modified", self.current_schema.get("generated_at", "unknown")),
+                    "source": "persistent_storage"
+                }
+            
+            # Check if entity exists in managed system (database)
+            try:
+                from baes.core.managed_system_manager import ManagedSystemManager
+                manager = ManagedSystemManager()
+                db_path = manager.managed_system_path / "app" / "database" / "baes_system.db"
+                
+                if db_path.exists():
+                    import sqlite3
+                    table_name = f"{self.entity_name.lower()}s"
+                    
+                    with sqlite3.connect(str(db_path)) as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+                        table_exists = cursor.fetchone() is not None
+                        
+                        if table_exists:
+                            # Get table schema
+                            cursor.execute(f"PRAGMA table_info({table_name})")
+                            columns = cursor.fetchall()
+                            
+                            attributes = []
+                            type_map = {"TEXT": "str", "INTEGER": "int", "REAL": "float"}
+                            
+                            for col in columns:
+                                col_name = col[1]
+                                col_type = col[2]
+                                py_type = type_map.get(col_type, "str")
+                                # Include ALL columns including 'id' for complete schema representation
+                                attributes.append({"name": col_name, "type": py_type})
+                            
+                            return {
+                                "exists": True,
+                                "attributes": attributes,
+                                "context": "academic",
+                                "source": "database_schema"
+                            }
+                
+            except Exception as db_e:
+                logger.debug(f"Could not check database for entity {self.entity_name}: {db_e}")
+            
+            # Entity does not exist
+            return {
+                "exists": False,
+                "attributes": [],
+                "context": "academic",
+                "source": "none"
+            }
+            
+        except Exception as e:
+            logger.warning(f"Could not get current entity context for {self.entity_name}: {e}")
+            return {
+                "exists": False,
+                "attributes": [],
+                "context": "academic",
+                "source": "error"
+            }
+
+    def _build_context_information(self, existing_entities: Dict[str, Any], current_entity: Dict[str, Any]) -> str:
+        """Build formatted context information for the LLM prompt."""
+        context_lines = []
+        
+        # Current entity information
+        entity_name = self.entity_name.lower()
+        if current_entity.get("exists", False):
+            attributes = current_entity.get("attributes", [])
+            if attributes:
+                attr_list = []
+                for attr in attributes:
+                    if isinstance(attr, dict):
+                        attr_list.append(f"{attr.get('name', 'unknown')}:{attr.get('type', 'str')}")
+                    elif isinstance(attr, str):
+                        attr_list.append(attr)
+                    else:
+                        attr_list.append(str(attr))
+                
+                context_lines.append(f"🎯 CURRENT ENTITY STATUS:")
+                context_lines.append(f"   Entity '{self.entity_name}' EXISTS with attributes: {', '.join(attr_list)}")
+                context_lines.append(f"   Source: {current_entity.get('source', 'unknown')}")
+                context_lines.append(f"   ⚠️  Any evolution must PRESERVE these existing attributes!")
+            else:
+                context_lines.append(f"🎯 CURRENT ENTITY STATUS:")
+                context_lines.append(f"   Entity '{self.entity_name}' EXISTS but has no recorded attributes")
+                context_lines.append(f"   Source: {current_entity.get('source', 'unknown')}")
+        else:
+            context_lines.append(f"🎯 CURRENT ENTITY STATUS:")
+            context_lines.append(f"   Entity '{self.entity_name}' does NOT exist in the system")
+            context_lines.append(f"   This is likely a CREATE operation for a new entity")
+        
+        # Other existing entities information
+        if existing_entities:
+            other_entities = {k: v for k, v in existing_entities.items() if k != entity_name}
+            if other_entities:
+                context_lines.append(f"\n📋 OTHER ENTITIES IN SYSTEM:")
+                for ent_name, ent_info in other_entities.items():
+                    if ent_info.get("exists", False):
+                        attrs = ent_info.get("attributes", [])
+                        if attrs:
+                            attr_summary = []
+                            for attr in attrs[:3]:  # Show first 3 attributes
+                                if isinstance(attr, dict):
+                                    attr_summary.append(attr.get('name', 'unknown'))
+                                elif isinstance(attr, str):
+                                    attr_summary.append(attr.split(':')[0] if ':' in attr else attr)
+                                else:
+                                    attr_summary.append(str(attr))
+                            attr_text = ', '.join(attr_summary)
+                            if len(attrs) > 3:
+                                attr_text += f" (+{len(attrs)-3} more)"
+                            context_lines.append(f"   - {ent_name}: {attr_text}")
+                        else:
+                            context_lines.append(f"   - {ent_name}: (no attributes recorded)")
+        else:
+            context_lines.append(f"\n📋 OTHER ENTITIES IN SYSTEM: None")
+        
+        # Evolution detection hints
+        context_lines.append(f"\n💡 EVOLUTION DETECTION HINTS:")
+        context_lines.append(f"   - Words like 'add', 'include', 'append' to existing entity = EVOLVE")
+        context_lines.append(f"   - Words like 'create', 'make', 'build' new entity = CREATE")
+        context_lines.append(f"   - Words like 'remove', 'delete' attribute = REMOVE")
+        context_lines.append(f"   - Words like 'change', 'modify', 'update' attribute = MODIFY")
+        
+        return '\n'.join(context_lines)
