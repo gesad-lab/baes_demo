@@ -98,7 +98,7 @@ class EnhancedRuntimeKernel:
 
         self.context_store = ContextStore(context_store_path)
         self.bae_registry = EnhancedBAERegistry()  # Auto-initializes all BAEs
-        self.entity_recognizer = EntityRecognizer()
+        self.entity_recognizer = EntityRecognizer(self.context_store)
         self._managed_system_manager = None  # Lazy initialization
 
         # SWEA agents (coordinated by BAEs) - also lazy initialization
