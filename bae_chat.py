@@ -993,9 +993,16 @@ class BAEConversationalCLI:
         if "error" in interpretation_result:
             return False
             
-        # Check confidence level
+        # Check confidence level - but only for low confidence cases
         confidence = interpretation_result.get("confidence", 0.5)
-        if confidence < 0.7:
+        detected_type = interpretation_result.get("operation_type", "unknown")
+        
+        # If confidence is high (>=0.7) and we have a valid operation type, don't ask for confirmation
+        if confidence >= 0.7 and detected_type in ["create", "evolve", "relationship", "remove", "modify"]:
+            return False
+        
+        # If confidence is low OR operation type is unknown, require confirmation
+        if confidence < 0.7 or detected_type == "unknown":
             return True
         
         # Check for ambiguous patterns that often get misinterpreted
@@ -1004,7 +1011,6 @@ class BAEConversationalCLI:
         # Check for relationship vs entity creation ambiguity
         if "add" in request_lower and "to" in request_lower and "entity" in request_lower:
             # This should be a relationship but often gets misinterpreted
-            detected_type = interpretation_result.get("operation_type", "unknown")
             is_relationship = interpretation_result.get("is_relationship", False)
             
             if detected_type != "relationship" and not is_relationship:
@@ -1016,7 +1022,6 @@ class BAEConversationalCLI:
             # If multiple entities are mentioned but it's not detected as relationship
             entities_mentioned = interpretation_result.get("entities_mentioned", [])
             if len(entities_mentioned) > 1:
-                detected_type = interpretation_result.get("operation_type", "unknown")
                 is_relationship = interpretation_result.get("is_relationship", False)
                 
                 if detected_type != "relationship" and not is_relationship:
@@ -1222,7 +1227,10 @@ class BAEConversationalCLI:
             "show logs",
             "clear",
         ]
-        return any(input_str.lower().strip().startswith(shortcut) for shortcut in shortcuts)
+        # Use exact match instead of startswith to avoid false positives
+        # e.g. "add course to student entity" should not match "add course"
+        input_normalized = input_str.lower().strip()
+        return any(input_normalized == shortcut for shortcut in shortcuts)
 
     def is_exit_command(self, input_str: str) -> bool:
         return input_str.lower().strip() in ["quit", "exit", "bye", "goodbye"]

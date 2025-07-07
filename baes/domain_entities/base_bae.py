@@ -448,27 +448,43 @@ class BaseBae(BaseAgent):
         - "add [ENTITY]" → entity creation (operation_type="create")
         - "create [ENTITY]" → entity creation (operation_type="create")
         - "add [FIELD] to [ENTITY]" → entity evolution (operation_type="evolve")
+        - "add [FIELD] to [ENTITY] entity" → entity evolution (operation_type="evolve")
 
         **CRITICAL EXAMPLES FOR REFERENCE:**
+        🔗 RELATIONSHIP EXAMPLES (operation_type="relationship"):
         ✅ "add course to student entity" → relationship (student gets course_id foreign key)
         ✅ "add a course to the student entity" → relationship (student gets course_id foreign key)
         ✅ "connect teacher with course" → relationship (course gets teacher_id foreign key)
         ✅ "enroll student in course" → relationship (student gets course_id foreign key)
-        ❌ "add student" → entity creation (create new student entity)
-        ❌ "add email to student" → entity evolution (add email field to student)
+        
+        🔄 EVOLUTION EXAMPLES (operation_type="evolve"):
+        ✅ "add age to student entity" → evolution (add age field to student)
+        ✅ "add email to student" → evolution (add email field to student)
+        ✅ "add birth date to student entity" → evolution (add birth_date field to student)
+        ✅ "add grade to student" → evolution (add grade field to student)
+        
+        🆕 CREATION EXAMPLES (operation_type="create"):
+        ✅ "add student" → entity creation (create new student entity)
+        ✅ "create student entity" → entity creation (create new student entity)
+        ✅ "add course" → entity creation (create new course entity)
 
         **STEP-BY-STEP ANALYSIS FOR REQUEST: "{request}"**
         
         Step 1: Count entities mentioned in request = ?
         Step 2: Identify relationship keywords (to, with, in, for) = ?
         Step 3: Check if matches "add X to Y entity" pattern = ?
-        Step 4: If multiple entities + relationship keywords → relationship
-        Step 5: If single entity → creation or evolution
+        Step 4: Apply decision matrix below
         
-        **DECISION MATRIX:**
-        - Multiple entities + "to/with/in" keywords = RELATIONSHIP
-        - Single entity + "add [entity]" = CREATION  
-        - Single entity + "add [field] to [entity]" = EVOLUTION
+        **DECISION MATRIX (APPLY IN ORDER):**
+        1. If request has 2+ entities AND relationship keywords → operation_type="relationship"
+        2. If request has 1 entity AND field/attribute keywords → operation_type="evolve"
+        3. If request has 1 entity AND creation keywords → operation_type="create"
+        4. If unclear → operation_type="unknown" (but try to avoid this)
+        
+        **KEYWORDS TO RECOGNIZE:**
+        • Relationship keywords: "to", "with", "in", "for", "connect", "link", "associate", "enroll", "assign"
+        • Field/attribute keywords: "age", "email", "name", "birth_date", "grade", "phone", "address", "description"
+        • Creation keywords: "add [entity]", "create [entity]", "make [entity]", "build [entity]"
 
         **RELATIONSHIP ENTITY ASSIGNMENT:**
         - For "add X to Y entity": Y=target_entity (gets X_id), X=related_entity
@@ -481,11 +497,16 @@ class BaseBae(BaseAgent):
         3. For relationships, entities can be created if they don't exist
 
         **CONFIDENCE SCORING:**
-        - 1.0: Perfect pattern match (e.g., "add course to student entity")
-        - 0.9: Clear relationship keywords with multiple entities
+        - 1.0: Perfect pattern match (e.g., "add course to student entity" or "add age to student entity")
+        - 0.9: Clear keywords with good evidence (e.g., "add email to student")
         - 0.8: Good evidence for relationship/creation/evolution
         - 0.7: Some ambiguity but leaning toward interpretation
         - 0.6 or below: High ambiguity, may need user confirmation
+        
+        **CONFIDENCE GUIDELINES:**
+        • Simple field additions should get 0.9+ confidence
+        • Clear relationship patterns should get 1.0 confidence
+        • Entity creation should get 0.8+ confidence
 
         Return a JSON object with:
 
@@ -518,7 +539,14 @@ class BaseBae(BaseAgent):
             "relationship_direction": "X_id added to Y - only for relationships"
         }}
 
-        **MANDATORY**: Follow the rules exactly. High confidence = clear interpretation. Low confidence = potential user confirmation needed.
+        **MANDATORY REQUIREMENTS:**
+        1. Follow the rules exactly in order
+        2. Use the provided examples as reference
+        3. AVOID returning "unknown" for basic cases - analyze the request carefully
+        4. High confidence (0.8+) = clear interpretation
+        5. Low confidence (0.6-) = potential user confirmation needed
+        6. For "add [field] to [entity]" patterns, always use operation_type="evolve"
+        7. For "add [entity1] to [entity2]" patterns, always use operation_type="relationship"
         """
 
     def _interpret_business_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
