@@ -270,18 +270,35 @@ class BaseBae(BaseAgent):
         
         logger.info(f"🔗 {self.entity_name}BAE: Handling relationship creation - {related_entity} -> {target_entity}")
         
-        # For relationship creation, we don't change attributes of the entity
-        # We just add a foreign key relationship
+        # CRITICAL FIX: For relationship creation, be selective about attributes to avoid extra fields
+        # Only include essential attributes that are required, not all existing attributes
         existing_attributes_raw: List[Any] = []
+        
+        # First, try to get current schema from memory (most up-to-date)
         if self.current_schema and self.current_schema.get("attributes"):
             existing_attributes_raw = self.current_schema["attributes"]
+            logger.info(f"🔗 {self.entity_name}BAE: Using attributes from current schema: {len(existing_attributes_raw)} attributes")
         else:
-            # If no current schema, try to load it or use default attributes
+            # Try to load from persistent storage
             self._load_stored_schema()
             if self.current_schema and self.current_schema.get("attributes"):
                 existing_attributes_raw = self.current_schema["attributes"]
+                logger.info(f"🔗 {self.entity_name}BAE: Using attributes from persistent storage: {len(existing_attributes_raw)} attributes")
             else:
-                existing_attributes_raw = self._get_default_attributes()
+                # Get current entity context but filter out extra attributes
+                current_entity_context = self._get_current_entity_context()
+                if current_entity_context.get("exists", False):
+                    db_attributes = current_entity_context.get("attributes", [])
+                    logger.info(f"🔗 {self.entity_name}BAE: Found {len(db_attributes)} attributes in database")
+                    
+                    # CRITICAL: Filter out extra attributes - only keep essential ones
+                    essential_attributes = self._filter_essential_attributes(db_attributes)
+                    existing_attributes_raw = essential_attributes
+                    logger.info(f"🔗 {self.entity_name}BAE: Filtered to {len(essential_attributes)} essential attributes")
+                else:
+                    # Entity doesn't exist, use minimal defaults
+                    existing_attributes_raw = [{"name": "id", "type": "int"}, {"name": "name", "type": "str"}]
+                    logger.info(f"🔗 {self.entity_name}BAE: Entity doesn't exist, using minimal defaults")
 
         existing_attributes = self._normalize_attributes(existing_attributes_raw)
         # ------------------------------------------------------------------
@@ -403,6 +420,59 @@ class BaseBae(BaseAgent):
         ]
         
         return interpretation
+
+    def _filter_essential_attributes(self, attributes: List[Any]) -> List[Any]:
+        """Filter attributes to only include essential ones for relationship creation"""
+        essential_attributes = []
+        
+        # Define core attributes that should always be kept
+        core_attributes = {"id"}  # Always keep ID
+        
+        # Add entity-specific essential attributes based on common patterns
+        entity_specific_essentials = {
+            "student": {"name", "email"},
+            "course": {"name"},
+            "teacher": {"name", "email"}
+        }
+        
+        essential_names = core_attributes.copy()
+        entity_name_lower = self.entity_name.lower()
+        if entity_name_lower in entity_specific_essentials:
+            essential_names.update(entity_specific_essentials[entity_name_lower])
+        else:
+            # For unknown entities, default to just name
+            essential_names.add("name")
+        
+        for attr in attributes:
+            if isinstance(attr, dict):
+                attr_name = attr.get("name", "").lower()
+                
+                # Keep essential attributes
+                if attr_name in essential_names:
+                    essential_attributes.append(attr)
+                    logger.info(f"🔗 Including essential attribute: {attr_name}")
+                # Keep existing foreign keys
+                elif attr.get("is_foreign_key", False):
+                    essential_attributes.append(attr)
+                    logger.info(f"🔗 Including existing foreign key: {attr_name}")
+                # Keep attributes that end with _id (likely foreign keys)
+                elif attr_name.endswith("_id"):
+                    essential_attributes.append(attr)
+                    logger.info(f"🔗 Including foreign key attribute: {attr_name}")
+                else:
+                    logger.info(f"🔗 Excluding non-essential attribute: {attr_name}")
+            else:
+                # For string format attributes, be selective
+                attr_str = str(attr).lower()
+                attr_name = attr_str.split(":")[0].strip() if ":" in attr_str else attr_str
+                
+                if attr_name in essential_names or attr_name.endswith("_id"):
+                    essential_attributes.append(attr)
+                    logger.info(f"🔗 Including essential string attribute: {attr}")
+                else:
+                    logger.info(f"🔗 Excluding non-essential string attribute: {attr}")
+        
+        return essential_attributes
 
     def _build_unified_interpretation_prompt(self, request: str, context: str) -> str:
         """Enhanced prompt with crystal-clear relationship detection rules for maximum accuracy."""
