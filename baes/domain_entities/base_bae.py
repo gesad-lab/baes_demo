@@ -486,6 +486,12 @@ class BaseBae(BaseAgent):
         3. If request has 1 entity AND creation keywords → operation_type="create"
         4. If unclear → operation_type="unknown" (but try to avoid this)
         
+        **SPECIFIC PATTERN MATCHING:**
+        • "add [field] to [entity]" → operation_type="evolve" (ALWAYS)
+        • "add [field] to [entity] entity" → operation_type="evolve" (ALWAYS) 
+        • "create [entity] with [attributes]" → operation_type="create" (ALWAYS)
+        • "create a [entity] entity with [attributes]" → operation_type="create" (ALWAYS)
+        
         **KEYWORDS TO RECOGNIZE:**
         • Relationship keywords: "to", "with", "in", "for", "connect", "link", "associate", "enroll", "assign"
         • Field/attribute keywords: "age", "email", "name", "birth_date", "grade", "phone", "address", "description"
@@ -892,6 +898,16 @@ class BaseBae(BaseAgent):
     def _create_unified_coordination_plan(self, attributes: List[Dict[str, Any]], 
                                         is_evolution: bool, operation_type: str) -> List[Dict[str, Any]]:
         """Create a unified coordination plan for all operation types"""
+        # CRITICAL: Create explicit constraint about using ONLY specified attributes
+        attribute_constraint = {
+            "use_only_specified_attributes": True,
+            "do_not_add_default_attributes": True,
+            "required_attributes": attributes,
+            "attribute_count": len(attributes),
+            "user_explicitly_specified": True,
+            "strict_attribute_compliance": True
+        }
+        
         return [
             {
                 "swea_agent": "TechLeadSWEA",
@@ -901,11 +917,13 @@ class BaseBae(BaseAgent):
                     "attributes": attributes,
                     "context": f"{operation_type} operation",
                     "is_evolution": is_evolution,
+                    "attribute_constraints": attribute_constraint,
                     "business_requirements": {
                         "domain_focus": True,
                         "semantic_coherence": True,
                         "quality_gates": True,
                         "technical_governance": True,
+                        "strict_attribute_compliance": True,
                     },
                 },
             },
@@ -918,6 +936,8 @@ class BaseBae(BaseAgent):
                     "context": f"{operation_type} operation",
                     "preserve_data": is_evolution,
                     "business_rules": True,
+                    "attribute_constraints": attribute_constraint,
+                    "use_only_specified_attributes": True,
                 },
             },
             {
@@ -930,6 +950,9 @@ class BaseBae(BaseAgent):
                     "business_vocabulary": True,
                     "domain_focus": True,
                     "semantic_coherence": True,
+                    "attribute_constraints": attribute_constraint,
+                    "use_only_specified_attributes": True,
+                    "do_not_add_extra_fields": True,
                 },
             },
             {
@@ -943,6 +966,9 @@ class BaseBae(BaseAgent):
                     "business_vocabulary": True,
                     "domain_focus": True,
                     "semantic_coherence": True,
+                    "attribute_constraints": attribute_constraint,
+                    "use_only_specified_attributes": True,
+                    "do_not_add_extra_fields": True,
                 },
             },
             {
@@ -954,6 +980,9 @@ class BaseBae(BaseAgent):
                     "context": f"{operation_type} operation",
                     "ui_framework": "streamlit",
                     "features": ["crud_operations", "data_visualization", "user_friendly"],
+                    "attribute_constraints": attribute_constraint,
+                    "use_only_specified_attributes": True,
+                    "do_not_add_extra_fields": True,
                 },
             },
             {
@@ -965,6 +994,8 @@ class BaseBae(BaseAgent):
                     "system_components": ["database", "backend", "frontend"],
                     "phase": "phase_1_complete",
                     "final_review": True,
+                    "attribute_constraints": attribute_constraint,
+                    "strict_attribute_compliance": True,
                 },
             },
         ]
