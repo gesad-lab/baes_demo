@@ -53,13 +53,13 @@ class CourseBae(BaseBae):
         """Get default attributes for Course domain entity"""
         return [
             {"name": "name", "type": "str"},
-            {"name": "code", "type": "str"},
-            {"name": "credits", "type": "int"},
-            {"name": "duration", "type": "int"},
-            {"name": "description", "type": "str"},
-            {"name": "prerequisites", "type": "List[str]"},
-            {"name": "department", "type": "str"},
-            {"name": "level", "type": "str"},
+            # {"name": "code", "type": "str"},
+            # {"name": "credits", "type": "int"},
+            # {"name": "duration", "type": "int"},
+            # {"name": "description", "type": "str"},
+            # {"name": "prerequisites", "type": "List[str]"},
+            # {"name": "department", "type": "str"},
+            # {"name": "level", "type": "str"},
         ]
 
     def _get_business_rules(self) -> List[str]:
