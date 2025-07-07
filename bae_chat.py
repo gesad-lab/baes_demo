@@ -790,10 +790,17 @@ class BAEConversationalCLI:
     def _handle_post_generation_server_refresh(self, result: Dict[str, Any]):
         """Handle server refresh after successful entity generation when servers were already running"""
         try:
-            # Check if new entity was actually created/added
+            # Check if new entity was actually created/added OR relationship was created
             execution_results = result.get("execution_results", [])
+            
+            # Check for entity creation/modification (model, migration, or relationship tasks)
             entity_added = any(
-                task.get("success") and "model" in task.get("task", "")
+                task.get("success") and (
+                    "model" in task.get("task", "").lower() or
+                    "migrate" in task.get("task", "").lower() or
+                    "create_relationships" in task.get("task", "").lower() or
+                    "relationship" in task.get("task", "").lower()
+                )
                 for task in execution_results
             )
 
@@ -802,7 +809,20 @@ class BAEConversationalCLI:
                 from baes.utils.presentation_logger import get_presentation_logger
 
                 presentation_logger = get_presentation_logger()
-                presentation_logger.server_restart("New entity detected")
+                
+                # Determine restart reason based on task type
+                restart_reason = "New entity detected"
+                for task in execution_results:
+                    if task.get("success"):
+                        task_name = task.get("task", "").lower()
+                        if "relationship" in task_name or "create_relationships" in task_name:
+                            restart_reason = "Relationship created"
+                            break
+                        elif "migrate" in task_name:
+                            restart_reason = "Entity modified"
+                            break
+                
+                presentation_logger.server_restart(restart_reason)
 
                 # Auto-restart servers to refresh the UI
                 self._restart_servers()
