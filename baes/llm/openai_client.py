@@ -3,6 +3,7 @@ import logging
 import os
 import re
 from typing import Any, Dict, Optional
+from datetime import datetime
 
 import openai
 from dotenv import load_dotenv
@@ -71,23 +72,247 @@ class OpenAIClient:
         system_prompt: Optional[str] = None,
         temperature: float = 0,
         max_tokens: int = 2000,
+        ensure_json: bool = False,
+        json_schema: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """Generate response from OpenAI GPT-4o-mini with domain focus"""
+        """
+        Generate response from OpenAI GPT-4o-mini with domain focus.
+        
+        Args:
+            prompt: The user prompt
+            system_prompt: Optional system prompt
+            temperature: Sampling temperature (0 for deterministic)
+            max_tokens: Maximum tokens in response
+            ensure_json: If True, enforces JSON response format
+            json_schema: Optional JSON schema to guide the response structure
+            
+        Returns:
+            Generated response string (clean JSON if ensure_json=True)
+        """
         try:
             messages = []
             if system_prompt:
                 messages.append({"role": "system", "content": system_prompt})
-            messages.append({"role": "user", "content": prompt})
+            
+            # Enhance prompt for JSON enforcement if requested
+            if ensure_json:
+                enhanced_prompt = self._enhance_prompt_for_json(prompt, json_schema)
+                messages.append({"role": "user", "content": enhanced_prompt})
+            else:
+                messages.append({"role": "user", "content": prompt})
 
             response = self.client.chat.completions.create(
                 model=self.model, messages=messages, temperature=temperature, max_tokens=max_tokens
             )
 
-            return response.choices[0].message.content
+            response_content = response.choices[0].message.content
+
+            # If JSON is required, clean and validate the response
+            if ensure_json:
+                return self._ensure_valid_json(response_content, json_schema)
+
+            return response_content
 
         except Exception as e:
             logger.error(f"OpenAI API error: {str(e)}")
-            return f"Error generating response: {str(e)}"
+            error_response = f"Error generating response: {str(e)}"
+            
+            # If JSON was required, return a valid JSON error response
+            if ensure_json:
+                return json.dumps({
+                    "error": True,
+                    "error_message": str(e),
+                    "error_type": type(e).__name__,
+                    "fallback_response": True
+                })
+            
+            return error_response
+
+    def generate_json_response(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0,
+        max_tokens: int = 2000,
+        json_schema: Optional[Dict[str, Any]] = None,
+        fallback_schema: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Generate and parse JSON response with robust error handling and fallback strategies.
+        
+        Args:
+            prompt: The user prompt
+            system_prompt: Optional system prompt
+            temperature: Sampling temperature (0 for deterministic)
+            max_tokens: Maximum tokens in response
+            json_schema: Optional JSON schema to guide the response structure
+            fallback_schema: Optional fallback schema if primary parsing fails
+            
+        Returns:
+            Parsed JSON as dictionary, or fallback response if parsing fails
+        """
+        try:
+            # First attempt: Generate with JSON enforcement
+            response_text = self.generate_response(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                ensure_json=True,
+                json_schema=json_schema
+            )
+            
+            # Try to parse the response
+            try:
+                parsed_json = json.loads(response_text)
+                return parsed_json
+            except json.JSONDecodeError as parse_error:
+                logger.warning(f"JSON parsing failed on first attempt: {parse_error}")
+                
+                # Second attempt: Try to extract JSON from the response
+                extracted_json = self._extract_json_from_response(response_text)
+                try:
+                    parsed_json = json.loads(extracted_json)
+                    logger.info("JSON successfully extracted and parsed on second attempt")
+                    return parsed_json
+                except json.JSONDecodeError as extract_error:
+                    logger.warning(f"JSON extraction failed: {extract_error}")
+                    
+                    # Third attempt: Try to fix common JSON issues
+                    fixed_json = self._fix_common_json_issues(response_text)
+                    try:
+                        parsed_json = json.loads(fixed_json)
+                        logger.info("JSON successfully fixed and parsed on third attempt")
+                        return parsed_json
+                    except json.JSONDecodeError as fix_error:
+                        logger.error(f"JSON fixing failed: {fix_error}")
+                        
+                        # Final fallback: Return structured error response
+                        return self._create_fallback_json_response(
+                            original_response=response_text,
+                            error=str(fix_error),
+                            fallback_schema=fallback_schema
+                        )
+                        
+        except Exception as e:
+            logger.error(f"JSON generation failed: {str(e)}")
+            return self._create_fallback_json_response(
+                original_response="",
+                error=str(e),
+                fallback_schema=fallback_schema
+            )
+
+    def _enhance_prompt_for_json(self, prompt: str, json_schema: Optional[Dict[str, Any]] = None) -> str:
+        """Enhance prompt to ensure JSON response format"""
+        json_instructions = """
+CRITICAL: You MUST respond with valid JSON only. Do not include any text before or after the JSON.
+Do not use markdown code blocks. Do not include explanations outside the JSON structure.
+
+JSON REQUIREMENTS:
+- Start with { and end with }
+- Use double quotes for all strings
+- Use proper JSON syntax (no trailing commas, valid types)
+- Include all required fields
+- Do not include any text outside the JSON structure
+"""
+        
+        if json_schema:
+            schema_str = json.dumps(json_schema, indent=2)
+            json_instructions += f"""
+EXPECTED JSON STRUCTURE:
+{schema_str}
+
+You must follow this exact structure. All fields are required unless marked as optional.
+"""
+        
+        enhanced_prompt = f"{prompt}\n\n{json_instructions}"
+        return enhanced_prompt
+
+    def _ensure_valid_json(self, response: str, json_schema: Optional[Dict[str, Any]] = None) -> str:
+        """Ensure the response is valid JSON with multiple fallback strategies"""
+        # First, try to extract JSON from the response
+        extracted_json = self._extract_json_from_response(response)
+        
+        # Try to parse the extracted JSON
+        try:
+            parsed = json.loads(extracted_json)
+            # If successful, return the cleaned JSON
+            return json.dumps(parsed, ensure_ascii=False)
+        except json.JSONDecodeError:
+            pass
+        
+        # If extraction failed, try to fix common JSON issues
+        fixed_json = self._fix_common_json_issues(response)
+        try:
+            parsed = json.loads(fixed_json)
+            return json.dumps(parsed, ensure_ascii=False)
+        except json.JSONDecodeError:
+            pass
+        
+        # If all attempts fail, return a structured error response
+        error_response = {
+            "error": True,
+            "error_message": "Failed to generate valid JSON response",
+            "original_response": response[:500],  # Truncate for safety
+            "fallback_response": True
+        }
+        
+        if json_schema:
+            error_response["expected_schema"] = json_schema
+        
+        return json.dumps(error_response, ensure_ascii=False)
+
+    def _fix_common_json_issues(self, response: str) -> str:
+        """Fix common JSON formatting issues"""
+        # Remove any text before the first {
+        start_idx = response.find('{')
+        if start_idx != -1:
+            response = response[start_idx:]
+        
+        # Remove any text after the last }
+        end_idx = response.rfind('}')
+        if end_idx != -1:
+            response = response[:end_idx + 1]
+        
+        # Fix common JSON syntax issues
+        response = response.replace("'", '"')  # Replace single quotes with double quotes
+        response = response.replace("True", "true")  # Fix boolean values
+        response = response.replace("False", "false")
+        response = response.replace("None", "null")
+        
+        # Remove trailing commas in objects and arrays
+        response = re.sub(r',(\s*[}\]])', r'\1', response)
+        
+        # Fix unquoted property names
+        response = re.sub(r'(\s*)(\w+)(\s*):', r'\1"\2"\3:', response)
+        
+        return response.strip()
+
+    def _create_fallback_json_response(
+        self, 
+        original_response: str, 
+        error: str, 
+        fallback_schema: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Create a fallback JSON response when parsing fails"""
+        fallback = {
+            "error": True,
+            "error_message": error,
+            "original_response": original_response[:200] if original_response else "",
+            "fallback_response": True,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        if fallback_schema:
+            # Try to create a minimal valid response based on fallback schema
+            try:
+                for key, value in fallback_schema.items():
+                    if key not in fallback:
+                        fallback[key] = value
+            except Exception as e:
+                logger.warning(f"Failed to apply fallback schema: {e}")
+        
+        return fallback
 
     def generate_domain_entity_response(
         self,
@@ -290,20 +515,45 @@ class OpenAIClient:
         Return ONLY valid JSON.
         """
 
-        response = self.generate_domain_entity_response(prompt, entity)
+        # Use the new JSON enforcement functionality
+        json_schema = {
+            "is_semantically_coherent": True,
+            "coherence_score": 85,
+            "business_vocabulary_preserved": True,
+            "domain_rules_followed": True,
+            "identified_issues": [],
+            "improvement_suggestions": []
+        }
 
-        try:
-            json_content = self._extract_json_from_response(response)
-            return json.loads(json_content)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse semantic coherence validation as JSON: {str(e)}")
-            logger.error(f"Raw OpenAI response: {response}")
-            return {
+        # Use the new generate_json_response method for robust JSON handling
+        return self.generate_json_response(
+            prompt=prompt,
+            system_prompt=f"""
+            You are working with Business Autonomous Entities (BAEs) that represent domain entities
+            as living, autonomous agents within the system.
+
+            Current focus: {entity} entity in academic context
+
+            Your responsibilities:
+            1. Maintain semantic coherence between business vocabulary and technical implementation
+            2. Preserve domain knowledge and business rules
+            3. Ensure generated artifacts reflect business terminology
+            4. Focus on domain entity representation, not software engineering roles
+            5. Enable runtime evolution while preserving semantic consistency
+
+            Always prioritize business domain understanding and vocabulary preservation.
+            """,
+            temperature=0,
+            json_schema=json_schema,
+            fallback_schema={
                 "is_semantically_coherent": False,
                 "coherence_score": 0,
-                "error": f"Failed to parse validation response: {str(e)}",
-                "raw_response": response,
+                "business_vocabulary_preserved": False,
+                "domain_rules_followed": False,
+                "identified_issues": ["Validation failed due to parsing error"],
+                "improvement_suggestions": ["Review the generated code manually"]
             }
+        )
 
     def interpret_business_request(
         self, natural_language_input: str, context: str = "academic"
@@ -333,16 +583,52 @@ class OpenAIClient:
         Return ONLY valid JSON.
         """
 
-        response = self.generate_domain_entity_response(prompt, context=context)
+        # Use the new JSON enforcement functionality
+        json_schema = {
+            "intent": "create_entity",
+            "entity_focus": "Student",
+            "requested_operations": ["create"],
+            "attributes_mentioned": [],
+            "business_vocabulary": [],
+            "swea_coordination_needed": {
+                "programmer": True,
+                "frontend": True,
+                "database": True
+            },
+            "complexity_level": "simple"
+        }
 
-        try:
-            json_content = self._extract_json_from_response(response)
-            return json.loads(json_content)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse business request interpretation as JSON: {str(e)}")
-            logger.error(f"Raw OpenAI response: {response}")
-            return {
+        # Use the new generate_json_response method for robust JSON handling
+        return self.generate_json_response(
+            prompt=prompt,
+            system_prompt=f"""
+            You are working with Business Autonomous Entities (BAEs) that represent domain entities
+            as living, autonomous agents within the system.
+
+            Current focus: Business request interpretation in {context} context
+
+            Your responsibilities:
+            1. Maintain semantic coherence between business vocabulary and technical implementation
+            2. Preserve domain knowledge and business rules
+            3. Ensure generated artifacts reflect business terminology
+            4. Focus on domain entity representation, not software engineering roles
+            5. Enable runtime evolution while preserving semantic consistency
+
+            Always prioritize business domain understanding and vocabulary preservation.
+            """,
+            temperature=0,
+            json_schema=json_schema,
+            fallback_schema={
                 "intent": "parse_error",
-                "error": f"Failed to parse business request: {str(e)}",
-                "raw_response": response,
+                "entity_focus": "unknown",
+                "requested_operations": [],
+                "attributes_mentioned": [],
+                "business_vocabulary": [],
+                "swea_coordination_needed": {
+                    "programmer": False,
+                    "frontend": False,
+                    "database": False
+                },
+                "complexity_level": "unknown"
             }
+        )

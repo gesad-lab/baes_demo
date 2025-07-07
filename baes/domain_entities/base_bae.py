@@ -156,68 +156,112 @@ class BaseBae(BaseAgent):
                 "entity": self.entity_name,
             }
 
-    def _clean_json_response(self, response: str) -> str:
-        """Clean LLM response to extract JSON from markdown code blocks"""
-        # Remove markdown code blocks
-        if "```json" in response:
-            # Extract content between ```json and ```
-            pattern = r"```json\s*(.*?)\s*```"
-            match = re.search(pattern, response, re.DOTALL)
-            if match:
-                return match.group(1).strip()
-        elif "```" in response:
-            # Extract content between ``` blocks
-            pattern = r"```\s*(.*?)\s*```"
-            match = re.search(pattern, response, re.DOTALL)
-            if match:
-                return match.group(1).strip()
-
-        return response.strip()
-
     def _detect_relationship_request(self, request: str) -> Dict[str, Any]:
-        """Detect if this is a relationship creation request rather than entity creation/evolution"""
-        request_lower = request.lower()
-        
-        # Relationship detection patterns
-        relationship_patterns = [
-            ("add a", "to", "entity"),
-            ("add", "to the", "entity"),
-            ("connect", "to", ""),
-            ("link", "to", ""),
-            ("relate", "to", ""),
-            ("associate", "with", ""),
-            ("assign", "to", ""),
-        ]
-        
-        for pattern in relationship_patterns:
-            if all(p in request_lower for p in pattern if p):
-                # Extract entities involved in the relationship
-                target_entity = None
-                related_entity = None
-                
-                # Pattern: "Add a [course] to the [student] entity"
-                if "add a" in request_lower and "to the" in request_lower and "entity" in request_lower:
-                    import re
-                    match = re.search(r'add a (\w+) to the (\w+) entity', request_lower)
-                    if match:
-                        related_entity = match.group(1)
-                        target_entity = match.group(2)
-                        
-                        return {
-                            "is_relationship": True,
-                            "target_entity": target_entity.capitalize(),
-                            "related_entity": related_entity.capitalize(),
-                            "relationship_type": "foreign_key",
-                            "description": f"Add {related_entity}_id foreign key to {target_entity} table"
-                        }
-        
-        return {
-            "is_relationship": False,
-            "target_entity": None,
-            "related_entity": None,
-            "relationship_type": None,
-            "description": None
-        }
+        """Detect if this is a relationship creation request using LLM instead of fixed patterns"""
+        try:
+            # Get current system state information for context
+            existing_entities_info = self._get_existing_entities_context()
+            current_entity_info = self._get_current_entity_context()
+            context_info = self._build_context_information(existing_entities_info, current_entity_info)
+            
+            # Build LLM prompt for relationship detection
+            prompt = f"""
+            As a {self.entity_name} BAE (Business Autonomous Entity), analyze this request to determine if it's a relationship creation request:
+
+            Request: "{request}"
+
+            SYSTEM CONTEXT INFORMATION:
+            {context_info}
+
+            CRITICAL RELATIONSHIP DETECTION INSTRUCTIONS:
+            1. Determine if this request is asking to CREATE A RELATIONSHIP between entities
+            2. A relationship request typically involves connecting two or more entities
+            3. Look for keywords like: "add X to Y", "connect", "link", "associate", "assign", "relate", "enroll", "register"
+            4. Consider natural language variations and domain-specific terminology
+            5. The PRIMARY entity is the one that will be MODIFIED to include a reference to the secondary entity
+            6. The SECONDARY entity is the one being referenced (will create a foreign key to it)
+
+            EXAMPLES OF RELATIONSHIP REQUESTS:
+            - "add a course to the student entity" → relationship (student gets course_id)
+            - "connect teacher with course" → relationship (course gets teacher_id)
+            - "enroll student in course" → relationship (student gets course_id)
+            - "assign teacher to course" → relationship (course gets teacher_id)
+            - "link student to course" → relationship (student gets course_id)
+            - "associate course with student" → relationship (student gets course_id)
+
+            EXAMPLES OF NON-RELATIONSHIP REQUESTS:
+            - "add student" → entity creation
+            - "add email field to student" → entity evolution
+            - "create course" → entity creation
+            - "modify student name" → entity modification
+
+            Return a JSON object with:
+
+            {{
+                "is_relationship": true/false,
+                "target_entity": "entity that will be modified (gets foreign key)",
+                "related_entity": "entity being referenced (foreign key points to this)",
+                "relationship_type": "foreign_key|many_to_many|one_to_one",
+                "description": "brief description of the relationship",
+                "confidence": 0.0-1.0,
+                "reasoning": "explanation of why this is/isn't a relationship request",
+                "entities_mentioned": ["list of all entities mentioned in request"],
+                "relationship_direction": "string"
+            }}
+
+            RELATIONSHIP DETECTION RULES:
+            - If request mentions multiple entities AND uses relationship keywords → likely relationship
+            - If request only mentions one entity OR uses creation/evolution keywords → likely not relationship
+            - Consider domain context: academic terms like "enroll", "register", "assign" often indicate relationships
+            - The entity being "added TO" another is usually the foreign key holder (primary entity)
+            - If uncertain, set is_relationship to false and explain reasoning
+            """
+
+            # Use the new JSON enforcement functionality
+            json_schema = {
+                "is_relationship": True,
+                "target_entity": "string",
+                "related_entity": "string", 
+                "relationship_type": "foreign_key|many_to_many|one_to_one",
+                "description": "string",
+                "confidence": 0.0,
+                "reasoning": "string",
+                "entities_mentioned": ["list of strings"],
+                "relationship_direction": "string"
+            }
+
+            relationship_info = self.llm.generate_json_response(
+                prompt=prompt,
+                json_schema=json_schema
+            )
+
+            # Validate the response
+            if relationship_info.get("is_relationship", False):
+                # Ensure we have the required fields for a relationship
+                if not relationship_info.get("target_entity") or not relationship_info.get("related_entity"):
+                    logger.warning(f"🔗 {self.entity_name}BAE: LLM detected relationship but missing target/related entity")
+                    relationship_info["is_relationship"] = False
+                    relationship_info["reasoning"] = "Missing required relationship entities"
+                    relationship_info["confidence"] = 0.0
+                else:
+                    logger.info(f"🔗 {self.entity_name}BAE: LLM detected relationship - {relationship_info['description']} (confidence: {relationship_info.get('confidence', 0.0)})")
+
+            return relationship_info
+
+        except Exception as e:
+            logger.error(f"Error in LLM relationship detection: {str(e)}")
+            return {
+                "is_relationship": False,
+                "target_entity": None,
+                "related_entity": None,
+                "relationship_type": None,
+                "description": f"Error in relationship detection: {str(e)}",
+                "confidence": 0.0,
+                "reasoning": f"Exception occurred during LLM relationship detection: {str(e)}",
+                "entities_mentioned": [],
+                "relationship_direction": None,
+                "error": True
+            }
 
     def _handle_relationship_request(self, request: str, context: str, relationship_info: Dict[str, Any]) -> Dict[str, Any]:
         """Handle relationship creation request with proper DatabaseSWEA coordination"""
@@ -361,7 +405,7 @@ class BaseBae(BaseAgent):
         return interpretation
 
     def _build_unified_interpretation_prompt(self, request: str, context: str) -> str:
-        """Builds a context-aware unified prompt for LLM to interpret any type of business request."""
+        """Builds a context-aware unified prompt for LLM to interpret any type of business request including relationships."""
         
         # Get current system state information
         existing_entities_info = self._get_existing_entities_context()
@@ -385,6 +429,42 @@ class BaseBae(BaseAgent):
         4. For evolution operations, PRESERVE all existing attributes and only add/modify/remove as requested
         5. For create operations, include all necessary attributes for a complete entity
 
+        🔗 RELATIONSHIP DETECTION INSTRUCTIONS (HIGH PRIORITY):
+        6. If the request is asking to CREATE A RELATIONSHIP between entities, use operation_type="relationship"
+        7. A relationship request typically involves connecting two or more entities
+        8. Look for keywords like: "add X to Y", "connect", "link", "associate", "assign", "relate", "enroll", "register"
+        9. Consider natural language variations and domain-specific terminology
+        10. The PRIMARY entity (target_entity) is the one that will be MODIFIED to include a reference to the secondary entity
+        11. The SECONDARY entity (related_entity) is the one being referenced (will create a foreign key to it)
+
+        🔗 SPECIFIC RELATIONSHIP EXAMPLES:
+        - "add course to student entity" → relationship (student gets course_id, target_entity="student", related_entity="course")
+        - "add a course to the student entity" → relationship (student gets course_id, target_entity="student", related_entity="course")
+        - "connect teacher with course" → relationship (course gets teacher_id, target_entity="course", related_entity="teacher")
+        - "enroll student in course" → relationship (student gets course_id, target_entity="student", related_entity="course")
+        - "assign teacher to course" → relationship (course gets teacher_id, target_entity="course", related_entity="teacher")
+        - "link student to course" → relationship (student gets course_id, target_entity="student", related_entity="course")
+        - "associate course with student" → relationship (student gets course_id, target_entity="student", related_entity="course")
+
+        ❌ NON-RELATIONSHIP EXAMPLES:
+        - "add student" → entity creation (only one entity mentioned)
+        - "add email field to student" → entity evolution (adding field to existing entity)
+        - "create course" → entity creation (only one entity mentioned)
+        - "modify student name" → entity modification (modifying existing field)
+
+        🔍 RELATIONSHIP DETECTION RULES:
+        - If request mentions multiple entities AND uses relationship keywords → likely relationship
+        - If request only mentions one entity OR uses creation/evolution keywords → likely not relationship
+        - Consider domain context: academic terms like "enroll", "register", "assign" often indicate relationships
+        - The entity being "added TO" another is usually the foreign key holder (primary entity)
+        - If uncertain, set is_relationship to false and explain reasoning
+
+        🎯 CRITICAL: For the request "{request}":
+        - Look for the pattern "add [entity1] to [entity2] entity" or similar
+        - If you see this pattern, it's ALWAYS a relationship request
+        - The entity after "to" is the target_entity (gets the foreign key)
+        - The entity before "to" is the related_entity (referenced by foreign key)
+
         Determine the operation type and extract all relevant information. Return a JSON object with:
 
         {{
@@ -403,10 +483,17 @@ class BaseBae(BaseAgent):
             "business_vocabulary": ["term1", "term2"],
             "requested_operations": ["create", "read", "update", "delete"],
             "confidence": 0.0-1.0,
-            "reasoning": "brief explanation of the interpretation including why you chose create vs evolve",
+            "reasoning": "brief explanation of the interpretation including why you chose create vs evolve vs relationship",
             "is_evolution": true/false,
             "evolution_type": "addition|removal|modification|complex",
-            "entity_exists": true/false
+            "entity_exists": true/false,
+            "is_relationship": true/false,
+            "target_entity": "entity that will be modified (gets foreign key) - only for relationships",
+            "related_entity": "entity being referenced (foreign key points to this) - only for relationships",
+            "relationship_type": "foreign_key|many_to_many|one_to_one - only for relationships",
+            "relationship_description": "brief description of the relationship - only for relationships",
+            "entities_mentioned": ["list of all entities mentioned in request"],
+            "relationship_direction": "from secondary to primary entity - only for relationships"
         }}
 
         OPERATION TYPE GUIDELINES:
@@ -414,56 +501,87 @@ class BaseBae(BaseAgent):
         - "evolve": Entity exists AND request asks to add/modify existing entity
         - "remove": Request asks to remove attributes from existing entity
         - "modify": Request asks to change existing attributes (rename, change type)
-        - "relationship": Request asks to connect entities
+        - "relationship": Request asks to connect entities (multiple entities mentioned + relationship keywords)
 
         ATTRIBUTE HANDLING:
         - For "create": populate "attributes" with ALL required fields for the entity
         - For "evolve": populate "new_attributes" with ONLY the fields to add, existing preserved automatically
         - For "remove": populate "removed_attributes" with fields to remove
         - For "modify": populate "modified_attributes" with field changes
+        - For "relationship": populate "target_entity" and "related_entity" with the entities involved
         - Always include "id: int" as the first attribute for database operations (auto-generated)
         - Use appropriate types: str, int, float, date, datetime, bool
         """
 
     def _interpret_business_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Unified business request interpretation using LLM for all request types"""
+        """Unified business request interpretation using LLM for all request types including relationships"""
         try:
             request = payload.get("request", "")
             context = payload.get("context", "academic")
 
-            # First, check if this is a relationship creation request (keep existing logic)
-            relationship_info = self._detect_relationship_request(request)
-            if relationship_info["is_relationship"]:
-                logger.info(
-                    f"🔗 {self.entity_name}BAE: Detected relationship request - {relationship_info['description']}"
-                )
-                return self._handle_relationship_request(request, context, relationship_info)
-
-            # Use unified LLM interpretation for all other requests
+            # Use unified LLM interpretation for ALL requests including relationships
             prompt = self._build_unified_interpretation_prompt(request, context)
-            interpretation_str = self.llm.generate_response(prompt)
+            
+            # Enhanced JSON schema to include relationship detection
+            json_schema = {
+                "operation_type": "create|evolve|remove|modify|relationship",
+                "entity": "string",
+                "attributes": ["list of attribute objects"],
+                "new_attributes": ["list of new attributes"],
+                "removed_attributes": ["list of removed attributes"],
+                "modified_attributes": ["list of modified attributes"],
+                "business_vocabulary": ["list of business terms"],
+                "requested_operations": ["list of operations"],
+                "confidence": 0.0,
+                "reasoning": "string",
+                "is_evolution": True,
+                "evolution_type": "addition|removal|modification|none",
+                "entity_exists": True,
+                # Relationship-specific fields
+                "is_relationship": True,
+                "target_entity": "string",
+                "related_entity": "string",
+                "relationship_type": "foreign_key|many_to_many|one_to_one",
+                "relationship_description": "string",
+                "entities_mentioned": ["list of strings"],
+                "relationship_direction": "string"
+            }
 
-            try:
-                interpretation = json.loads(self._clean_json_response(interpretation_str))
-            except json.JSONDecodeError:
-                logger.error(f"Failed to parse JSON from LLM response: {interpretation_str}")
-                # Create a fallback interpretation
-                interpretation = {
-                    "operation_type": "create",
-                    "entity": self.entity_name,
-                    "attributes": self._get_default_attributes(),
-                    "new_attributes": [],
-                    "removed_attributes": [],
-                    "modified_attributes": [],
-                    "business_vocabulary": [],
-                    "requested_operations": ["create", "read", "update", "delete"],
-                    "confidence": 0.0,
-                    "reasoning": "Fallback interpretation due to LLM parsing error",
-                    "is_evolution": False,
-                    "evolution_type": "none"
-                }
+            interpretation = self.llm.generate_json_response(
+                prompt=prompt,
+                json_schema=json_schema
+            )
 
-            # Process the interpretation based on operation type
+            # Add detailed logging for debugging
+            logger.info(f"🔍 {self.entity_name}BAE: LLM interpretation result:")
+            logger.info(f"   Operation type: {interpretation.get('operation_type', 'unknown')}")
+            logger.info(f"   Is relationship: {interpretation.get('is_relationship', False)}")
+            logger.info(f"   Target entity: {interpretation.get('target_entity', 'None')}")
+            logger.info(f"   Related entity: {interpretation.get('related_entity', 'None')}")
+            logger.info(f"   Confidence: {interpretation.get('confidence', 0.0)}")
+            logger.info(f"   Reasoning: {interpretation.get('reasoning', 'No reasoning provided')}")
+            logger.info(f"   Entities mentioned: {interpretation.get('entities_mentioned', [])}")
+
+            # Check if this is a relationship request
+            if interpretation.get("is_relationship", False) and interpretation.get("operation_type") == "relationship":
+                logger.info(
+                    f"🔗 {self.entity_name}BAE: LLM detected relationship request - {interpretation.get('relationship_description', 'Unknown relationship')}"
+                )
+                
+                # Validate relationship information
+                target_entity = interpretation.get("target_entity")
+                related_entity = interpretation.get("related_entity")
+                
+                if not target_entity or not related_entity:
+                    logger.warning(f"🔗 {self.entity_name}BAE: LLM detected relationship but missing target/related entity")
+                    logger.warning(f"   Target entity: {target_entity}")
+                    logger.warning(f"   Related entity: {related_entity}")
+                    # Continue with regular processing instead of failing
+                else:
+                    # Handle relationship request
+                    return self._handle_relationship_request(request, context, interpretation)
+
+            # Process regular (non-relationship) requests
             return self._process_unified_interpretation(interpretation, request, context)
 
         except Exception as e:
@@ -1019,37 +1137,46 @@ class BaseBae(BaseAgent):
         Always return valid JSON that can be parsed successfully. Do not include any text outside the JSON object.
         """
 
-        validation_response = self.llm.generate_domain_entity_response(prompt, self.entity_name)
-        cleaned_response = self._clean_json_response(validation_response)
+        validation_result = self.llm.generate_json_response(
+            prompt=prompt,
+            system_prompt=f"""
+            You are working with Business Autonomous Entities (BAEs) that represent domain entities
+            as living, autonomous agents within the system.
 
-        try:
-            validation_result = json.loads(cleaned_response)
+            Current focus: {self.entity_name} entity in academic context
 
-            # Ensure all required fields are present with defaults
-            validation_result.setdefault("is_valid", True)
-            validation_result.setdefault("entity_focus_correct", True)
-            validation_result.setdefault("semantic_coherence_score", 85)
-            validation_result.setdefault("business_vocabulary_preserved", True)
-            validation_result.setdefault("domain_rules_followed", True)
-            validation_result.setdefault("issues", [])
-            validation_result.setdefault("recommendations", [])
-            validation_result["entity"] = self.entity_name
+            Your responsibilities:
+            1. Maintain semantic coherence between business vocabulary and technical implementation
+            2. Preserve domain knowledge and business rules
+            3. Ensure generated artifacts reflect business terminology
+            4. Focus on domain entity representation, not software engineering roles
+            5. Enable runtime evolution while preserving semantic consistency
 
-            return validation_result
-        except json.JSONDecodeError:
-            # Return fallback validation result with all expected fields
-            return {
-                "entity": self.entity_name,
+            Always prioritize business domain understanding and vocabulary preservation.
+            """,
+            json_schema={
                 "is_valid": True,
                 "entity_focus_correct": True,
-                "semantic_coherence_score": 85,
+                "semantic_coherence_score": 90,
                 "business_vocabulary_preserved": True,
                 "domain_rules_followed": True,
-                "issues": [],
-                "recommendations": [],
-                "error": "Failed to parse validation response",
-                "raw_response": validation_response,
+                "issues": ["list of issues"],
+                "recommendations": ["list of recommendations"],
+                "validation_summary": "string"
             }
+        )
+
+        # Ensure all required fields are present with defaults
+        validation_result.setdefault("is_valid", True)
+        validation_result.setdefault("entity_focus_correct", True)
+        validation_result.setdefault("semantic_coherence_score", 85)
+        validation_result.setdefault("business_vocabulary_preserved", True)
+        validation_result.setdefault("domain_rules_followed", True)
+        validation_result.setdefault("issues", [])
+        validation_result.setdefault("recommendations", [])
+        validation_result["entity"] = self.entity_name
+
+        return validation_result
 
     def _get_domain_info(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Return comprehensive information about the domain entity"""

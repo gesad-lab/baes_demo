@@ -90,17 +90,57 @@ class EntityRecognizer:
         """
 
         system_prompt = (
-            "You are an Entity Recognition specialist for an Academic BAE System. "
-            "Your job is to accurately classify user requests to route them to the "
-            "appropriate Business Autonomous Entity (BAE). For relationship creation requests, "
-            "you must correctly identify the PRIMARY entity (the one being modified) using "
-            "structured chain-of-thought reasoning. Be precise and conservative - "
-            "if unsure, classify as 'unknown' and explain your reasoning."
+            "You are a data modeling expert tasked with interpreting natural language commands "
+            "to define system components. Your primary function is to accurately identify the "
+            "main subject (the 'primary entity') of a user's request, which determines which "
+            "part of the system's data model will be created or modified. When a request "
+            "describes a relationship between entities, your most critical task is to determine "
+            "which entity's schema must be altered to establish the link. You must use a "
+            "structured, step-by-step reasoning process. If the primary entity cannot be "
+            "determined with high confidence, you must classify it as 'unknown' and explain "
+            "your reasoning."
         )
 
         try:
-            response = self.llm.generate_response(prompt, system_prompt, temperature=0)
-            classification = json.loads(response)
+            # Use the new JSON enforcement functionality
+            json_schema = {
+                "detected_entity": "student|course|teacher|unknown",
+                "confidence": 0.0,
+                "reasoning": "string",
+                "language_detected": "string",
+                "action_intent": "create|update|delete|list|relationship|unknown",
+                "relationship_analysis": {
+                    "is_relationship_request": True,
+                    "entities_mentioned": ["list of strings"],
+                    "primary_entity": "string",
+                    "secondary_entity": "string",
+                    "relationship_direction": "string"
+                }
+            }
+
+            fallback_schema = {
+                "detected_entity": "unknown",
+                "confidence": 0.0,
+                "reasoning": "Failed to parse LLM response",
+                "language_detected": "unknown",
+                "action_intent": "unknown",
+                "relationship_analysis": {
+                    "is_relationship_request": False,
+                    "entities_mentioned": [],
+                    "primary_entity": None,
+                    "secondary_entity": None,
+                    "relationship_direction": None
+                },
+                "error": True
+            }
+
+            classification = self.llm.generate_json_response(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                temperature=0,
+                json_schema=json_schema,
+                fallback_schema=fallback_schema
+            )
 
             # Validate the response
             if classification.get("detected_entity") not in self.supported_entities + ["unknown"]:
@@ -110,7 +150,7 @@ class EntityRecognizer:
 
             return classification
 
-        except (json.JSONDecodeError, Exception) as e:
+        except Exception as e:
             # Error handling - return unknown classification
             return {
                 "detected_entity": "unknown",
@@ -162,7 +202,8 @@ class EntityRecognizer:
             else:
                 context_parts.append("### Existing Entities: None")
         except Exception as e:
-            context_parts.append(f"### Existing Entities: Error retrieving ({str(e)})")
+            # raise error
+            raise Exception(f"Error retrieving existing entities: {str(e)}")
         
         # Get existing relationships
         try:
@@ -181,7 +222,8 @@ class EntityRecognizer:
             else:
                 context_parts.append("### Existing Relationships: None")
         except Exception as e:
-            context_parts.append(f"### Existing Relationships: Error retrieving ({str(e)})")
+            # raise error
+            raise Exception(f"Error retrieving existing relationships: {str(e)}")
         
         # Get domain knowledge
         try:
@@ -195,7 +237,8 @@ class EntityRecognizer:
             else:
                 context_parts.append("### Domain Knowledge: None")
         except Exception as e:
-            context_parts.append(f"### Domain Knowledge: Error retrieving ({str(e)})")
+            # raise error
+            raise Exception(f"Error retrieving domain knowledge: {str(e)}")
             
         return "\n".join(context_parts) if context_parts else "No context information available."
 

@@ -479,46 +479,43 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
                 session_id=self.current_session_id,
             )
 
-            # Make LLM request
-            response_text = self.llm_client.generate_response(prompt)
+            # Use the new JSON enforcement functionality
+            json_schema = {
+                "ui_improvements": {
+                    "missing_components": ["list of missing components"],
+                    "required_patterns": ["list of required patterns"],
+                    "user_experience": ["list of UX improvements"]
+                },
+                "form_fields": ["list of form field objects"],
+                "validation_rules": ["list of validation rules"],
+                "api_integration": {
+                    "base_url": "string",
+                    "endpoints": {},
+                    "error_handling": ["list of error handling patterns"]
+                }
+            }
 
-            # Log the response
-            self.llm_logger.log_response(
-                request_id=request_id,
-                response_text=response_text,
-                success=True,
-                response_time_ms=0.0,  # TODO: Add actual timing
-                model_used="gpt-4o-mini",
+            fallback_schema = {
+                "ui_improvements": {
+                    "missing_components": [],
+                    "required_patterns": [],
+                    "user_experience": []
+                },
+                "form_fields": [],
+                "validation_rules": [],
+                "api_integration": {
+                    "base_url": 'API_BASE_URL = "http://localhost:8000"',
+                    "endpoints": {},
+                    "error_handling": []
+                },
+                "error": True
+            }
+
+            interpretation = self.llm_client.generate_json_response(
+                prompt=prompt,
+                json_schema=json_schema,
+                fallback_schema=fallback_schema
             )
-
-            if not response_text:
-                logger.error("❌ FrontendSWEA: LLM request failed - empty response")
-                raise FrontendGenerationError("LLM request failed - empty response")
-
-            # Parse the response
-            response_text = response_text
-
-            # Extract JSON from response (handle potential markdown formatting)
-            import json
-            import re
-
-            # Try to extract JSON from the response
-            json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
-            if json_match:
-                try:
-                    interpretation = json.loads(json_match.group())
-                except json.JSONDecodeError:
-                    logger.warning(
-                        "Failed to parse JSON from LLM response, using fallback interpretation"
-                    )
-                    interpretation = self._extract_ui_improvements_from_text(
-                        response_text, original_attributes
-                    )
-            else:
-                logger.warning("No JSON found in LLM response, using fallback interpretation")
-                interpretation = self._extract_ui_improvements_from_text(
-                    response_text, original_attributes
-                )
 
             # Validate and normalize interpretation structure
             interpretation = self._validate_interpretation_structure(interpretation)

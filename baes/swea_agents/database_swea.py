@@ -310,55 +310,55 @@ Please provide the JSON response with database improvements."""
             response = self.llm_client.generate_response(user_prompt, system_prompt)
             logger.debug(f"DatabaseSWEA: Raw LLM response: {response}")
 
-            # Try to parse JSON response
-            try:
-                interpretation = json.loads(response)
-                logger.info(
-                    f"DatabaseSWEA interpreted feedback: {interpretation.get('explanation', 'No explanation provided')}"
-                )
-                logger.debug(f"DatabaseSWEA: Parsed interpretation: {interpretation}")
+            # Use the new JSON enforcement functionality
+            json_schema = {
+                "attributes": ["list of attribute objects"],
+                "additional_requirements": ["list of requirements"],
+                "constraints": ["list of constraints"],
+                "modifications": ["list of modifications"],
+                "explanation": "string"
+            }
 
-                # Stage 2 Improvement #8: Log successful feedback interaction
-                response_time = (datetime.now() - start_time).total_seconds()
-                db_changes = interpretation.get("constraints", []) + interpretation.get(
-                    "modifications", []
-                )
+            fallback_schema = {
+                "attributes": [],
+                "additional_requirements": [],
+                "constraints": [],
+                "modifications": [],
+                "explanation": "Failed to parse feedback interpretation",
+                "error": True
+            }
 
-                self.feedback_analytics.log_feedback_interaction(
-                    session_id=self.current_session_id,
-                    entity=entity,
-                    feedback_round=1,
-                    techlead_feedback=feedback,
-                    database_response_time=response_time,
-                    feedback_addressed=True,
-                    retry_count=0,
-                    final_success=True,
-                    database_changes_made=db_changes,
-                )
+            interpretation = self.llm_client.generate_json_response(
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                json_schema=json_schema,
+                fallback_schema=fallback_schema
+            )
 
-                return interpretation
-            except json.JSONDecodeError as json_error:
-                error_msg = (
-                    f"LLM response for DB feedback interpretation is not valid JSON: {json_error}. "
-                    f"Raw response: {response}"
-                )
-                logger.error(error_msg)
+            logger.info(
+                f"DatabaseSWEA interpreted feedback: {interpretation.get('explanation', 'No explanation provided')}"
+            )
+            logger.debug(f"DatabaseSWEA: Parsed interpretation: {interpretation}")
 
-                # Stage 2 Improvement #8: Log failed feedback interaction
-                response_time = (datetime.now() - start_time).total_seconds()
-                self.feedback_analytics.log_feedback_interaction(
-                    session_id=self.current_session_id,
-                    entity=entity,
-                    feedback_round=1,
-                    techlead_feedback=feedback,
-                    database_response_time=response_time,
-                    feedback_addressed=False,
-                    retry_count=0,
-                    final_success=False,
-                    database_changes_made=[],
-                )
+            # Stage 2 Improvement #8: Log successful feedback interaction
+            response_time = (datetime.now() - start_time).total_seconds()
+            db_changes = interpretation.get("constraints", []) + interpretation.get(
+                "modifications", []
+            )
 
-                raise DatabaseGenerationError(error_msg) from json_error
+            self.feedback_analytics.log_feedback_interaction(
+                session_id=self.current_session_id,
+                entity=entity,
+                feedback_round=1,
+                techlead_feedback=feedback,
+                database_response_time=response_time,
+                feedback_addressed=True,
+                retry_count=0,
+                final_success=True,
+                database_changes_made=db_changes,
+            )
+
+            return interpretation
 
         except Exception as e:
             logger.error(f"DatabaseSWEA feedback interpretation failed: {e}")

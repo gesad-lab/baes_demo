@@ -130,13 +130,11 @@ class TestUserRequestVerification:
         entity = "Student"
         context = "academic"
 
-        with patch.object(self.techlead.llm_client, 'generate_response') as mock_llm:
-            mock_llm.return_value = '''
-            [
+        with patch.object(self.techlead.llm_client, 'generate_json_response') as mock_llm:
+            mock_llm.return_value = [
                 {"name": "name", "type": "str", "source": "explicit"},
                 {"name": "email", "type": "str", "source": "explicit"}
             ]
-            '''
 
             result = self.techlead._analyze_user_request_for_attributes(user_request, entity, context)
 
@@ -247,23 +245,4 @@ class TestUserRequestVerification:
 
             assert result["success"] is False
             assert "User request compliance verification failed" in result["error"]
-            assert "email" in result["compliance_issues"][0]
-
-    def test_clean_json_response(self):
-        """Test JSON response cleaning functionality."""
-        response = '''
-        Here is the JSON response:
-        ```json
-        [
-            {"name": "name", "type": "str", "source": "explicit"},
-            {"name": "email", "type": "str", "source": "explicit"}
-        ]
-        ```
-        '''
-
-        cleaned = self.techlead._clean_json_response(response)
-
-        assert cleaned.startswith('[')
-        assert cleaned.endswith(']')
-        assert '"name": "name"' in cleaned
-        assert '"name": "email"' in cleaned 
+            assert "email" in result["compliance_issues"][0] 

@@ -1433,29 +1433,48 @@ class TechLeadSWEA(BaseAgent):
         """
 
     def _parse_validation_response(self, validation_response: str) -> Dict[str, Any]:
-        """Parse LLM validation response into structured format with categorized feedback."""
+        """Parse validation response with robust JSON handling"""
         try:
-            # Try to extract JSON from the response
-            import re
+            # Use the new JSON enforcement functionality
+            json_schema = {
+                "is_valid": True,
+                "quality_score": 0.0,
+                "issues": ["list of issues"],
+                "suggestions": ["list of suggestions"],
+                "fix_instructions": ["list of fix instructions"],
+                "categorized_feedback": [
+                    {
+                        "priority": "CRITICAL|REQUIRED|OPTIONAL",
+                        "issue": "string",
+                        "fix": "string"
+                    }
+                ],
+                "details": "string"
+            }
 
-            json_match = re.search(r"```json\s*(\{.*?\})\s*```", validation_response, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-                parsed_response = json.loads(json_str)
-                # Stage 3 Improvement #4: Process categorized feedback
-                if "categorized_feedback" in parsed_response:
-                    parsed_response = self._process_categorized_feedback(parsed_response)
-                return parsed_response
-            # Fallback: try to find JSON without markdown
-            json_match = re.search(r"\{.*\}", validation_response, re.DOTALL)
-            if json_match:
-                parsed_response = json.loads(json_match.group(0))
-                # Stage 3 Improvement #4: Process categorized feedback
-                if "categorized_feedback" in parsed_response:
-                    parsed_response = self._process_categorized_feedback(parsed_response)
-                return parsed_response
-            # If no JSON found, parse manually
-            return self._parse_manual_validation_response(validation_response)
+            fallback_schema = {
+                "is_valid": False,
+                "quality_score": 0.0,
+                "issues": ["Failed to parse validation response"],
+                "suggestions": ["Review the generated code manually"],
+                "fix_instructions": ["Check for JSON parsing errors"],
+                "categorized_feedback": [],
+                "details": "Validation response parsing failed",
+                "error": True
+            }
+
+            parsed_response = self.llm_client.generate_json_response(
+                prompt="Parse this validation response: " + validation_response,
+                json_schema=json_schema,
+                fallback_schema=fallback_schema
+            )
+
+            # Stage 3 Improvement #4: Process categorized feedback
+            if "categorized_feedback" in parsed_response:
+                parsed_response = self._process_categorized_feedback(parsed_response)
+
+            return parsed_response
+
         except Exception as e:
             logger.warning(f"Failed to parse validation response as JSON: {str(e)}")
             return self._parse_manual_validation_response(validation_response)
@@ -2405,22 +2424,29 @@ class TechLeadSWEA(BaseAgent):
                 system_prompt="You are a TechLeadSWEA analyzing user requests for attribute extraction. Be precise and conservative - only include attributes that are clearly requested or domain-essential."
             )
             
-            # Parse LLM response
-            try:
-                import json
-                cleaned_response = self._clean_json_response(response)
-                expected_attributes = json.loads(cleaned_response)
-                
-                if not isinstance(expected_attributes, list):
-                    logger.warning(f"LLM response is not a list: {type(expected_attributes)}")
-                    return []
-                
-                return expected_attributes
-                
-            except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse LLM response as JSON: {e}")
-                # Fallback: extract attributes using simple pattern matching
-                return self._fallback_attribute_extraction(user_request, entity)
+            # Use the new JSON enforcement functionality
+            json_schema = [
+                {
+                    "name": "string",
+                    "type": "string", 
+                    "source": "explicit|implied|domain"
+                }
+            ]
+
+            fallback_schema = []
+
+            expected_attributes = self.llm_client.generate_json_response(
+                prompt=prompt,
+                system_prompt="You are a TechLeadSWEA analyzing user requests for attribute extraction. Be precise and conservative - only include attributes that are clearly requested or domain-essential.",
+                json_schema=json_schema,
+                fallback_schema=fallback_schema
+            )
+            
+            if not isinstance(expected_attributes, list):
+                logger.warning(f"LLM response is not a list: {type(expected_attributes)}")
+                return []
+            
+            return expected_attributes
                 
         except Exception as e:
             logger.error(f"Failed to analyze user request: {e}")

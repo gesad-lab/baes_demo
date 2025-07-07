@@ -181,7 +181,7 @@ class LLMResponseValidator:
     @classmethod
     def validate_json_parseable(cls, response_text: str) -> Dict[str, Any]:
         """
-        Validate that response text can be parsed as JSON
+        Validate that response text can be parsed as JSON using the new JSON enforcement functionality
 
         Args:
             response_text: Raw text response from LLM
@@ -193,8 +193,34 @@ class LLMResponseValidator:
             ValueError: If response cannot be parsed as valid JSON
         """
         try:
-            return json.loads(response_text)
-        except json.JSONDecodeError as e:
+            # Use the new JSON enforcement functionality from OpenAIClient
+            from baes.llm.openai_client import OpenAIClient
+            
+            client = OpenAIClient()
+            
+            # Create a generic schema for any JSON response
+            json_schema = {
+                "data": "any",
+                "success": True,
+                "error": "string"
+            }
+            
+            fallback_schema = {
+                "data": {},
+                "success": False,
+                "error": "JSON parsing failed",
+                "fallback_response": True
+            }
+            
+            parsed_response = client.generate_json_response(
+                prompt=f"Parse this JSON response: {response_text}",
+                json_schema=json_schema,
+                fallback_schema=fallback_schema
+            )
+            
+            return parsed_response
+            
+        except Exception as e:
             logger.error(f"JSON parsing failed for response: {e}")
             logger.debug(f"Problematic response text: {response_text}")
             raise ValueError(f"Invalid JSON response: {e}")

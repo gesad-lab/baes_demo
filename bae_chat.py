@@ -899,6 +899,14 @@ class BAEConversationalCLI:
             print("  • Add new fields to existing entities")
             print("  • Modify business rules")
             print("  • Create relationships between entities")
+            print("  • Use natural language for relationship creation")
+
+        print("\n🤖 LLM-Powered Intelligence:")
+        print("  • Smart relationship detection from natural language")
+        print("  • Context-aware entity recognition")
+        print("  • Flexible command interpretation")
+        print("  • Domain-specific terminology understanding")
+        print("  • Automatic foreign key relationship creation")
 
     def show_examples(self):
         """Show example requests"""
@@ -916,6 +924,16 @@ class BAEConversationalCLI:
         print("  • 'Add birth date field to students'")
         print("  • 'Students should have grade point average'")
 
+        print("\n🔗 Relationship Creation (LLM-Powered):")
+        print("  • 'Add a course to the student entity'")
+        print("  • 'Connect teacher with course'")
+        print("  • 'Enroll student in course'")
+        print("  • 'Assign teacher to course'")
+        print("  • 'Link student to course'")
+        print("  • 'Associate course with student'")
+        print("  • 'Register student for course'")
+        print("  • 'Relate teacher to course'")
+
         print("\n🔍 System Inspection:")
         print("  • 'Show me the current system status'")
         print("  • 'What files have been generated?'")
@@ -926,6 +944,12 @@ class BAEConversationalCLI:
         print("  • 'add course' → Add course entity")
         print("  • 'status' → System overview")
         print("  • 'files' → Generated files list")
+
+        print("\n💡 LLM-Powered Features:")
+        print("  • Natural language relationship detection")
+        print("  • Context-aware entity recognition")
+        print("  • Flexible command interpretation")
+        print("  • Domain-specific terminology support")
 
     def _suggest_error_recovery(self, error: str, request: str):
         """Suggest error recovery actions"""
