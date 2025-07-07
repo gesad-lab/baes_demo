@@ -673,6 +673,10 @@ class BaseBae(BaseAgent):
             
             # CRITICAL: If user specified attributes explicitly, use ONLY those
             # Don't add default attributes when user has been specific
+            logger.info(f"🔍 DEBUG {self.entity_name}BAE: raw_attributes from LLM: {raw_attributes}")
+            logger.info(f"🔍 DEBUG {self.entity_name}BAE: type of raw_attributes: {type(raw_attributes)}")
+            logger.info(f"🔍 DEBUG {self.entity_name}BAE: len of raw_attributes: {len(raw_attributes) if raw_attributes else 'None'}")
+            
             if raw_attributes:
                 # User specified attributes - use only those
                 extracted_attributes = self._normalize_attributes(raw_attributes)
