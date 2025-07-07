@@ -993,9 +993,16 @@ class BAEConversationalCLI:
         if "error" in interpretation_result:
             return False
             
-        # Check confidence level - but only for low confidence cases
         confidence = interpretation_result.get("confidence", 0.5)
         detected_type = interpretation_result.get("operation_type", "unknown")
+        
+        # CRITICAL: If confidence is high (>=0.8) for basic create/evolve operations, don't ask for confirmation
+        # This handles cases like "create a student entity with name and email" that should be straightforward
+        if confidence >= 0.8:
+            request_lower = request.lower()
+            # For basic entity creation patterns, trust the high confidence
+            if any(pattern in request_lower for pattern in ["create", "add student", "add course", "add teacher"]):
+                return False
         
         # If confidence is high (>=0.7) and we have a valid operation type, don't ask for confirmation
         if confidence >= 0.7 and detected_type in ["create", "evolve", "relationship", "remove", "modify"]:
@@ -1127,15 +1134,25 @@ class BAEConversationalCLI:
                 return f"create relationship for: {original_request}"
                 
         elif target_operation == "create":
-            # Generate explicit entity creation request
+            # Generate explicit entity creation request - preserve original attributes
             if "student" in request_lower:
-                return "add student entity"
+                # If original request had specific attributes, preserve them
+                if "with" in request_lower:
+                    return original_request  # Keep the full original request with attributes
+                else:
+                    return "add student entity"
             elif "course" in request_lower:
-                return "add course entity"  
+                if "with" in request_lower:
+                    return original_request  # Keep the full original request with attributes
+                else:
+                    return "add course entity"  
             elif "teacher" in request_lower:
-                return "add teacher entity"
+                if "with" in request_lower:
+                    return original_request  # Keep the full original request with attributes
+                else:
+                    return "add teacher entity"
             else:
-                return f"create entity: {original_request}"
+                return original_request  # Preserve the original request
                 
         elif target_operation == "evolve":
             # Generate explicit evolution request

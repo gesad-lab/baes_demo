@@ -447,6 +447,8 @@ class BaseBae(BaseAgent):
         If request mentions only ONE entity:
         - "add [ENTITY]" → entity creation (operation_type="create")
         - "create [ENTITY]" → entity creation (operation_type="create")
+        - "create [ENTITY] with [ATTRIBUTES]" → entity creation (operation_type="create")
+        - "create [ENTITY] entity with [ATTRIBUTES]" → entity creation (operation_type="create")
         - "add [FIELD] to [ENTITY]" → entity evolution (operation_type="evolve")
         - "add [FIELD] to [ENTITY] entity" → entity evolution (operation_type="evolve")
 
@@ -466,7 +468,10 @@ class BaseBae(BaseAgent):
         🆕 CREATION EXAMPLES (operation_type="create"):
         ✅ "add student" → entity creation (create new student entity)
         ✅ "create student entity" → entity creation (create new student entity)
+        ✅ "create a student entity with name and email" → entity creation (create student with name, email)
+        ✅ "create student with name and email" → entity creation (create student with name, email)
         ✅ "add course" → entity creation (create new course entity)
+        ✅ "create course entity with name" → entity creation (create course with name)
 
         **STEP-BY-STEP ANALYSIS FOR REQUEST: "{request}"**
         
@@ -485,6 +490,12 @@ class BaseBae(BaseAgent):
         • Relationship keywords: "to", "with", "in", "for", "connect", "link", "associate", "enroll", "assign"
         • Field/attribute keywords: "age", "email", "name", "birth_date", "grade", "phone", "address", "description"
         • Creation keywords: "add [entity]", "create [entity]", "make [entity]", "build [entity]"
+        
+        **ATTRIBUTE EXTRACTION RULES:**
+        • For "create [entity] with [attributes]": Extract ONLY the attributes listed after "with"
+        • For "add [field] to [entity]": Extract ONLY the field mentioned before "to"
+        • Do NOT add default attributes like "course", "teacher", "student" unless explicitly requested
+        • Do NOT assume relationships - only create what's explicitly asked for
 
         **RELATIONSHIP ENTITY ASSIGNMENT:**
         - For "add X to Y entity": Y=target_entity (gets X_id), X=related_entity
@@ -547,6 +558,8 @@ class BaseBae(BaseAgent):
         5. Low confidence (0.6-) = potential user confirmation needed
         6. For "add [field] to [entity]" patterns, always use operation_type="evolve"
         7. For "add [entity1] to [entity2]" patterns, always use operation_type="relationship"
+        8. CRITICAL: Only include attributes explicitly mentioned in the request - do NOT add extra fields
+        9. For "create [entity] with [attributes]" patterns, ONLY use the specified attributes, no additional ones
         """
 
     def _interpret_business_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -649,11 +662,35 @@ class BaseBae(BaseAgent):
         
         # Extract and normalize attributes based on operation type
         if operation_type == "create":
-            # Initial generation - use all attributes
+            # Initial generation - use requested attributes or defaults
             raw_attributes = interpretation.get("attributes", [])
-            if not raw_attributes:
+            
+            # CRITICAL: If user specified attributes explicitly, use ONLY those
+            # Don't add default attributes when user has been specific
+            if raw_attributes:
+                # User specified attributes - use only those
+                extracted_attributes = self._normalize_attributes(raw_attributes)
+                
+                # Ensure 'id' attribute is always present and first, but don't add other defaults
+                has_id = any(attr.get("name") == "id" for attr in extracted_attributes if isinstance(attr, dict))
+                if not has_id:
+                    id_attr = {"name": "id", "type": "int"}
+                    extracted_attributes.insert(0, id_attr)
+                    logger.info(f"🔧 {self.entity_name}BAE: Added mandatory 'id' attribute")
+                
+                logger.info(f"🎯 {self.entity_name}BAE: Using user-specified attributes: {[attr.get('name', str(attr)) for attr in extracted_attributes]}")
+            else:
+                # No attributes specified - use defaults
                 raw_attributes = self._get_default_attributes()
-            extracted_attributes = self._normalize_attributes(raw_attributes)
+                extracted_attributes = self._normalize_attributes(raw_attributes)
+                
+                # Ensure 'id' attribute for defaults too
+                has_id = any(attr.get("name") == "id" for attr in extracted_attributes if isinstance(attr, dict))
+                if not has_id:
+                    id_attr = {"name": "id", "type": "int"}
+                    extracted_attributes.insert(0, id_attr)
+                
+                logger.info(f"🎯 {self.entity_name}BAE: Using default attributes: {[attr.get('name', str(attr)) for attr in extracted_attributes]}")
             
             # Store the schema for future reference
             self.current_schema = {
