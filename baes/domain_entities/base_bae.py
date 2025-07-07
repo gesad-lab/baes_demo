@@ -405,13 +405,13 @@ class BaseBae(BaseAgent):
         return interpretation
 
     def _build_unified_interpretation_prompt(self, request: str, context: str) -> str:
-        """Builds a context-aware unified prompt for LLM to interpret any type of business request including relationships."""
+        """Enhanced prompt with crystal-clear relationship detection rules for maximum accuracy."""
         
         # Get current system state information
         existing_entities_info = self._get_existing_entities_context()
         current_entity_info = self._get_current_entity_context()
         
-        # Build context section for the prompt
+        # Build enhanced context section for the prompt
         context_info = self._build_context_information(existing_entities_info, current_entity_info)
         
         return f"""
@@ -422,50 +422,72 @@ class BaseBae(BaseAgent):
         SYSTEM CONTEXT INFORMATION:
         {context_info}
 
-        CRITICAL INSTRUCTIONS:
-        1. If the {self.entity_name} entity ALREADY EXISTS and has current attributes, this is likely an EVOLUTION operation
-        2. If the request mentions "add", "include", "append" to an existing entity, use operation_type="evolve"
-        3. If the {self.entity_name} entity does NOT exist, this is a CREATE operation
-        4. For evolution operations, PRESERVE all existing attributes and only add/modify/remove as requested
-        5. For create operations, include all necessary attributes for a complete entity
+        🔗 **RELATIONSHIP DETECTION RULES (HIGHEST PRIORITY - ANALYZE FIRST):**
+        
+        **RULE 1 - "ADD X TO Y ENTITY" PATTERN:**
+        If request matches EXACTLY "add [ENTITY_A] to [ENTITY_B] entity":
+        → This is ALWAYS a relationship request (100% certainty)
+        → ENTITY_B (after "to") = target_entity (gets foreign key [ENTITY_A]_id)
+        → ENTITY_A (before "to") = related_entity (referenced by foreign key)
+        → Set: operation_type="relationship", is_relationship=true, confidence=1.0
+        
+        **RULE 2 - OTHER RELATIONSHIP PATTERNS:**
+        If request matches any of these patterns:
+        - "connect [ENTITY_A] with [ENTITY_B]"
+        - "link [ENTITY_A] to [ENTITY_B]"  
+        - "associate [ENTITY_A] with [ENTITY_B]"
+        - "enroll [ENTITY_A] in [ENTITY_B]"
+        - "assign [ENTITY_A] to [ENTITY_B]"
+        - "relate [ENTITY_A] to [ENTITY_B]"
+        - "register [ENTITY_A] for [ENTITY_B]"
+        → This is ALWAYS a relationship request
+        → Determine target_entity and related_entity based on context
+        
+        **RULE 3 - SINGLE ENTITY PATTERNS:**
+        If request mentions only ONE entity:
+        - "add [ENTITY]" → entity creation (operation_type="create")
+        - "create [ENTITY]" → entity creation (operation_type="create")
+        - "add [FIELD] to [ENTITY]" → entity evolution (operation_type="evolve")
 
-        🔗 RELATIONSHIP DETECTION INSTRUCTIONS (HIGH PRIORITY):
-        6. If the request is asking to CREATE A RELATIONSHIP between entities, use operation_type="relationship"
-        7. A relationship request typically involves connecting two or more entities
-        8. Look for keywords like: "add X to Y", "connect", "link", "associate", "assign", "relate", "enroll", "register"
-        9. Consider natural language variations and domain-specific terminology
-        10. The PRIMARY entity (target_entity) is the one that will be MODIFIED to include a reference to the secondary entity
-        11. The SECONDARY entity (related_entity) is the one being referenced (will create a foreign key to it)
+        **CRITICAL EXAMPLES FOR REFERENCE:**
+        ✅ "add course to student entity" → relationship (student gets course_id foreign key)
+        ✅ "add a course to the student entity" → relationship (student gets course_id foreign key)
+        ✅ "connect teacher with course" → relationship (course gets teacher_id foreign key)
+        ✅ "enroll student in course" → relationship (student gets course_id foreign key)
+        ❌ "add student" → entity creation (create new student entity)
+        ❌ "add email to student" → entity evolution (add email field to student)
 
-        🔗 SPECIFIC RELATIONSHIP EXAMPLES:
-        - "add course to student entity" → relationship (student gets course_id, target_entity="student", related_entity="course")
-        - "add a course to the student entity" → relationship (student gets course_id, target_entity="student", related_entity="course")
-        - "connect teacher with course" → relationship (course gets teacher_id, target_entity="course", related_entity="teacher")
-        - "enroll student in course" → relationship (student gets course_id, target_entity="student", related_entity="course")
-        - "assign teacher to course" → relationship (course gets teacher_id, target_entity="course", related_entity="teacher")
-        - "link student to course" → relationship (student gets course_id, target_entity="student", related_entity="course")
-        - "associate course with student" → relationship (student gets course_id, target_entity="student", related_entity="course")
+        **STEP-BY-STEP ANALYSIS FOR REQUEST: "{request}"**
+        
+        Step 1: Count entities mentioned in request = ?
+        Step 2: Identify relationship keywords (to, with, in, for) = ?
+        Step 3: Check if matches "add X to Y entity" pattern = ?
+        Step 4: If multiple entities + relationship keywords → relationship
+        Step 5: If single entity → creation or evolution
+        
+        **DECISION MATRIX:**
+        - Multiple entities + "to/with/in" keywords = RELATIONSHIP
+        - Single entity + "add [entity]" = CREATION  
+        - Single entity + "add [field] to [entity]" = EVOLUTION
 
-        ❌ NON-RELATIONSHIP EXAMPLES:
-        - "add student" → entity creation (only one entity mentioned)
-        - "add email field to student" → entity evolution (adding field to existing entity)
-        - "create course" → entity creation (only one entity mentioned)
-        - "modify student name" → entity modification (modifying existing field)
+        **RELATIONSHIP ENTITY ASSIGNMENT:**
+        - For "add X to Y entity": Y=target_entity (gets X_id), X=related_entity
+        - For "connect X with Y": contextually determine which gets foreign key
+        - For "enroll X in Y": X=target_entity (gets Y_id), Y=related_entity
 
-        🔍 RELATIONSHIP DETECTION RULES:
-        - If request mentions multiple entities AND uses relationship keywords → likely relationship
-        - If request only mentions one entity OR uses creation/evolution keywords → likely not relationship
-        - Consider domain context: academic terms like "enroll", "register", "assign" often indicate relationships
-        - The entity being "added TO" another is usually the foreign key holder (primary entity)
-        - If uncertain, set is_relationship to false and explain reasoning
+        **ENTITY EXISTENCE HANDLING:**
+        1. If {self.entity_name} entity EXISTS and request adds to it → use operation_type="evolve" OR "relationship"
+        2. If {self.entity_name} entity does NOT exist → use operation_type="create"
+        3. For relationships, entities can be created if they don't exist
 
-        🎯 CRITICAL: For the request "{request}":
-        - Look for the pattern "add [entity1] to [entity2] entity" or similar
-        - If you see this pattern, it's ALWAYS a relationship request
-        - The entity after "to" is the target_entity (gets the foreign key)
-        - The entity before "to" is the related_entity (referenced by foreign key)
+        **CONFIDENCE SCORING:**
+        - 1.0: Perfect pattern match (e.g., "add course to student entity")
+        - 0.9: Clear relationship keywords with multiple entities
+        - 0.8: Good evidence for relationship/creation/evolution
+        - 0.7: Some ambiguity but leaning toward interpretation
+        - 0.6 or below: High ambiguity, may need user confirmation
 
-        Determine the operation type and extract all relevant information. Return a JSON object with:
+        Return a JSON object with:
 
         {{
             "operation_type": "create|evolve|remove|modify|relationship",
@@ -483,34 +505,20 @@ class BaseBae(BaseAgent):
             "business_vocabulary": ["term1", "term2"],
             "requested_operations": ["create", "read", "update", "delete"],
             "confidence": 0.0-1.0,
-            "reasoning": "brief explanation of the interpretation including why you chose create vs evolve vs relationship",
+            "reasoning": "Step-by-step explanation following the analysis above",
             "is_evolution": true/false,
             "evolution_type": "addition|removal|modification|complex",
             "entity_exists": true/false,
             "is_relationship": true/false,
-            "target_entity": "entity that will be modified (gets foreign key) - only for relationships",
-            "related_entity": "entity being referenced (foreign key points to this) - only for relationships",
-            "relationship_type": "foreign_key|many_to_many|one_to_one - only for relationships",
-            "relationship_description": "brief description of the relationship - only for relationships",
+            "target_entity": "entity that gets the foreign key - only for relationships",
+            "related_entity": "entity referenced by foreign key - only for relationships", 
+            "relationship_type": "foreign_key",
+            "relationship_description": "brief description - only for relationships",
             "entities_mentioned": ["list of all entities mentioned in request"],
-            "relationship_direction": "from secondary to primary entity - only for relationships"
+            "relationship_direction": "X_id added to Y - only for relationships"
         }}
 
-        OPERATION TYPE GUIDELINES:
-        - "create": Entity does not exist OR request asks to create from scratch
-        - "evolve": Entity exists AND request asks to add/modify existing entity
-        - "remove": Request asks to remove attributes from existing entity
-        - "modify": Request asks to change existing attributes (rename, change type)
-        - "relationship": Request asks to connect entities (multiple entities mentioned + relationship keywords)
-
-        ATTRIBUTE HANDLING:
-        - For "create": populate "attributes" with ALL required fields for the entity
-        - For "evolve": populate "new_attributes" with ONLY the fields to add, existing preserved automatically
-        - For "remove": populate "removed_attributes" with fields to remove
-        - For "modify": populate "modified_attributes" with field changes
-        - For "relationship": populate "target_entity" and "related_entity" with the entities involved
-        - Always include "id: int" as the first attribute for database operations (auto-generated)
-        - Use appropriate types: str, int, float, date, datetime, bool
+        **MANDATORY**: Follow the rules exactly. High confidence = clear interpretation. Low confidence = potential user confirmation needed.
         """
 
     def _interpret_business_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -1397,26 +1405,47 @@ class BaseBae(BaseAgent):
             }
 
     def _build_context_information(self, existing_entities: Dict[str, Any], current_entity: Dict[str, Any]) -> str:
-        """Build formatted context information for the LLM prompt."""
+        """Build comprehensive context information for accurate relationship detection."""
         context_lines = []
         
-        # Current entity information
+        # Current entity information with relationship details
         entity_name = self.entity_name.lower()
         if current_entity.get("exists", False):
             attributes = current_entity.get("attributes", [])
             if attributes:
                 attr_list = []
+                foreign_keys = []
+                regular_attributes = []
+                
                 for attr in attributes:
                     if isinstance(attr, dict):
-                        attr_list.append(f"{attr.get('name', 'unknown')}:{attr.get('type', 'str')}")
+                        attr_name = attr.get('name', 'unknown')
+                        attr_type = attr.get('type', 'str')
+                        attr_display = f"{attr_name}:{attr_type}"
+                        
+                        if attr.get('is_foreign_key'):
+                            related_entity = attr.get('related_entity', 'unknown')
+                            foreign_keys.append(f"{attr_name} → {related_entity}")
+                            attr_display += f" (FK→{related_entity})"
+                        else:
+                            regular_attributes.append(attr_display)
+                        
+                        attr_list.append(attr_display)
                     elif isinstance(attr, str):
                         attr_list.append(attr)
+                        regular_attributes.append(attr)
                     else:
                         attr_list.append(str(attr))
+                        regular_attributes.append(str(attr))
                 
                 context_lines.append(f"🎯 CURRENT ENTITY STATUS:")
-                context_lines.append(f"   Entity '{self.entity_name}' EXISTS with attributes: {', '.join(attr_list)}")
-                context_lines.append(f"   Source: {current_entity.get('source', 'unknown')}")
+                context_lines.append(f"   Entity '{self.entity_name}' EXISTS with {len(attributes)} attributes")
+                context_lines.append(f"   📊 Attributes: {', '.join(attr_list)}")
+                
+                if foreign_keys:
+                    context_lines.append(f"   🔗 Current relationships: {', '.join(foreign_keys)}")
+                
+                context_lines.append(f"   📍 Source: {current_entity.get('source', 'unknown')}")
                 context_lines.append(f"   ⚠️  Any evolution must PRESERVE these existing attributes!")
             else:
                 context_lines.append(f"🎯 CURRENT ENTITY STATUS:")
@@ -1427,37 +1456,70 @@ class BaseBae(BaseAgent):
             context_lines.append(f"   Entity '{self.entity_name}' does NOT exist in the system")
             context_lines.append(f"   This is likely a CREATE operation for a new entity")
         
-        # Other existing entities information
+        # Other existing entities with relationship potential
         if existing_entities:
             other_entities = {k: v for k, v in existing_entities.items() if k != entity_name}
             if other_entities:
-                context_lines.append(f"\n📋 OTHER ENTITIES IN SYSTEM:")
+                context_lines.append(f"\n📋 AVAILABLE ENTITIES FOR RELATIONSHIPS:")
+                
+                relationship_ready_entities = []
                 for ent_name, ent_info in other_entities.items():
                     if ent_info.get("exists", False):
                         attrs = ent_info.get("attributes", [])
+                        relationship_ready_entities.append(ent_name.capitalize())
+                        
                         if attrs:
                             attr_summary = []
+                            fk_summary = []
                             for attr in attrs[:3]:  # Show first 3 attributes
                                 if isinstance(attr, dict):
-                                    attr_summary.append(attr.get('name', 'unknown'))
+                                    attr_name = attr.get('name', 'unknown')
+                                    if attr.get('is_foreign_key'):
+                                        related = attr.get('related_entity', 'unknown')
+                                        fk_summary.append(f"{attr_name}→{related}")
+                                    else:
+                                        attr_summary.append(attr_name)
                                 elif isinstance(attr, str):
                                     attr_summary.append(attr.split(':')[0] if ':' in attr else attr)
                                 else:
                                     attr_summary.append(str(attr))
+                            
                             attr_text = ', '.join(attr_summary)
                             if len(attrs) > 3:
                                 attr_text += f" (+{len(attrs)-3} more)"
-                            context_lines.append(f"   - {ent_name}: {attr_text}")
+                            
+                            display_text = f"{attr_text}"
+                            if fk_summary:
+                                display_text += f" | Relationships: {', '.join(fk_summary)}"
+                            
+                            context_lines.append(f"   ✅ {ent_name.capitalize()}: {display_text}")
                         else:
-                            context_lines.append(f"   - {ent_name}: (no attributes recorded)")
+                            context_lines.append(f"   ✅ {ent_name.capitalize()}: (ready for relationships)")
+                
+                # Show possible relationship combinations
+                if len(relationship_ready_entities) >= 1:
+                    context_lines.append(f"\n🔗 POTENTIAL RELATIONSHIPS:")
+                    for entity in relationship_ready_entities:
+                        if entity.lower() != self.entity_name.lower():
+                            context_lines.append(f"   💡 {self.entity_name} ↔ {entity} (add {entity.lower()}_id to {self.entity_name})")
+                            context_lines.append(f"   💡 {entity} ↔ {self.entity_name} (add {self.entity_name.lower()}_id to {entity})")
+                            
         else:
-            context_lines.append(f"\n📋 OTHER ENTITIES IN SYSTEM: None")
+            context_lines.append(f"\n📋 AVAILABLE ENTITIES FOR RELATIONSHIPS: None")
+            context_lines.append(f"   ⚠️  No other entities exist yet - relationships require multiple entities")
         
-        # Evolution detection hints
-        context_lines.append(f"\n💡 EVOLUTION DETECTION HINTS:")
-        context_lines.append(f"   - Words like 'add', 'include', 'append' to existing entity = EVOLVE")
-        context_lines.append(f"   - Words like 'create', 'make', 'build' new entity = CREATE")
-        context_lines.append(f"   - Words like 'remove', 'delete' attribute = REMOVE")
-        context_lines.append(f"   - Words like 'change', 'modify', 'update' attribute = MODIFY")
+        # Relationship detection guidance
+        context_lines.append(f"\n� RELATIONSHIP DETECTION GUIDANCE:")
+        context_lines.append(f"   🎯 'add [ENTITY_A] to [ENTITY_B] entity' = RELATIONSHIP (ENTITY_B gets ENTITY_A_id)")
+        context_lines.append(f"   🎯 'connect/link/associate [A] with [B]' = RELATIONSHIP")
+        context_lines.append(f"   🎯 'enroll [A] in [B]' = RELATIONSHIP (A gets B_id)")
+        context_lines.append(f"   ❌ 'add [ENTITY]' = ENTITY CREATION (single entity)")
+        context_lines.append(f"   ❌ 'add [FIELD] to [ENTITY]' = ENTITY EVOLUTION (field addition)")
+        
+        # Academic domain patterns
+        context_lines.append(f"\n📚 ACADEMIC DOMAIN PATTERNS:")
+        context_lines.append(f"   🎓 Student-Course: student gets course_id (enrollment)")
+        context_lines.append(f"   👨‍🏫 Teacher-Course: course gets teacher_id (assignment)")
+        context_lines.append(f"   📖 Student-Teacher: student gets teacher_id (mentoring)")
         
         return '\n'.join(context_lines)
