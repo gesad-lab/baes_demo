@@ -2170,14 +2170,15 @@ class EnhancedRuntimeKernel:
 
     def _get_default_attributes_for_entity(self, entity: str) -> List[str]:
         """Get default attributes for an entity if none can be extracted."""
-        # Use minimal defaults - don't assume extra fields like age unless explicitly requested
+        # CRITICAL: Use absolute minimal defaults - only "name" for most entities
+        # This prevents adding extra fields when user specifies exact attributes
         default_attributes = {
-            "student": ["name", "email"],  # Removed age - only include if explicitly requested
-            "course": ["name", "code"],   # Removed credits
-            "teacher": ["name", "email"], # Removed department
+            "student": ["name"],  # Only name - no extra fields
+            "course": ["name"],   # Only name - no extra fields
+            "teacher": ["name"],  # Only name - no extra fields
         }
 
-        return default_attributes.get(entity.lower(), ["name", "id"])
+        return default_attributes.get(entity.lower(), ["name"])
 
     def _coordinate_test_fixes_until_success(
         self, entity: str, test_result: Dict[str, Any], execution_results: List[Dict[str, Any]]

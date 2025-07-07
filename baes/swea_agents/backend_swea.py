@@ -67,7 +67,13 @@ class BackendSWEA(BaseAgent):
         retry_count = payload.get("retry_count", 0)
         is_evolution: bool = payload.get("is_evolution", False)
         new_attributes: List[str] = payload.get("new_attributes", [])
-        # Build prompt with evolution-aware instructions
+        
+        # CRITICAL: Check for attribute constraints
+        use_only_specified = payload.get("use_only_specified_attributes", False)
+        do_not_add_extra = payload.get("do_not_add_extra_fields", False)
+        attribute_constraints = payload.get("attribute_constraints", {})
+        
+        # Build prompt with evolution-aware instructions and strict attribute constraints
         prompt = self._build_api_prompt(
             entity,
             attributes,
@@ -77,6 +83,9 @@ class BackendSWEA(BaseAgent):
             retry_count,
             is_evolution,
             new_attributes,
+            use_only_specified,
+            do_not_add_extra,
+            attribute_constraints,
         )
         code = self.llm_client.generate_code_with_domain_focus(
             prompt, code_type="FastAPI Routes", entity_context={"entity": entity, "attributes": attributes}
@@ -132,7 +141,11 @@ REQUIREMENTS:
 
     def _build_api_prompt(self, entity: str, attributes: List[str], context: str,
                           techlead_feedback: List[str] = None, previous_errors: List[str] = None,
-                          retry_count: int = 0, is_evolution: bool = False, new_attributes: List[str] = None) -> str:
+                          retry_count: int = 0, is_evolution: bool = False, new_attributes: List[str] = None,
+                          use_only_specified: bool = False, do_not_add_extra: bool = False, 
+                          attribute_constraints: Dict[str, Any] = None) -> str:
+        if attribute_constraints is None:
+            attribute_constraints = {}
         feedback_section = ""
         if techlead_feedback or previous_errors:
             feedback_section = "\n\nCRITICAL FEEDBACK TO INCORPORATE:\n"
@@ -159,10 +172,24 @@ REQUIREMENTS:
         attributes_display = "\n".join([f"- {attr}" for attr in attributes])
         entity_lower = entity.lower()
         
+        # Build constraint warnings if specified
+        constraint_warning = ""
+        if use_only_specified or do_not_add_extra or attribute_constraints.get("use_only_specified_attributes"):
+            constraint_warning = f"""
+🚨 CRITICAL ATTRIBUTE CONSTRAINTS (VIOLATION WILL CAUSE REJECTION):
+- USE ONLY THE {len(attributes)} ATTRIBUTES LISTED ABOVE
+- DO NOT ADD ANY EXTRA FIELDS OR ATTRIBUTES
+- DO NOT ADD DEFAULT FIELDS LIKE 'created_at', 'updated_at', 'description', 'code', etc.
+- USER EXPLICITLY SPECIFIED ONLY THESE ATTRIBUTES: {len(attributes)} attributes
+- STRICT COMPLIANCE REQUIRED - ANY EXTRA FIELDS WILL BE REJECTED
+- This is user-specified creation - respect their exact requirements
+
+"""
+        
         return f"""
 Generate FastAPI router code for the {entity} entity with EXACTLY these attributes and NO OTHERS:
 {attributes_display}
-Context: {context}{feedback_section}{retry_info}{optional_fields_instruction}
+Context: {context}{constraint_warning}{feedback_section}{retry_info}{optional_fields_instruction}
 
 CRITICAL REQUIREMENTS (ALL MUST BE IMPLEMENTED):
 - Use APIRouter with correct prefix: prefix="/api/{entity_lower}s"
@@ -280,6 +307,8 @@ def create_{entity_lower}(data: {entity}Create) -> Dict[str, Any]:
 ```
 
 CRITICAL REMINDER: Use ONLY the attributes specified above. Do not add age, created_at, updated_at, or any other fields unless explicitly listed in the attributes.
+
+🚨 FINAL WARNING: The user explicitly requested ONLY the attributes listed above. Adding ANY extra fields beyond what's specified will violate user requirements. This is a user-constrained creation - respect their exact specification.
 """
 
  

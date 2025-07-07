@@ -688,6 +688,17 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
             attributes = payload.get("attributes", [])
             context = payload.get("context", "academic")
 
+            # CRITICAL: Check for attribute constraints from BAE coordination plan
+            use_only_specified = payload.get("use_only_specified_attributes", False)
+            do_not_add_extra = payload.get("do_not_add_extra_fields", False)
+            attribute_constraints = payload.get("attribute_constraints", {})
+            
+            logger.info(f"🎯 FrontendSWEA: Processing {entity} UI with {len(attributes)} attributes")
+            logger.info(f"🚨 UI constraint mode: use_only_specified={use_only_specified}")
+            if use_only_specified:
+                logger.info(f"🔒 UI STRICT MODE: Using ONLY the {len(attributes)} user-specified attributes")
+                logger.info(f"📝 UI Specified attributes: {[attr.get('name', str(attr)) for attr in attributes]}")
+
             # Extract feedback information from payload
             techlead_feedback = payload.get("techlead_feedback", [])
             previous_errors = payload.get("previous_errors", [])
@@ -708,8 +719,24 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
             if expected_output:
                 all_feedback.append(f"Expected output: {expected_output}")
 
-            # If we have feedback, interpret it and apply improvements
-            if all_feedback:
+            if use_only_specified or attribute_constraints.get("use_only_specified_attributes"):
+                # STRICT MODE: Skip LLM feedback interpretation and use exact attributes for UI
+                logger.info(f"🔒 UI STRICT MODE: Bypassing LLM feedback interpretation, using exact user attributes")
+                
+                # Parse attributes to structured list - CRITICAL: Use exact attributes from payload
+                parsed_attributes = self._parse_attributes(attributes)
+                
+                # Validate that we're using the exact attributes provided
+                logger.info(f"🔍 FrontendSWEA STRICT: Using exact attributes: {parsed_attributes}")
+                
+                # Build Streamlit UI code based on exact attributes (DRY template)
+                code = self._create_streamlit_ui_code(entity, parsed_attributes, context)
+
+                # Sanitize unsupported Streamlit arguments (template shouldn't produce, but keep safe)
+                code = self._sanitize_ui_code(code)
+            
+            # Check if we have feedback and we're NOT in strict mode
+            elif all_feedback:
                 logger.info(f"🔧 FrontendSWEA: Interpreting feedback for {entity}")
                 interpretation = self._interpret_feedback_for_ui_generation(
                     all_feedback, entity, attributes

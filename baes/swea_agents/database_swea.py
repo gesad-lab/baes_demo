@@ -545,6 +545,16 @@ Please provide the JSON response with database improvements."""
         techlead_feedback = payload.get("techlead_feedback", [])
         previous_errors = payload.get("previous_errors", [])
         expected_output = payload.get("expected_output", "")
+        
+        # CRITICAL: Check for attribute constraints from BAE
+        use_only_specified = payload.get("use_only_specified_attributes", False)
+        attribute_constraints = payload.get("attribute_constraints", {})
+        
+        logger.info(f"🎯 DatabaseSWEA: Processing {entity} with {len(attributes)} attributes")
+        logger.info(f"🚨 Constraint mode: use_only_specified={use_only_specified}")
+        if use_only_specified:
+            logger.info(f"🔒 STRICT MODE: Using ONLY the {len(attributes)} user-specified attributes")
+            logger.info(f"📝 Specified attributes: {[attr.get('name', str(attr)) for attr in attributes]}")
         all_feedback = []
         if techlead_feedback:
             all_feedback.extend(techlead_feedback if isinstance(techlead_feedback, list) else [techlead_feedback])
@@ -579,9 +589,21 @@ Please provide the JSON response with database improvements."""
             logger.info(f"Managed system database already exists at {db_file}, no changes made.")
             return self.create_success_response("setup_database", result)
         # Table does not exist, proceed to create
-        interpretation = self._interpret_feedback_for_database_setup(
-            all_feedback, entity, attributes
-        )
+        if use_only_specified or attribute_constraints.get("use_only_specified_attributes"):
+            # STRICT MODE: Skip LLM feedback interpretation and use exact attributes
+            logger.info(f"🔒 STRICT MODE: Bypassing LLM feedback interpretation, using exact user attributes")
+            interpretation = {
+                "attributes": attributes,
+                "additional_requirements": [],
+                "constraints": [],
+                "modifications": [],
+                "explanation": f"Using exact user-specified attributes for {entity} (strict mode)"
+            }
+        else:
+            # NORMAL MODE: Use LLM feedback interpretation (may add extra attributes)
+            interpretation = self._interpret_feedback_for_database_setup(
+                all_feedback, entity, attributes
+            )
         result = self._apply_database_improvements(interpretation, entity, db_file)
         self.managed_system_manager.ensure_managed_system_structure()
         logger.info(
@@ -591,7 +613,7 @@ Please provide the JSON response with database improvements."""
 
     def _migrate_schema(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Migrate schema by merging new attributes with existing ones, preserving all fields."""
-        entity = payload.get("entity")
+        entity = payload.get("entity", "Student")
         attributes = payload.get("attributes")
         if not attributes or not isinstance(attributes, list):
             raise ValueError("_migrate_schema requires a non-empty attribute list.")
@@ -601,6 +623,13 @@ Please provide the JSON response with database improvements."""
         try:
             new_attributes = payload.get("attributes", [])
             feedback = payload.get("feedback", [])
+            
+            # CRITICAL: Check for attribute constraints from BAE
+            use_only_specified = payload.get("use_only_specified_attributes", False)
+            attribute_constraints = payload.get("attribute_constraints", {})
+            
+            logger.info(f"🎯 DatabaseSWEA migration: Processing {entity} with {len(new_attributes)} attributes")
+            logger.info(f"🚨 Migration constraint mode: use_only_specified={use_only_specified}")
 
             logger.info(f"🔄 DatabaseSWEA: Starting schema migration for {entity} entity")
 
@@ -634,9 +663,21 @@ Please provide the JSON response with database improvements."""
             all_attributes = list(merged_attributes.values())
             logger.info(f"🔗 Merged attributes for migration: {all_attributes}")
             
-            interpretation = self._interpret_feedback_for_database_setup(
-                feedback, entity, all_attributes
-            )
+            if use_only_specified or attribute_constraints.get("use_only_specified_attributes"):
+                # STRICT MODE: Skip LLM feedback interpretation for migration
+                logger.info(f"🔒 MIGRATION STRICT MODE: Using exact merged attributes without LLM interpretation")
+                interpretation = {
+                    "attributes": all_attributes,
+                    "additional_requirements": [],
+                    "constraints": [],
+                    "modifications": [],
+                    "explanation": f"Migration using exact merged attributes for {entity} (strict mode)"
+                }
+            else:
+                # NORMAL MODE: Use LLM feedback interpretation
+                interpretation = self._interpret_feedback_for_database_setup(
+                    feedback, entity, all_attributes
+                )
             interpretation = self._validate_interpretation_structure(interpretation)
             
             logger.info(f"🔍 DEBUG - LLM interpretation result: {interpretation}")
