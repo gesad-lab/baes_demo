@@ -300,12 +300,10 @@ class BAEConversationalCLI:
             and self.current_system_state.get("auto_restart_on_entity_changes", True)
         ):
             self._handle_post_generation_server_refresh(result)
-        end_time = datetime.now()
-
-        generation_time = (end_time - start_time).total_seconds()
+        # Remove obsolete end_time and generation_time calculation
 
         # Show detailed results
-        self._show_detailed_results(result, generation_time, request)
+        self._show_detailed_results(result, 0, request)  # Pass 0 as generation_time placeholder
 
         # Update context and suggest next actions
         self._update_context_and_suggest_next_actions(result)
