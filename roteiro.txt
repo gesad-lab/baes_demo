@@ -2,12 +2,20 @@ create a student entity with name
 
 add email to student entity
 
+create a course entity with name and level
 
 add course to student entity
 
+create a teacher entity with name and email
 
+add teacher to course entity
+
+add phone number to student entity
+
+into course add a field called prerequisites
+
+---
 (mostrar api no localhost:8100/docs)
 --
 
 clear && /home/amg/projects/uece/baes_demo/.venv/bin/python /home/amg/projects/uece/baes_demo/bae_chat.py
-create a course entity with name and level
