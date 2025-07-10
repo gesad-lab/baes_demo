@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Any, Dict
 
 import requests
+from time import time
+from baes.utils.metrics_tracker import add_time, flush_snapshot
 
 # Add the project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -285,10 +287,11 @@ class BAEConversationalCLI:
         servers_already_running = self.ensure_servers_running()
 
         # Process with Enhanced Runtime Kernel - only start servers if needed
-        start_time = datetime.now()
+        start_ts = time()
         result = self.kernel.process_natural_language_request(
             request, start_servers=not servers_already_running
         )
+        add_time(time() - start_ts)
 
         # For PoC: Automatically restart servers after entity changes to refresh UI
         if (
@@ -1058,6 +1061,8 @@ class BAEConversationalCLI:
 
     def _request_user_clarification(self, interpretation_result: Dict[str, Any], original_request: str) -> str | None:
         """Request user clarification for ambiguous interpretations"""
+        from baes.utils.metrics_tracker import inc_clarification
+        inc_clarification()
         
         print("\n🤔 Request Clarification Needed")
         print("=" * 50)
@@ -1294,6 +1299,9 @@ class BAEConversationalCLI:
         # Save session before exit
         self._save_session()
         print("\n💾 Session saved. Resume with same command next time!")
+
+        # Flush metrics log
+        flush_snapshot()
 
         # Check if servers are running
         server_status = self.check_servers_running()
