@@ -1,0 +1,13 @@
+create a student entity with name
+
+add email to student entity
+
+
+add course to student entity
+
+
+(mostrar api no localhost:8100/docs)
+--
+
+clear && /home/amg/projects/uece/baes_demo/.venv/bin/python /home/amg/projects/uece/baes_demo/bae_chat.py
+create a course entity with name and level
