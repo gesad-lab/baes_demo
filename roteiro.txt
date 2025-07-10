@@ -10,9 +10,539 @@ create a teacher entity with name and email
 
 add teacher to course entity
 
+---
+resultado:
+---
+{
+  "total_wall_seconds": 194.14050126075745,
+  "clarification_prompts": 3,
+  "openai_tokens_in": 48813,
+  "openai_tokens_out": 10481
+}
+
+🧠 BAE System - Conversational Interface
+============================================================
+🎯 Proof of Concept: Scenario 1 - Initial System Generation
+💬 I'm your Business Autonomous Entity assistant!
+📚 I generate academic management systems for you.
+🌐 CRUD operations available in generated web UI!
+🔄 Auto-restart: New entities appear immediately in web UI
+
+ℹ️  Commands: 'help', 'examples', 'status', 'files', 'quit'
+
+🚀 Let's start! What kind of system would you like me to generate?
+💡 Try: 'Create a student management system' or 'add student'
+
+────────────────────────────────────────────────────────────
+
+🔄 Found previous session with entities: student, course
+Continue from there? (y/n): n
+🗑️  Removing managed system directory: /home/amg/projects/uece/managed_system
+🆕 Starting fresh session
+✅ Servers restarted successfully!
+🌐 FastAPI: http://localhost:8100/docs
+🎨 Streamlit: http://localhost:8600
+🏢 HBE/HSWE> create a student entity with name
+
+🎯 Processing your request: 'create a student entity with name'
+────────────────────────────────────────────────────────────
+🧠 BAE System analyzing your request...
+📊 Interpreting business requirements...
+  🎯 Detected entities: Student
+  📝 Extracting attributes from natural language...
+  🏗️  Planning system architecture...
+  🤝 Coordinating SWEA agents...
+✅ Servers already running - reusing existing instances
+
+🚀 Starting Student System Generation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 Step 1/6: TechLead Coordination...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ TechLead Coordination completed (0.0s)
+
+🎯 Step 2/6: Database Setup...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Database Setup completed (0.0s)
+      📁 Database ready
+
+🎯 Step 3/6: Model Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Model Generation completed (0.0s)
+
+🎯 Step 4/6: API Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ API Generation completed (22.0s)
+
+🎯 Step 5/6: UI Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ UI Generation completed (0.0s)
+
+🎯 Step 6/6: Final Review...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Final Review completed (0.0s)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 Phase 1 Complete: Student System Generated
+📋 Tasks Completed: 6/6
+🧪 Tests generated (execution deferred to Phase 2)
+
+🔄 Server Restart: New entity detected
+💡 Updating web interface...
+✅ Servers restarted successfully!
+🌐 FastAPI: http://localhost:8100/docs
+🎨 Streamlit: http://localhost:8600
+✅ System generation completed in 0.0 seconds!
+🎯 Entity processed: student
+🔄 SWEA coordination completed: 6 tasks
+  ✅ Task 1: TechLeadSWEA.coordinate_system_generation
+  ✅ Task 2: DatabaseSWEA.setup_database
+    📁 Database: 
+    🗄️  Tables: 
+  ✅ Task 3: BackendSWEA.generate_model
+  ✅ Task 4: BackendSWEA.generate_api
+  ✅ Task 5: FrontendSWEA.generate_ui
+    🎨 UI components: 0 elements
+  ✅ Task 6: TechLeadSWEA.review_and_approve
+
+🌐 Your generated system is ready!
+  📊 FastAPI Documentation: http://localhost:8100/docs
+  🖥️  Streamlit CRUD Interface: http://localhost:8600
+  📁 Generated files: /home/amg/projects/uece/managed_system/
+  🗄️  Database: /home/amg/projects/uece/managed_system/app/database/baes_system.db
+  📝 Server logs: /home/amg/projects/uece/managed_system/logs/ (fastapi.log, streamlit.log)
+
+💡 Use the web interface above for CRUD operations!
+💡 Server output is redirected to log files to keep CLI clean
+🎯 Semantic coherence: 94% (business vocabulary preserved)
+🔄 HBE/HSWE> add email to student entity
+
+🎯 Processing your request: 'add email to student entity'
+────────────────────────────────────────────────────────────
+🧠 BAE System analyzing your request...
+📊 Interpreting business requirements...
+  🎯 Detected entities: Student
+  📝 Extracting attributes from natural language...
+  🏗️  Planning system architecture...
+  🤝 Coordinating SWEA agents...
+
+🤔 Request Clarification Needed
+==================================================
+Original request: 'add email to student entity'
+
+🤖 System Interpretation:
+   Operation type: unknown
+   Confidence: 0.9/1.0
+   Reasoning: The request 'add email to student entity' matches the pattern for adding a field to an existing entity. The Student entity exists with attributes id and name, and the request specifies adding a new attribute 'email'.
+
+💭 Your request could mean:
+   1) Execute as interpreted (unknown)
+   2) Create a relationship between entities (add foreign key)
+   3) Add a field/attribute to existing entity
+   4) Create a new entity in the system
+   c) Cancel this request
+
+🎯 Please select (1-4, c): 3
+🔄 Using clarified request: 'add field to existing entity: add email to student entity'
+✅ Servers already running - reusing existing instances
+
+🚀 Starting Student System Generation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 Step 1/6: TechLead Coordination...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ TechLead Coordination completed (0.0s)
+
+🎯 Step 2/6: Databaseswea.Migrate Schema...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Databasemigrate Schema completed (0.0s)
+
+🎯 Step 3/6: Model Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Model Generation completed (0.0s)
+
+🎯 Step 4/6: API Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ API Generation completed (20.8s)
+
+🎯 Step 5/6: UI Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ UI Generation completed (0.0s)
+
+🎯 Step 6/6: Final Review...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Final Review completed (0.0s)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 Phase 1 Complete: Student System Generated
+📋 Tasks Completed: 6/6
+🧪 Tests generated (execution deferred to Phase 2)
+
+🔄 Server Restart: Entity modified
+💡 Updating web interface...
+✅ Servers restarted successfully!
+🌐 FastAPI: http://localhost:8100/docs
+🎨 Streamlit: http://localhost:8600
+✅ System generation completed in 0.0 seconds!
+🎯 Entity processed: student
+🔄 SWEA coordination completed: 6 tasks
+  ✅ Task 1: TechLeadSWEA.coordinate_system_generation
+  ✅ Task 2: DatabaseSWEA.migrate_schema
+    📁 Database: 
+    🗄️  Tables: 
+  ✅ Task 3: BackendSWEA.generate_model
+  ✅ Task 4: BackendSWEA.generate_api
+  ✅ Task 5: FrontendSWEA.generate_ui
+    🎨 UI components: 0 elements
+  ✅ Task 6: TechLeadSWEA.review_and_approve
+
+🌐 Your generated system is ready!
+  📊 FastAPI Documentation: http://localhost:8100/docs
+  🖥️  Streamlit CRUD Interface: http://localhost:8600
+  📁 Generated files: /home/amg/projects/uece/managed_system/
+  🗄️  Database: /home/amg/projects/uece/managed_system/app/database/baes_system.db
+  📝 Server logs: /home/amg/projects/uece/managed_system/logs/ (fastapi.log, streamlit.log)
+
+💡 Use the web interface above for CRUD operations!
+💡 Server output is redirected to log files to keep CLI clean
+🎯 Semantic coherence: 94% (business vocabulary preserved)
+🔄 HBE/HSWE> create a course entity with name and level
+
+🎯 Processing your request: 'create a course entity with name and level'
+────────────────────────────────────────────────────────────
+🧠 BAE System analyzing your request...
+📊 Interpreting business requirements...
+  🎯 Detected entities: Course
+  📝 Extracting attributes from natural language...
+  🏗️  Planning system architecture...
+  🤝 Coordinating SWEA agents...
+✅ Servers already running - reusing existing instances
+
+🚀 Starting Course System Generation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 Step 1/6: TechLead Coordination...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ TechLead Coordination completed (0.0s)
+
+🎯 Step 2/6: Database Setup...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Database Setup completed (0.0s)
+      📁 Database ready
+
+🎯 Step 3/6: Model Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Model Generation completed (0.0s)
+
+🎯 Step 4/6: API Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ API Generation completed (22.2s)
+
+🎯 Step 5/6: UI Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ UI Generation completed (0.0s)
+
+🎯 Step 6/6: Final Review...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Final Review completed (0.0s)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 Phase 1 Complete: Course System Generated
+📋 Tasks Completed: 6/6
+🧪 Tests generated (execution deferred to Phase 2)
+
+🔄 Server Restart: New entity detected
+💡 Updating web interface...
+✅ Servers restarted successfully!
+🌐 FastAPI: http://localhost:8100/docs
+🎨 Streamlit: http://localhost:8600
+✅ System generation completed in 0.0 seconds!
+🎯 Entity processed: course
+🔄 SWEA coordination completed: 6 tasks
+  ✅ Task 1: TechLeadSWEA.coordinate_system_generation
+  ✅ Task 2: DatabaseSWEA.setup_database
+    📁 Database: 
+    🗄️  Tables: 
+  ✅ Task 3: BackendSWEA.generate_model
+  ✅ Task 4: BackendSWEA.generate_api
+  ✅ Task 5: FrontendSWEA.generate_ui
+    🎨 UI components: 0 elements
+  ✅ Task 6: TechLeadSWEA.review_and_approve
+
+🌐 Your generated system is ready!
+  📊 FastAPI Documentation: http://localhost:8100/docs
+  🖥️  Streamlit CRUD Interface: http://localhost:8600
+  📁 Generated files: /home/amg/projects/uece/managed_system/
+  🗄️  Database: /home/amg/projects/uece/managed_system/app/database/baes_system.db
+  📝 Server logs: /home/amg/projects/uece/managed_system/logs/ (fastapi.log, streamlit.log)
+
+💡 Use the web interface above for CRUD operations!
+💡 Server output is redirected to log files to keep CLI clean
+🎯 Semantic coherence: 94% (business vocabulary preserved)
+🔄 HBE/HSWE> add course to student entity               
+
+🎯 Processing your request: 'add course to student entity'
+────────────────────────────────────────────────────────────
+🧠 BAE System analyzing your request...
+📊 Interpreting business requirements...
+  🎯 Detected entities: Student, Course
+  📝 Extracting attributes from natural language...
+  🏗️  Planning system architecture...
+  🤝 Coordinating SWEA agents...
+
+🤔 Request Clarification Needed
+==================================================
+Original request: 'add course to student entity'
+
+🤖 System Interpretation:
+   Operation type: unknown
+   Confidence: 0.0/1.0
+   Reasoning: No reasoning provided
+
+💭 Your request could mean:
+   1) Execute as interpreted (unknown)
+   2) Create a relationship between entities (add foreign key)
+   3) Add a field/attribute to existing entity
+   4) Create a new entity in the system
+   c) Cancel this request
+
+🎯 Please select (1-4, c): 2
+✅ Servers already running - reusing existing instances
+
+🚀 Starting Student System Generation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 Step 1/5: TechLead Coordination...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ TechLead Coordination completed (0.0s)
+
+🎯 Step 2/5: Databaseswea.Create Relationships...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Databasecreate Relationships completed (0.0s)
+
+🎯 Step 3/5: API Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ API Generation completed (19.1s)
+
+🎯 Step 4/5: UI Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ UI Generation completed (0.0s)
+
+🎯 Step 5/5: Final Review...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Final Review completed (0.0s)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 Phase 1 Complete: Student System Generated
+📋 Tasks Completed: 5/5
+🧪 Tests generated (execution deferred to Phase 2)
+
+🔄 Server Restart: Relationship created
+💡 Updating web interface...
+✅ Servers restarted successfully!
+🌐 FastAPI: http://localhost:8100/docs
+🎨 Streamlit: http://localhost:8600
+✅ System generation completed in 0.0 seconds!
+🎯 Entity processed: student
+🔄 SWEA coordination completed: 5 tasks
+  ✅ Task 1: TechLeadSWEA.coordinate_system_generation
+  ✅ Task 2: DatabaseSWEA.create_relationships
+    📁 Database: /home/amg/projects/uece/managed_system/app/database/baes_system.db
+    🗄️  Tables: 
+  ✅ Task 3: BackendSWEA.generate_api
+  ✅ Task 4: FrontendSWEA.generate_ui
+    🎨 UI components: 0 elements
+  ✅ Task 5: TechLeadSWEA.review_and_approve
+
+🌐 Your generated system is ready!
+  📊 FastAPI Documentation: http://localhost:8100/docs
+  🖥️  Streamlit CRUD Interface: http://localhost:8600
+  📁 Generated files: /home/amg/projects/uece/managed_system/
+  🗄️  Database: /home/amg/projects/uece/managed_system/app/database/baes_system.db
+  📝 Server logs: /home/amg/projects/uece/managed_system/logs/ (fastapi.log, streamlit.log)
+
+💡 Use the web interface above for CRUD operations!
+💡 Server output is redirected to log files to keep CLI clean
+🎯 Semantic coherence: 94% (business vocabulary preserved)
+🔄 HBE/HSWE> create a teacher entity with name and email
+
+🎯 Processing your request: 'create a teacher entity with name and email'
+────────────────────────────────────────────────────────────
+🧠 BAE System analyzing your request...
+📊 Interpreting business requirements...
+  🎯 Detected entities: Teacher
+  📝 Extracting attributes from natural language...
+  🏗️  Planning system architecture...
+  🤝 Coordinating SWEA agents...
+✅ Servers already running - reusing existing instances
+
+🚀 Starting Teacher System Generation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 Step 1/6: TechLead Coordination...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ TechLead Coordination completed (0.0s)
+
+🎯 Step 2/6: Database Setup...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Database Setup completed (0.0s)
+      📁 Database ready
+
+🎯 Step 3/6: Model Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Model Generation completed (0.0s)
+
+🎯 Step 4/6: API Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ API Generation completed (26.0s)
+
+🎯 Step 5/6: UI Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ UI Generation completed (0.0s)
+
+🎯 Step 6/6: Final Review...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Final Review completed (0.0s)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 Phase 1 Complete: Teacher System Generated
+📋 Tasks Completed: 6/6
+🧪 Tests generated (execution deferred to Phase 2)
+
+🔄 Server Restart: New entity detected
+💡 Updating web interface...
+✅ Servers restarted successfully!
+🌐 FastAPI: http://localhost:8100/docs
+🎨 Streamlit: http://localhost:8600
+✅ System generation completed in 0.0 seconds!
+🎯 Entity processed: teacher
+🔄 SWEA coordination completed: 6 tasks
+  ✅ Task 1: TechLeadSWEA.coordinate_system_generation
+  ✅ Task 2: DatabaseSWEA.setup_database
+    📁 Database: 
+    🗄️  Tables: 
+  ✅ Task 3: BackendSWEA.generate_model
+  ✅ Task 4: BackendSWEA.generate_api
+  ✅ Task 5: FrontendSWEA.generate_ui
+    🎨 UI components: 0 elements
+  ✅ Task 6: TechLeadSWEA.review_and_approve
+
+🌐 Your generated system is ready!
+  📊 FastAPI Documentation: http://localhost:8100/docs
+  🖥️  Streamlit CRUD Interface: http://localhost:8600
+  📁 Generated files: /home/amg/projects/uece/managed_system/
+  🗄️  Database: /home/amg/projects/uece/managed_system/app/database/baes_system.db
+  📝 Server logs: /home/amg/projects/uece/managed_system/logs/ (fastapi.log, streamlit.log)
+
+💡 Use the web interface above for CRUD operations!
+💡 Server output is redirected to log files to keep CLI clean
+🎯 Semantic coherence: 94% (business vocabulary preserved)
+🔄 HBE/HSWE> add teacher to course entity
+
+🎯 Processing your request: 'add teacher to course entity'
+────────────────────────────────────────────────────────────
+🧠 BAE System analyzing your request...
+📊 Interpreting business requirements...
+  🎯 Detected entities: Course, Teacher
+  📝 Extracting attributes from natural language...
+  🏗️  Planning system architecture...
+  🤝 Coordinating SWEA agents...
+
+🤔 Request Clarification Needed
+==================================================
+Original request: 'add teacher to course entity'
+
+🤖 System Interpretation:
+   Operation type: unknown
+   Confidence: 0.0/1.0
+   Reasoning: No reasoning provided
+
+💭 Your request could mean:
+   1) Execute as interpreted (unknown)
+   2) Create a relationship between entities (add foreign key)
+   3) Add a field/attribute to existing entity
+   4) Create a new entity in the system
+   c) Cancel this request
+
+🎯 Please select (1-4, c): 2
+✅ Servers already running - reusing existing instances
+
+🚀 Starting Course System Generation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 Step 1/5: TechLead Coordination...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ TechLead Coordination completed (0.0s)
+
+🎯 Step 2/5: Databaseswea.Create Relationships...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Databasecreate Relationships completed (0.0s)
+
+🎯 Step 3/5: API Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ API Generation completed (26.0s)
+
+🎯 Step 4/5: UI Generation...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ UI Generation completed (0.0s)
+
+🎯 Step 5/5: Final Review...
+   👁️  TechLead Review: ✅ APPROVED
+   ✅ Final Review completed (0.0s)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 Phase 1 Complete: Course System Generated
+📋 Tasks Completed: 5/5
+🧪 Tests generated (execution deferred to Phase 2)
+
+🔄 Server Restart: Relationship created
+💡 Updating web interface...
+✅ Servers restarted successfully!
+🌐 FastAPI: http://localhost:8100/docs
+🎨 Streamlit: http://localhost:8600
+✅ System generation completed in 0.0 seconds!
+🎯 Entity processed: course
+🔄 SWEA coordination completed: 5 tasks
+  ✅ Task 1: TechLeadSWEA.coordinate_system_generation
+  ✅ Task 2: DatabaseSWEA.create_relationships
+    📁 Database: /home/amg/projects/uece/managed_system/app/database/baes_system.db
+    🗄️  Tables: 
+  ✅ Task 3: BackendSWEA.generate_api
+  ✅ Task 4: FrontendSWEA.generate_ui
+    🎨 UI components: 0 elements
+  ✅ Task 5: TechLeadSWEA.review_and_approve
+
+🌐 Your generated system is ready!
+  📊 FastAPI Documentation: http://localhost:8100/docs
+  🖥️  Streamlit CRUD Interface: http://localhost:8600
+  📁 Generated files: /home/amg/projects/uece/managed_system/
+  🗄️  Database: /home/amg/projects/uece/managed_system/app/database/baes_system.db
+  📝 Server logs: /home/amg/projects/uece/managed_system/logs/ (fastapi.log, streamlit.log)
+
+💡 Use the web interface above for CRUD operations!
+💡 Server output is redirected to log files to keep CLI clean
+🎯 Semantic coherence: 94% (business vocabulary preserved)
+🔄 HBE/HSWE> exit
+
+📊 Session Summary:
+  ⏱️  Duration: 696 seconds
+  💬 Interactions: 6
+  🎯 Entities: student, course, teacher
+
+💾 Session saved. Resume with same command next time!
+
+🌐 Servers remain running:
+  • FastAPI: http://localhost:8100/docs
+  • Streamlit: http://localhost:8600
+  • Use 'restart servers' command if you need to restart them
+
+🤝 Thanks for testing the BAE System! Goodbye!
+
+--- extra fields
+
 add phone number to student entity
 
-into course add a field called prerequisites
+add the following fields to course entity: description, duration, price, start_date, end_date, prerequisites
 
 ---
 (mostrar api no localhost:8100/docs)
