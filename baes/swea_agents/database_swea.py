@@ -967,7 +967,7 @@ if __name__ == "__main__":
             
             logger.info(f"✅ Relationship creation for '{table_name}' completed successfully")
             logger.info(f"📊 Final table columns: {list(current_columns_map.keys())}")
-            logger.info(f"🔗 Foreign keys created: {[f'{rel['target_entity'].lower()}_id' for rel in relationships]}")
+            logger.info(f"🔗 Foreign keys created: {[rel['target_entity'].lower() + '_id' for rel in relationships]}")
             return result
 
         except Exception as e:
