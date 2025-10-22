@@ -171,7 +171,14 @@ class EnhancedRuntimeKernel:
         self, request: str, context: str = "academic", start_servers: bool = True
     ) -> Dict[str, Any]:
         """
-        Process natural language request with proper entity routing and error handling
+        Process natural language request with proper entity routing and error handling.
+        
+        FALLBACK STRATEGY:
+        - If entity is recognized but no specific BAE exists in registry, 
+          a GenericBAE is instantiated dynamically to handle the request.
+        - This ensures system generation proceeds for all recognized entities,
+          routing directly to SWEA team coordination.
+        - Only truly unknown entities (confidence < threshold) are rejected.
         """
         logger.debug("📥 Processing request: %s", request)
 
@@ -182,22 +189,33 @@ class EnhancedRuntimeKernel:
 
         logger.debug("🔍 Entity detection: %s (confidence: %.2f)", detected_entity, confidence)
 
-        # Step 2: Check if entity is supported
-        if detected_entity == "unknown" or not self.bae_registry.is_entity_supported(
-            detected_entity
-        ):
+        # Step 2: Check if entity is truly unknown (reject only if unrecognizable)
+        # Note: We allow recognized entities even if not in registry (GenericBAE fallback)
+        if detected_entity == "unknown":
             error_response = self._create_unsupported_entity_error(
                 detected_entity, entity_classification
             )
-            logger.warning("❌ Unsupported entity requested: %s", detected_entity)
+            logger.warning("❌ Unknown entity requested (cannot classify): %s", detected_entity)
             return error_response
 
-        # Step 3: Route to appropriate BAE
+        # Step 3: Route to appropriate BAE (with fallback to GenericBAE)
         target_bae = self.bae_registry.get_bae(detected_entity)
+        used_generic_fallback = False
+        
         if not target_bae:
-            error_response = self._create_bae_unavailable_error(detected_entity)
-            logger.error("❌ BAE not available for entity: %s", detected_entity)
-            return error_response
+            # FALLBACK: Use GenericBAE to handle unregistered but recognized entities
+            logger.warning(
+                "⚠️  No specific BAE found for '%s' - using GenericBAE fallback to ensure system generation",
+                detected_entity,
+            )
+            from baes.domain_entities.generic_bae import GenericBae
+
+            target_bae = GenericBae(primary_entity=detected_entity.capitalize())
+            used_generic_fallback = True
+            logger.info(
+                "✅ GenericBAE instantiated for '%s' - proceeding with SWEA coordination",
+                detected_entity,
+            )
 
         # Step 4: BAE interprets business request
         interpretation_result = target_bae.handle(
@@ -579,6 +597,7 @@ class EnhancedRuntimeKernel:
             "entity": detected_entity,
             "confidence": confidence,
             "bae_used": target_bae.name,
+            "used_generic_fallback": used_generic_fallback,
             "interpretation": interpretation_result,
             "execution_results": execution_results,
             "test_execution_result": test_execution_result,
@@ -612,10 +631,13 @@ class EnhancedRuntimeKernel:
         }
 
         if overall_success:
-            logger.info(
-                "✅ Request processed successfully for %s entity - ALL tasks approved + ALL tests passing",
-                detected_entity,
+            success_msg = (
+                f"✅ Request processed successfully for {detected_entity} entity - "
+                f"ALL tasks approved + ALL tests passing"
             )
+            if used_generic_fallback:
+                success_msg += f" (via GenericBAE fallback)"
+            logger.info(success_msg)
         else:
             logger.warning(
                 "❌ Request processing FAILED for %s entity - %d tasks failed",

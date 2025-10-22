@@ -216,3 +216,116 @@ class TestEnhancedRuntimeKernel:
         # Verify the error message indicates the expected failure
         assert "Maximum retries" in str(exc_info.value)
         assert "BackendSWEA.generate_model" in str(exc_info.value)
+
+
+@pytest.mark.unit
+class TestGenericBAEFallback:
+    """Test suite for GenericBAE fallback mechanism"""
+
+    @pytest.fixture
+    def kernel(self, temp_database_path):
+        """Create a kernel instance for testing"""
+        with patch("baes.core.enhanced_runtime_kernel.Config"):
+            kernel = EnhancedRuntimeKernel(context_store_path=temp_database_path)
+            return kernel
+
+    def test_generic_bae_fallback_for_unregistered_entity(self, kernel):
+        """Test that GenericBAE is used as fallback for recognized but unregistered entities"""
+        # Mock entity recognition to return a valid but unregistered entity
+        with patch.object(kernel.entity_recognizer, "recognize_entity") as mock_recognize:
+            mock_recognize.return_value = {
+                "detected_entity": "book",  # Not registered in BAE Registry
+                "confidence": 0.85,
+                "reasoning": "User wants to create a book management system",
+                "language_detected": "english",
+                "action_intent": "create",
+            }
+
+            # Mock the GenericBae at the source module where it's imported
+            with patch("baes.domain_entities.generic_bae.GenericBae") as MockGenericBae:
+                mock_generic_bae = Mock()
+                mock_generic_bae.name = "BookBAE"
+                mock_generic_bae.handle.return_value = {
+                    "success": True,
+                    "entity": "Book",
+                    "extracted_attributes": ["title", "author", "isbn"],
+                    "swea_coordination": [],  # Empty to avoid execution
+                    "business_rules": ["ISBN must be unique"],
+                }
+                MockGenericBae.return_value = mock_generic_bae
+
+                # Skip server start for test
+                with patch.dict("os.environ", {"SKIP_SERVER_START": "1"}):
+                    result = kernel.process_natural_language_request(
+                        "Create a system to manage books with title, author, and ISBN",
+                        context="academic",
+                        start_servers=False,
+                    )
+
+                # Verify GenericBAE was instantiated
+                MockGenericBae.assert_called_once_with(primary_entity="Book")
+
+                # Verify the result indicates fallback was used
+                assert result.get("used_generic_fallback") is True
+                assert result.get("entity") == "book"
+                assert result.get("bae_used") == "BookBAE"
+
+    def test_specific_bae_used_when_available(self, kernel):
+        """Test that specific BAE is used when available (no fallback)"""
+        # Mock entity recognition to return a registered entity
+        with patch.object(kernel.entity_recognizer, "recognize_entity") as mock_recognize:
+            mock_recognize.return_value = {
+                "detected_entity": "student",  # Registered in BAE Registry
+                "confidence": 0.95,
+                "reasoning": "User wants to create a student management system",
+                "language_detected": "english",
+                "action_intent": "create",
+            }
+
+            # Mock the StudentBAE behavior
+            student_bae = kernel.bae_registry.get_bae("student")
+            with patch.object(student_bae, "handle") as mock_handle:
+                mock_handle.return_value = {
+                    "success": True,
+                    "entity": "Student",
+                    "extracted_attributes": ["name", "email"],
+                    "swea_coordination": [],  # Empty to avoid execution
+                    "business_rules": ["Email must be unique"],
+                }
+
+                # Skip server start for test
+                with patch.dict("os.environ", {"SKIP_SERVER_START": "1"}):
+                    result = kernel.process_natural_language_request(
+                        "Create a system to manage students",
+                        context="academic",
+                        start_servers=False,
+                    )
+
+                # Verify specific BAE was used (no fallback)
+                assert result.get("used_generic_fallback") is False
+                assert result.get("entity") == "student"
+                assert "StudentBAE" in result.get("bae_used", "")
+
+    def test_unknown_entity_still_rejected(self, kernel):
+        """Test that truly unknown entities are still rejected (no fallback)"""
+        # Mock entity recognition to return "unknown"
+        with patch.object(kernel.entity_recognizer, "recognize_entity") as mock_recognize:
+            mock_recognize.return_value = {
+                "detected_entity": "unknown",
+                "confidence": 0.2,
+                "reasoning": "Unable to classify entity from request",
+                "language_detected": "english",
+                "action_intent": "unknown",
+            }
+
+            result = kernel.process_natural_language_request(
+                "Create something weird that doesn't make sense",
+                context="academic",
+                start_servers=False,
+            )
+
+            # Verify request was rejected
+            assert result.get("success") is False
+            assert result.get("error") == "ENTITY_NOT_SUPPORTED"
+            assert "used_generic_fallback" not in result  # No fallback attempted
+            assert "supported_entities" in result.get("details", {})
