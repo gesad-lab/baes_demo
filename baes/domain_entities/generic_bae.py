@@ -99,15 +99,15 @@ class GenericBae(BaseAgent):
     def handle(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
         Handle domain entity tasks - primary entry point for runtime kernel.
-        
+
         This method is called by enhanced_runtime_kernel. It delegates to
         handle_task() for the actual implementation, maintaining consistency
         with the base_bae.py interface pattern.
-        
+
         Args:
             task: Task name (e.g., "interpret_business_request")
             payload: Task-specific data dictionary
-            
+
         Returns:
             Task execution result dictionary with success/error status
         """
@@ -314,8 +314,39 @@ class GenericBae(BaseAgent):
         raise NotImplementedError("Specialized BAE should implement _configure_context")
 
     def _coordinate_swea(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Coordinate SWEA - to be implemented by specialized BAEs"""
-        raise NotImplementedError("Specialized BAE should implement _coordinate_swea")
+        """
+        Coordinate SWEA agents while maintaining domain entity focus.
+
+        Creates a coordination plan that maps BAE tasks to SWEA agents with proper
+        semantic context and business vocabulary.
+        """
+        swea_tasks = payload.get("swea_tasks", [])
+        domain_context = payload.get("domain_context", {})
+
+        coordination_plan = []
+
+        for task in swea_tasks:
+            swea_task = {
+                "entity": self.current_entity,
+                "swea_agent": task.get("agent", ""),  # Map 'agent' to 'swea_agent' for validation
+                "task_type": task.get("task", ""),
+                "payload": task.get("payload", {}),
+                "domain_context": domain_context,
+                "business_vocabulary": list(self.business_vocabulary),
+                "semantic_requirements": {
+                    "maintain_domain_coherence": True,
+                    "preserve_business_rules": True,
+                    "use_business_terminology": True,
+                    "entity_focus": self.current_entity,
+                },
+            }
+            coordination_plan.append(swea_task)
+
+        return {
+            "success": True,
+            "entity": self.current_entity,
+            "coordination_plan": coordination_plan,
+        }
 
     def _validate_domain_coherence(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Validate domain coherence - to be implemented by specialized BAEs"""
