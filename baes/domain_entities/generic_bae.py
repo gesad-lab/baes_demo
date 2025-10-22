@@ -210,22 +210,11 @@ class GenericBae(BaseAgent):
         entity_lower = entity.lower()
         entity_plural = self._pluralize_entity(entity_lower)
 
+        # Note: Schema generation is handled internally by the BAE
+        # SWEA coordination plan only includes SWEA agent tasks
         plan = [
             {
                 "step": 1,
-                "swea_agent": self.name,
-                "task_type": "generate_schema",
-                "payload": {
-                    "attributes": attributes,
-                    "context": context,
-                    "business_vocabulary": business_vocab,
-                    "entity": entity,
-                },
-                "description": f"Generate {entity} domain entity schema with semantic coherence",
-                "domain_focus": True,
-            },
-            {
-                "step": 2,
                 "swea_agent": "BackendSWEA",
                 "task_type": "generate_api",
                 "payload": {
@@ -236,10 +225,9 @@ class GenericBae(BaseAgent):
                     "domain_operations": ["create", "read", "update", "delete", "list"],
                 },
                 "description": f"Generate FastAPI backend with {entity} entity operations",
-                "depends_on": [f"{self.name}.generate_schema"],
             },
             {
-                "step": 3,
+                "step": 2,
                 "swea_agent": "DatabaseSWEA",
                 "task_type": "setup_database",
                 "payload": {
@@ -249,10 +237,9 @@ class GenericBae(BaseAgent):
                     "persistence_requirements": ["durability", "consistency", "domain_integrity"],
                 },
                 "description": f"Create database schema for {entity} with business rule preservation",
-                "depends_on": [f"{self.name}.generate_schema"],
             },
             {
-                "step": 4,
+                "step": 3,
                 "swea_agent": "FrontendSWEA",
                 "task_type": "generate_ui",
                 "payload": {
