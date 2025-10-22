@@ -9,6 +9,7 @@ class EntityRecognizer:
 
     def __init__(self, context_store=None):
         self.llm = OpenAIClient()
+        # Only registered BAE entities - everything else uses GenericBAE fallback
         self.supported_entities = ["student", "course", "teacher"]
         self.context_store = context_store
 
@@ -23,7 +24,7 @@ class EntityRecognizer:
         context_info = self._gather_context_info()
         
         prompt = f"""
-        You are an Entity Recognition specialist for an Academic BAE System. Your task is to analyze user requests and determine which entity they want to work with, particularly for relationship creation scenarios.
+        You are an Entity Recognition specialist for a BAE (Business Autonomous Entity) System. Your task is to analyze user requests and identify the PRIMARY ENTITY or CONCEPT that the user wants to work with.
 
         User Request: "{user_input}"
 
@@ -31,15 +32,15 @@ class EntityRecognizer:
         {context_info}
 
         ## Analysis Instructions:
-        Follow this structured reasoning process:
 
-        ### Step 1: Identify all entities mentioned in the request
-        - List all entities (student, course, teacher) mentioned in the request
-        - Identify the explicit action being requested
+        ### Step 1: Identify what the user wants to create/manage
+        - What is the PRIMARY subject of this request?
+        - Extract the main entity/concept (e.g., "student", "book", "api", "product", "vehicle")
+        - Use a SINGLE, SIMPLE NOUN to describe it (lowercase, singular form)
 
         ### Step 2: Determine request type
-        - Is this a RELATIONSHIP request (e.g., "add X to Y", "connect X with Y", "link X to Y")?
-        - Is this a CREATION request (e.g., "create X", "add X entity")?
+        - Is this a RELATIONSHIP request (e.g., "add X to Y", "connect X with Y")?
+        - Is this a CREATION request (e.g., "create X", "build X", "develop X")?
         - Is this an UPDATE request (e.g., "modify X", "change X")?
         - Is this a DELETION request (e.g., "remove X", "delete X")?
 
@@ -47,27 +48,28 @@ class EntityRecognizer:
         **CRITICAL RULE**: The PRIMARY entity is the one that will be MODIFIED to include a reference to the secondary entity.
         
         Examples:
-        - "add course to student" → PRIMARY: student (student gets course_id field)
-        - "add student to course" → PRIMARY: course (course gets student_id field)  
-        - "connect teacher with course" → Ambiguous - need more context
-        - "assign teacher to course" → PRIMARY: course (course gets teacher_id field)
-        - "enroll student in course" → PRIMARY: student (student gets course_id field)
+        - "add course to student" → PRIMARY: student (student schema gets modified)
+        - "add student to course" → PRIMARY: course (course schema gets modified)
+        - "create API for products" → PRIMARY: api (the thing being created)
+        - "build database for users" → PRIMARY: database (the thing being built)
 
-        ### Step 4: Chain-of-thought reasoning for relationships
-        - Which entity's schema needs to be modified?
-        - Which entity will receive the foreign key reference?
-        - Direction of relationship: From [secondary] TO [primary]
-        - The entity being "added TO" another is usually the foreign key holder
+        ### Step 4: Entity Extraction Guidelines
+        - For "REST API", "web service", "backend API" → use "api"
+        - For "user interface", "web UI", "frontend" → use "ui"
+        - For "database", "data model", "schema" → use "database"
+        - For "test suite", "tests" → use "test"
+        - For business entities like "book", "product", "employee" → use the noun directly
+        - For academic entities like "student", "course", "teacher" → use the exact term
 
-        ### Step 5: Final determination
-        - Declare the primary entity based on schema modification requirements
-        - Provide confidence level (0.0-1.0)
-        - Explain your reasoning clearly
+        ### Step 5: Confidence Assessment
+        - High confidence (>0.8): Clear, unambiguous entity mentioned
+        - Medium confidence (0.5-0.8): Entity can be inferred with reasonable certainty
+        - Low confidence (<0.5): Request is vague, ambiguous, or unintelligible → use "unknown"
 
         ## Response Format:
         Return a JSON response with:
         {{
-            "detected_entity": "student|course|teacher|unknown",
+            "detected_entity": "string (single noun, lowercase, singular)",
             "confidence": 0.0-1.0,
             "reasoning": "Step-by-step explanation of your analysis",
             "language_detected": "detected language",
@@ -81,30 +83,38 @@ class EntityRecognizer:
             }}
         }}
 
-        ## Supported Entities:
-        - student (aluno, estudante, discente): for managing students/learners
-        - course (curso, disciplina, matéria): for managing courses/subjects  
-        - teacher (professor, docente, instrutor): for managing teachers/instructors
+        ## Registered BAE Entities (have specialized handlers):
+        - **student** (aluno, estudante, discente): students/learners
+        - **course** (curso, disciplina, matéria): courses/subjects  
+        - **teacher** (professor, docente, instrutor): teachers/instructors
 
-        **Important**: If the request doesn't clearly map to any supported entity or if you're uncertain about relationship direction, use "unknown" and explain why in your reasoning.
+        ## Dynamic Entity Handling:
+        - Any OTHER entity will be handled by GenericBAE fallback
+        - Examples: "book", "product", "api", "vehicle", "employee", "inventory", etc.
+        - Just extract the entity name - the system will handle it dynamically!
+
+        **Important**: 
+        - Extract the entity name even if it's NOT in the registered list
+        - Only use "unknown" if confidence is very low (<0.5) or request is unintelligible
+        - The system supports ANY entity through dynamic fallback - your job is just to identify it!
         """
 
         system_prompt = (
-            "You are a data modeling expert tasked with interpreting natural language commands "
-            "to define system components. Your primary function is to accurately identify the "
-            "main subject (the 'primary entity') of a user's request, which determines which "
-            "part of the system's data model will be created or modified. When a request "
-            "describes a relationship between entities, your most critical task is to determine "
-            "which entity's schema must be altered to establish the link. You must use a "
-            "structured, step-by-step reasoning process. If the primary entity cannot be "
-            "determined with high confidence, you must classify it as 'unknown' and explain "
-            "your reasoning."
+            "You are an entity extraction expert that identifies the PRIMARY subject of user requests. "
+            "Your job is simple: extract the main entity/concept the user wants to work with. "
+            "Return it as a single, simple noun (lowercase, singular form). Examples: 'student', 'book', "
+            "'api', 'product', 'vehicle', 'employee', 'database', 'ui'. Don't worry if the entity isn't "
+            "in a predefined list - the system handles ANY entity through dynamic fallback. Just extract "
+            "what the user is talking about. Only return 'unknown' if confidence is very low (<0.5) or "
+            "the request is completely unintelligible."
         )
 
         try:
             # Use the new JSON enforcement functionality
+            # Note: detected_entity accepts ANY string (not constrained to enum)
+            # This allows dynamic entity recognition with GenericBAE fallback
             json_schema = {
-                "detected_entity": "student|course|teacher|unknown",
+                "detected_entity": "string",  # Any entity name (lowercase, singular)
                 "confidence": 0.0,
                 "reasoning": "string",
                 "language_detected": "string",
@@ -142,12 +152,16 @@ class EntityRecognizer:
                 fallback_schema=fallback_schema
             )
 
-            # Validate the response
-            if classification.get("detected_entity") not in self.supported_entities + ["unknown"]:
+            # Validate the response - accept ANY entity name
+            # The system will route to specific BAE if available, or GenericBAE fallback otherwise
+            detected = classification.get("detected_entity", "unknown")
+            
+            # Basic validation: ensure it's a non-empty string
+            if not detected or not isinstance(detected, str) or detected.strip() == "":
                 classification["detected_entity"] = "unknown"
                 classification["confidence"] = 0.0
-                classification["reasoning"] = f"Invalid entity detected: {classification.get('detected_entity')}"
-
+                classification["reasoning"] = "Empty or invalid entity name"
+            
             return classification
 
         except Exception as e:
