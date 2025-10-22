@@ -96,6 +96,23 @@ class GenericBae(BaseAgent):
             logger.error(f"{self.name}: {error_msg}")
             return self.create_error_response(task, error_msg, "execution_error")
 
+    def handle(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handle domain entity tasks - primary entry point for runtime kernel.
+        
+        This method is called by enhanced_runtime_kernel. It delegates to
+        handle_task() for the actual implementation, maintaining consistency
+        with the base_bae.py interface pattern.
+        
+        Args:
+            task: Task name (e.g., "interpret_business_request")
+            payload: Task-specific data dictionary
+            
+        Returns:
+            Task execution result dictionary with success/error status
+        """
+        return self.handle_task(task, payload)
+
     def _interpret_business_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
         Interpret natural language business request with dynamic entity adaptation
