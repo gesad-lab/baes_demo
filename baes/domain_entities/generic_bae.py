@@ -213,8 +213,8 @@ class GenericBae(BaseAgent):
         plan = [
             {
                 "step": 1,
-                "agent": self.name,
-                "task": "generate_schema",
+                "swea_agent": self.name,
+                "task_type": "generate_schema",
                 "payload": {
                     "attributes": attributes,
                     "context": context,
@@ -226,8 +226,8 @@ class GenericBae(BaseAgent):
             },
             {
                 "step": 2,
-                "agent": "BackendSWEA",
-                "task": "generate_api",
+                "swea_agent": "BackendSWEA",
+                "task_type": "generate_api",
                 "payload": {
                     "entity": entity,
                     "attributes": attributes,
@@ -240,8 +240,8 @@ class GenericBae(BaseAgent):
             },
             {
                 "step": 3,
-                "agent": "DatabaseSWEA",
-                "task": "setup_database",
+                "swea_agent": "DatabaseSWEA",
+                "task_type": "setup_database",
                 "payload": {
                     "entity": entity,
                     "attributes": attributes,
@@ -253,8 +253,8 @@ class GenericBae(BaseAgent):
             },
             {
                 "step": 4,
-                "agent": "FrontendSWEA",
-                "task": "generate_ui",
+                "swea_agent": "FrontendSWEA",
+                "task_type": "generate_ui",
                 "payload": {
                     "entity": entity,
                     "attributes": attributes,
