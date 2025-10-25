@@ -16,10 +16,11 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from time import time
 from typing import Any, Dict
 
 import requests
-from time import time
+
 from baes.utils.metrics_tracker import add_time, flush_snapshot
 
 # Add the project root to Python path
@@ -31,8 +32,8 @@ from config import Config  # noqa: E402
 
 
 class BAEConversationalCLI:
-    def __init__(self):
-        self.kernel = EnhancedRuntimeKernel()
+    def __init__(self, context_store_path: str = "database/context_store.json"):
+        self.kernel = EnhancedRuntimeKernel(context_store_path=context_store_path)
         self.session_start = datetime.now()
         self.conversation_history = []
         self.session_file = Path("bae_session.json")
@@ -272,7 +273,7 @@ class BAEConversationalCLI:
 
         # Pre-process to get interpretation and check confidence
         interpretation_result = self._get_interpretation_preview(request)
-        
+
         # Check if we need user confirmation for low confidence or ambiguous interpretations
         if self._needs_user_confirmation(interpretation_result, request):
             confirmed_request = self._request_user_clarification(interpretation_result, request)
@@ -793,14 +794,15 @@ class BAEConversationalCLI:
         try:
             # Check if new entity was actually created/added OR relationship was created
             execution_results = result.get("execution_results", [])
-            
+
             # Check for entity creation/modification (model, migration, or relationship tasks)
             entity_added = any(
-                task.get("success") and (
-                    "model" in task.get("task", "").lower() or
-                    "migrate" in task.get("task", "").lower() or
-                    "create_relationships" in task.get("task", "").lower() or
-                    "relationship" in task.get("task", "").lower()
+                task.get("success")
+                and (
+                    "model" in task.get("task", "").lower()
+                    or "migrate" in task.get("task", "").lower()
+                    or "create_relationships" in task.get("task", "").lower()
+                    or "relationship" in task.get("task", "").lower()
                 )
                 for task in execution_results
             )
@@ -810,7 +812,7 @@ class BAEConversationalCLI:
                 from baes.utils.presentation_logger import get_presentation_logger
 
                 presentation_logger = get_presentation_logger()
-                
+
                 # Determine restart reason based on task type
                 restart_reason = "New entity detected"
                 for task in execution_results:
@@ -822,7 +824,7 @@ class BAEConversationalCLI:
                         elif "migrate" in task_name:
                             restart_reason = "Entity modified"
                             break
-                
+
                 presentation_logger.server_restart(restart_reason)
 
                 # Auto-restart servers to refresh the UI
@@ -990,60 +992,66 @@ class BAEConversationalCLI:
         try:
             # Create a temporary student BAE instance to get interpretation
             from baes.domain_entities.academic.student_bae import StudentBae
+
             preview_bae = StudentBae()
-            
+
             # Get the interpretation without execution
             interpretation_result = preview_bae.handle(
-                "interpret_business_request",
-                {
-                    "request": request,
-                    "context": "academic"
-                }
+                "interpret_business_request", {"request": request, "context": "academic"}
             )
-            
+
             return interpretation_result
-            
+
         except Exception as e:
             print(f"⚠️  Could not get interpretation preview: {str(e)}")
             return {"confidence": 0.5, "operation_type": "unknown"}
 
     def _needs_user_confirmation(self, interpretation_result: Dict[str, Any], request: str) -> bool:
         """Check if user confirmation is needed based on interpretation confidence and ambiguity"""
-        
+
         # If interpretation failed, don't require confirmation (let it fail normally)
         if "error" in interpretation_result:
             return False
-            
+
         confidence = interpretation_result.get("confidence", 0.5)
         detected_type = interpretation_result.get("operation_type", "unknown")
-        
+
         # CRITICAL: If confidence is high (>=0.8) for basic create/evolve operations, don't ask for confirmation
         # This handles cases like "create a student entity with name and email" that should be straightforward
         if confidence >= 0.8:
             request_lower = request.lower()
             # For basic entity creation patterns, trust the high confidence
-            if any(pattern in request_lower for pattern in ["create", "add student", "add course", "add teacher"]):
+            if any(
+                pattern in request_lower
+                for pattern in ["create", "add student", "add course", "add teacher"]
+            ):
                 return False
-        
+
         # If confidence is high (>=0.7) and we have a valid operation type, don't ask for confirmation
-        if confidence >= 0.7 and detected_type in ["create", "evolve", "relationship", "remove", "modify"]:
+        if confidence >= 0.7 and detected_type in [
+            "create",
+            "evolve",
+            "relationship",
+            "remove",
+            "modify",
+        ]:
             return False
-        
+
         # If confidence is low OR operation type is unknown, require confirmation
         if confidence < 0.7 or detected_type == "unknown":
             return True
-        
+
         # Check for ambiguous patterns that often get misinterpreted
         request_lower = request.lower()
-        
+
         # Check for relationship vs entity creation ambiguity
         if "add" in request_lower and "to" in request_lower and "entity" in request_lower:
             # This should be a relationship but often gets misinterpreted
             is_relationship = interpretation_result.get("is_relationship", False)
-            
+
             if detected_type != "relationship" and not is_relationship:
                 return True  # Likely misinterpreted relationship request
-        
+
         # Check for patterns that suggest multiple valid interpretations
         ambiguous_keywords = ["add", "include", "create", "make", "build"]
         if any(keyword in request_lower for keyword in ambiguous_keywords):
@@ -1051,36 +1059,39 @@ class BAEConversationalCLI:
             entities_mentioned = interpretation_result.get("entities_mentioned", [])
             if len(entities_mentioned) > 1:
                 is_relationship = interpretation_result.get("is_relationship", False)
-                
+
                 if detected_type != "relationship" and not is_relationship:
                     return True  # Multiple entities but not relationship detection
-        
+
         return False
 
-    def _request_user_clarification(self, interpretation_result: Dict[str, Any], original_request: str) -> str | None:
+    def _request_user_clarification(
+        self, interpretation_result: Dict[str, Any], original_request: str
+    ) -> str | None:
         """Request user clarification for ambiguous interpretations"""
         from baes.utils.metrics_tracker import inc_clarification
+
         inc_clarification()
-        
+
         print("\n🤔 Request Clarification Needed")
         print("=" * 50)
         print(f"Original request: '{original_request}'")
-        
+
         # Show what the system interpreted
         detected_type = interpretation_result.get("operation_type", "unknown")
         confidence = interpretation_result.get("confidence", 0.0)
         reasoning = interpretation_result.get("reasoning", "No reasoning provided")
-        
+
         print(f"\n🤖 System Interpretation:")
         print(f"   Operation type: {detected_type}")
         print(f"   Confidence: {confidence:.1f}/1.0")
         print(f"   Reasoning: {reasoning}")
-        
+
         # Provide clarification options based on the request
         print(f"\n💭 Your request could mean:")
-        
+
         options = []
-        
+
         # Always offer the detected interpretation as option 1
         if detected_type == "relationship":
             options.append(("1", f"Create a relationship between entities", detected_type))
@@ -1090,13 +1101,19 @@ class BAEConversationalCLI:
             options.append(("1", f"Add fields/attributes to existing entity", detected_type))
         else:
             options.append(("1", f"Execute as interpreted ({detected_type})", detected_type))
-        
+
         # Offer alternative interpretations
         request_lower = original_request.lower()
         if "add" in request_lower and "to" in request_lower and "entity" in request_lower:
             # Likely a relationship that might have been misinterpreted
             if detected_type != "relationship":
-                options.append(("2", f"Create a relationship between entities (add foreign key)", "relationship"))
+                options.append(
+                    (
+                        "2",
+                        f"Create a relationship between entities (add foreign key)",
+                        "relationship",
+                    )
+                )
             if detected_type != "evolve":
                 options.append(("3", f"Add a field/attribute to existing entity", "evolve"))
             if detected_type != "create":
@@ -1109,19 +1126,19 @@ class BAEConversationalCLI:
                 options.append(("3", f"Add fields to existing entity", "evolve"))
             if detected_type != "relationship":
                 options.append(("4", f"Create a relationship between entities", "relationship"))
-        
+
         # Add cancel option
         options.append(("c", "Cancel this request", "cancel"))
-        
+
         # Show options
         for option_key, description, _ in options:
             print(f"   {option_key}) {description}")
-        
+
         # Get user choice
         while True:
             try:
                 choice = input(f"\n🎯 Please select (1-{len(options)-1}, c): ").strip().lower()
-                
+
                 # Find matching option
                 for option_key, description, operation_type in options:
                     if choice == option_key.lower():
@@ -1132,20 +1149,22 @@ class BAEConversationalCLI:
                             return original_request
                         else:
                             # Generate modified request based on user choice
-                            return self._generate_clarified_request(original_request, operation_type)
-                
+                            return self._generate_clarified_request(
+                                original_request, operation_type
+                            )
+
                 print("❌ Invalid choice. Please select a valid option.")
-                
+
             except (EOFError, KeyboardInterrupt):
                 print("\n❌ Request cancelled by user")
                 return None
 
     def _generate_clarified_request(self, original_request: str, target_operation: str) -> str:
         """Generate a clarified request based on user's chosen operation type"""
-        
+
         # Extract key entities/terms from original request
         request_lower = original_request.lower()
-        
+
         if target_operation == "relationship":
             # Generate explicit relationship request
             if "student" in request_lower and "course" in request_lower:
@@ -1155,7 +1174,7 @@ class BAEConversationalCLI:
             else:
                 # Generic relationship format
                 return f"create relationship for: {original_request}"
-                
+
         elif target_operation == "create":
             # Generate explicit entity creation request - preserve original attributes
             if "student" in request_lower:
@@ -1168,7 +1187,7 @@ class BAEConversationalCLI:
                 if "with" in request_lower:
                     return original_request  # Keep the full original request with attributes
                 else:
-                    return "add course entity"  
+                    return "add course entity"
             elif "teacher" in request_lower:
                 if "with" in request_lower:
                     return original_request  # Keep the full original request with attributes
@@ -1176,11 +1195,11 @@ class BAEConversationalCLI:
                     return "add teacher entity"
             else:
                 return original_request  # Preserve the original request
-                
+
         elif target_operation == "evolve":
             # Generate explicit evolution request
             return f"add field to existing entity: {original_request}"
-            
+
         else:
             # Fallback - use original request
             return original_request
