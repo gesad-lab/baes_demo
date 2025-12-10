@@ -101,9 +101,24 @@ class OpenAIClient:
             else:
                 messages.append({"role": "user", "content": prompt})
 
-            response = self.client.chat.completions.create(
-                model=self.model, messages=messages, temperature=temperature, max_tokens=max_tokens
-            )
+            # Build API parameters conditionally for gpt-4 vs gpt-5 models
+            api_params = {
+                "model": self.model,
+                "messages": messages
+            }
+            
+            # gpt-5 models only support temperature=1 (default), so we omit it
+            # gpt-4 models support custom temperature values
+            if not self.model.startswith("gpt-5"):
+                api_params["temperature"] = temperature
+            
+            # gpt-5 uses max_completion_tokens, gpt-4 uses max_tokens
+            if self.model.startswith("gpt-5"):
+                api_params["max_completion_tokens"] = max_tokens
+            else:
+                api_params["max_tokens"] = max_tokens
+            
+            response = self.client.chat.completions.create(**api_params)
             from baes.utils.metrics_tracker import add_tokens
             add_tokens(response.usage.prompt_tokens, response.usage.completion_tokens)
 
