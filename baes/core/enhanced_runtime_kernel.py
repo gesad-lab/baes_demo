@@ -941,6 +941,8 @@ class EnhancedRuntimeKernel:
                                         task_name,
                                     )
 
+                            # Extract deployment_ready logic for better readability
+                            deployment_ready = False if force_accepted else review_result.get("data", {}).get("deployment_ready", False)
                             results.append(
                                 {
                                     "task": task_name,
@@ -949,9 +951,7 @@ class EnhancedRuntimeKernel:
                                     "techlead_approved": True,
                                     "force_accepted": force_accepted,
                                     "final_review": True,
-                                    "deployment_ready": review_result.get("data", {}).get(
-                                        "deployment_ready", False
-                                    ) if not force_accepted else False,  # Force-accepted means not truly deployment ready
+                                    "deployment_ready": deployment_ready,
                                     "system_quality_score": quality_score,
                                     "retry_count": retry_count,
                                     # Include force-accept metadata if applicable
