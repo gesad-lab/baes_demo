@@ -1255,7 +1255,7 @@ class EnhancedRuntimeKernel:
                         )
                     else:
                         # Max retries reached after execution errors
-                        strict_mode = os.getenv("BAE_STRICT_MODE", "false").lower() in ("true", "1", "yes", "on")
+                        strict_mode = Config.BAE_STRICT_MODE
                         
                         if strict_mode:
                             # STRICT MODE: Fail fast and interrupt generation
