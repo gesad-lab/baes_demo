@@ -12,6 +12,7 @@ import pytest
 from unittest.mock import patch
 
 from baes.swea_agents.techlead_swea import TechLeadSWEA
+from config import Config
 
 
 class TestForceAcceptMode:
@@ -49,9 +50,6 @@ class TestForceAcceptMode:
 
     def test_force_accept_mode_with_quality_issues(self):
         """Test that force-accept mode accepts code after max retries with quality issues"""
-        # Ensure force-accept mode is enabled
-        os.environ["BAE_STRICT_MODE"] = "false"
-        
         # Create TechLeadSWEA instance
         techlead = TechLeadSWEA()
         
@@ -80,9 +78,11 @@ class TestForceAcceptMode:
             "retry_count": 3,  # Max retries reached
         }
         
-        # Mock the validation method to return our mock result
-        with patch.object(techlead, '_validate_with_llm', return_value=mock_validation_result):
-            result = techlead._review_and_approve(payload)
+        # Mock Config.BAE_STRICT_MODE to False (force-accept mode) and validation method
+        with patch('baes.swea_agents.techlead_swea.Config.BAE_STRICT_MODE', False):
+            with patch('baes.swea_agents.techlead_swea.Config.BAE_MAX_RETRIES', 3):
+                with patch.object(techlead, '_validate_with_llm', return_value=mock_validation_result):
+                    result = techlead._review_and_approve(payload)
         
         # Verify force-accept behavior
         assert result.get("approved") == True, "Code should be force-accepted"
@@ -95,9 +95,6 @@ class TestForceAcceptMode:
 
     def test_strict_mode_rejects_after_max_retries(self):
         """Test that strict mode rejects code after max retries without force-accepting"""
-        # Enable strict mode
-        os.environ["BAE_STRICT_MODE"] = "true"
-        
         # Create TechLeadSWEA instance
         techlead = TechLeadSWEA()
         
@@ -126,9 +123,11 @@ class TestForceAcceptMode:
             "retry_count": 3,  # Max retries reached
         }
         
-        # Mock the validation method
-        with patch.object(techlead, '_validate_with_llm', return_value=mock_validation_result):
-            result = techlead._review_and_approve(payload)
+        # Mock Config.BAE_STRICT_MODE and validation method
+        with patch('baes.swea_agents.techlead_swea.Config.BAE_STRICT_MODE', True):
+            with patch('baes.swea_agents.techlead_swea.Config.BAE_MAX_RETRIES', 3):
+                with patch.object(techlead, '_validate_with_llm', return_value=mock_validation_result):
+                    result = techlead._review_and_approve(payload)
         
         # Verify strict mode behavior (rejection without force-accept)
         assert result.get("approved") == False, "Code should be rejected in strict mode"
@@ -138,9 +137,6 @@ class TestForceAcceptMode:
 
     def test_strict_mode_with_critical_issues_escalates(self):
         """Test that strict mode escalates critical issues to human expert"""
-        # Enable strict mode
-        os.environ["BAE_STRICT_MODE"] = "true"
-        
         # Create TechLeadSWEA instance
         techlead = TechLeadSWEA()
         
@@ -176,10 +172,12 @@ class TestForceAcceptMode:
             "retry_count": 3,  # Max retries reached
         }
         
-        # Mock the validation and escalation methods
-        with patch.object(techlead, '_validate_with_llm', return_value=mock_validation_result):
-            with patch.object(techlead, '_escalate_to_human_expert', return_value={"escalated": True}):
-                result = techlead._review_and_approve(payload)
+        # Mock Config.BAE_STRICT_MODE, validation and escalation methods
+        with patch('baes.swea_agents.techlead_swea.Config.BAE_STRICT_MODE', True):
+            with patch('baes.swea_agents.techlead_swea.Config.BAE_MAX_RETRIES', 3):
+                with patch.object(techlead, '_validate_with_llm', return_value=mock_validation_result):
+                    with patch.object(techlead, '_escalate_to_human_expert', return_value={"escalated": True}):
+                        result = techlead._review_and_approve(payload)
         
         # Verify rejection in strict mode (may or may not escalate depending on issues)
         assert result.get("approved") == False
@@ -189,9 +187,6 @@ class TestForceAcceptMode:
 
     def test_force_accept_mode_with_critical_issues(self):
         """Test that force-accept mode accepts even with critical issues"""
-        # Ensure force-accept mode is enabled
-        os.environ["BAE_STRICT_MODE"] = "false"
-        
         # Create TechLeadSWEA instance
         techlead = TechLeadSWEA()
         
@@ -227,9 +222,11 @@ class TestForceAcceptMode:
             "retry_count": 3,  # Max retries reached
         }
         
-        # Mock the validation method
-        with patch.object(techlead, '_validate_with_llm', return_value=mock_validation_result):
-            result = techlead._review_and_approve(payload)
+        # Mock Config.BAE_STRICT_MODE to False (force-accept mode) and validation method
+        with patch('baes.swea_agents.techlead_swea.Config.BAE_STRICT_MODE', False):
+            with patch('baes.swea_agents.techlead_swea.Config.BAE_MAX_RETRIES', 3):
+                with patch.object(techlead, '_validate_with_llm', return_value=mock_validation_result):
+                    result = techlead._review_and_approve(payload)
         
         # Verify force-accept even with critical issues
         assert result.get("approved") == True
@@ -243,22 +240,26 @@ class TestForceAcceptMode:
 
     def test_config_strict_mode_parsing(self):
         """Test that BAE_STRICT_MODE environment variable is parsed correctly"""
+        import importlib
+        import config
+        
+        def reload_config_and_get_strict_mode():
+            """Helper to reload config and get BAE_STRICT_MODE value"""
+            importlib.reload(config)
+            return config.Config.BAE_STRICT_MODE
+        
         # Test various true values
         for value in ["true", "True", "TRUE", "1", "yes", "on"]:
             os.environ["BAE_STRICT_MODE"] = value
-            strict_mode = os.getenv("BAE_STRICT_MODE", "false").lower() in ("true", "1", "yes", "on")
-            assert strict_mode == True, f"Should be True for BAE_STRICT_MODE={value}"
+            assert reload_config_and_get_strict_mode() == True, f"Should be True for BAE_STRICT_MODE={value}"
         
         # Test various false values
         for value in ["false", "False", "FALSE", "0", "no", "off", ""]:
             os.environ["BAE_STRICT_MODE"] = value
-            strict_mode = os.getenv("BAE_STRICT_MODE", "false").lower() in ("true", "1", "yes", "on")
-            assert strict_mode == False, f"Should be False for BAE_STRICT_MODE={value}"
+            assert reload_config_and_get_strict_mode() == False, f"Should be False for BAE_STRICT_MODE={value}"
 
     def test_force_accept_metadata_tracking(self):
         """Test that force-accepted artifacts include proper metadata"""
-        os.environ["BAE_STRICT_MODE"] = "false"
-        
         techlead = TechLeadSWEA()
         
         mock_validation_result = {
@@ -278,8 +279,11 @@ class TestForceAcceptMode:
             "retry_count": 3,
         }
         
-        with patch.object(techlead, '_validate_with_llm', return_value=mock_validation_result):
-            result = techlead._review_and_approve(payload)
+        # Mock Config.BAE_STRICT_MODE to False (force-accept mode) and validation method
+        with patch('baes.swea_agents.techlead_swea.Config.BAE_STRICT_MODE', False):
+            with patch('baes.swea_agents.techlead_swea.Config.BAE_MAX_RETRIES', 3):
+                with patch.object(techlead, '_validate_with_llm', return_value=mock_validation_result):
+                    result = techlead._review_and_approve(payload)
         
         # Verify comprehensive metadata
         assert result["force_accepted"] == True
