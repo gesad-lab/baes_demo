@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 
 from ..agents.base_agent import BaseAgent
 from ..llm.openai_client import OpenAIClient
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -575,8 +576,8 @@ class TechLeadSWEA(BaseAgent):
             escalation_needed = feedback_summary.get("escalation_needed", False)
             critical_feedback = validation_result.get("critical_feedback", [])
             # Check if we've reached max retries with CRITICAL issues
-            max_retries = int(os.getenv("BAE_MAX_RETRIES", "3"))
-            strict_mode = os.getenv("BAE_STRICT_MODE", "false").lower() in ("true", "1", "yes", "on")
+            max_retries = Config.BAE_MAX_RETRIES
+            strict_mode = Config.BAE_STRICT_MODE
             
             if retry_count >= max_retries and critical_feedback and escalation_needed:
                 # Check if we should force-accept or escalate based on strict mode

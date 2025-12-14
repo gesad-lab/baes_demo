@@ -1186,7 +1186,7 @@ class EnhancedRuntimeKernel:
                                 # Note: This code should rarely be reached in force-accept mode because
                                 # TechLeadSWEA will approve with force_accepted=True before we get here.
                                 # This is a safety check for edge cases.
-                                strict_mode = os.getenv("BAE_STRICT_MODE", "false").lower() in ("true", "1", "yes", "on")
+                                strict_mode = Config.BAE_STRICT_MODE
                                 
                                 if strict_mode:
                                     # STRICT MODE: Fail fast and interrupt generation
@@ -1255,7 +1255,7 @@ class EnhancedRuntimeKernel:
                         )
                     else:
                         # Max retries reached after execution errors
-                        strict_mode = os.getenv("BAE_STRICT_MODE", "false").lower() in ("true", "1", "yes", "on")
+                        strict_mode = Config.BAE_STRICT_MODE
                         
                         if strict_mode:
                             # STRICT MODE: Fail fast and interrupt generation
