@@ -940,7 +940,6 @@ class EnhancedRuntimeKernel:
 
                             # Extract deployment_ready logic for better readability
                             deployment_ready = False if force_accepted else review_result.get("data", {}).get("deployment_ready", False)
-                            
                             results.append(
                                 {
                                     "task": task_name,
