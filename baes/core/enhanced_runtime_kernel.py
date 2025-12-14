@@ -1186,9 +1186,8 @@ class EnhancedRuntimeKernel:
                                 # Note: This code should rarely be reached in force-accept mode because
                                 # TechLeadSWEA will approve with force_accepted=True before we get here.
                                 # This is a safety check for edge cases.
-                                strict_mode = os.getenv("BAE_STRICT_MODE", "false").lower() in ("true", "1", "yes", "on")
                                 
-                                if strict_mode:
+                                if Config.BAE_STRICT_MODE:
                                     # STRICT MODE: Fail fast and interrupt generation
                                     logger.error(
                                         "🛑 [STRICT MODE] %s FAILED after %d attempts - stopping coordination plan",
@@ -1255,9 +1254,8 @@ class EnhancedRuntimeKernel:
                         )
                     else:
                         # Max retries reached after execution errors
-                        strict_mode = os.getenv("BAE_STRICT_MODE", "false").lower() in ("true", "1", "yes", "on")
                         
-                        if strict_mode:
+                        if Config.BAE_STRICT_MODE:
                             # STRICT MODE: Fail fast and interrupt generation
                             logger.error(
                                 "🛑 [STRICT MODE] %s FAILED after %d attempts - stopping coordination plan",
