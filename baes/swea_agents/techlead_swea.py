@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 
 from ..agents.base_agent import BaseAgent
 from ..llm.openai_client import OpenAIClient
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -575,40 +576,114 @@ class TechLeadSWEA(BaseAgent):
             escalation_needed = feedback_summary.get("escalation_needed", False)
             critical_feedback = validation_result.get("critical_feedback", [])
             # Check if we've reached max retries with CRITICAL issues
-            max_retries = int(os.getenv("BAE_MAX_RETRIES", "3"))
+            max_retries = Config.BAE_MAX_RETRIES
+            strict_mode = Config.BAE_STRICT_MODE
+            
             if retry_count >= max_retries and critical_feedback and escalation_needed:
-                logger.error(
-                    "🚨 Max retries reached with CRITICAL issues - escalating to Human Expert"
-                )
-                escalation_report = self._escalate_to_human_expert(
-                    entity, critical_feedback, retry_count
-                )
-                return {
-                    "approved": False,
-                    "success": False,
-                    "escalation_required": True,
-                    "escalation_report": escalation_report,
-                    "data": {
-                        "overall_approval": False,
+                # Check if we should force-accept or escalate based on strict mode
+                if strict_mode:
+                    # STRICT MODE: Escalate to human expert (original behavior)
+                    logger.error(
+                        "🚨 [STRICT MODE] Max retries reached with CRITICAL issues - escalating to Human Expert"
+                    )
+                    escalation_report = self._escalate_to_human_expert(
+                        entity, critical_feedback, retry_count
+                    )
+                    return {
+                        "approved": False,
+                        "success": False,
+                        "escalation_required": True,
+                        "escalation_report": escalation_report,
+                        "data": {
+                            "overall_approval": False,
+                            "quality_score": validation_result["quality_score"],
+                            "validation_details": validation_result["details"],
+                            "feedback": validation_result.get(
+                                "actionable_feedback", validation_result["suggestions"]
+                            ),
+                            "technical_feedback": validation_result.get(
+                                "actionable_feedback", validation_result["suggestions"]
+                            ),
+                            "retry_required": False,  # No more retries, escalation needed
+                            "escalation_reason": f"CRITICAL issues unresolved after {retry_count} attempts",
+                            "human_expert_required": True,
+                        },
                         "quality_score": validation_result["quality_score"],
                         "validation_details": validation_result["details"],
                         "feedback": validation_result.get(
                             "actionable_feedback", validation_result["suggestions"]
                         ),
-                        "technical_feedback": validation_result.get(
+                    }
+                else:
+                    # FORCE-ACCEPT MODE: Accept code as-is and continue (new default behavior)
+                    logger.warning(
+                        "⚠️  [FORCE-ACCEPT MODE] Max retries reached with CRITICAL issues - force-accepting code as-is"
+                    )
+                    logger.warning(
+                        f"📝 Force-accepted with {len(critical_feedback)} unresolved critical issues"
+                    )
+                    return {
+                        "approved": True,
+                        "success": True,
+                        "force_accepted": True,  # Mark as force-accepted for tracking
+                        "data": {
+                            "overall_approval": True,
+                            "quality_score": validation_result["quality_score"],
+                            "validation_details": validation_result["details"],
+                            "feedback": validation_result.get(
+                                "actionable_feedback", validation_result["suggestions"]
+                            ),
+                            "technical_feedback": validation_result.get(
+                                "actionable_feedback", validation_result["suggestions"]
+                            ),
+                            "force_accepted": True,
+                            "force_accept_reason": f"Max retries ({max_retries}) reached with unresolved issues",
+                            "unresolved_critical_issues": critical_feedback,
+                            "retry_count": retry_count,
+                        },
+                        "quality_score": validation_result["quality_score"],
+                        "validation_details": validation_result["details"],
+                        "feedback": validation_result.get(
                             "actionable_feedback", validation_result["suggestions"]
                         ),
-                        "retry_required": False,  # No more retries, escalation needed
-                        "escalation_reason": f"CRITICAL issues unresolved after {retry_count} attempts",
-                        "human_expert_required": True,
-                    },
-                    "quality_score": validation_result["quality_score"],
-                    "validation_details": validation_result["details"],
-                    "feedback": validation_result.get(
-                        "actionable_feedback", validation_result["suggestions"]
-                    ),
-                }
-            # Normal rejection with categorized feedback
+                    }
+            # Check if max retries reached (for normal non-critical rejections)
+            if retry_count >= max_retries:
+                # Check strict mode setting
+                if strict_mode:
+                    # STRICT MODE: Normal rejection (will trigger interrupt in RuntimeKernel)
+                    logger.warning(
+                        f"❌ [STRICT MODE] Max retries ({max_retries}) reached - will interrupt generation"
+                    )
+                else:
+                    # FORCE-ACCEPT MODE: Accept code as-is (new default behavior)
+                    logger.warning(
+                        f"⚠️  [FORCE-ACCEPT MODE] Max retries ({max_retries}) reached - force-accepting code as-is"
+                    )
+                    actionable_feedback = validation_result.get(
+                        "actionable_feedback", validation_result.get("suggestions", [])
+                    )
+                    return {
+                        "approved": True,
+                        "success": True,
+                        "force_accepted": True,  # Mark as force-accepted for tracking
+                        "data": {
+                            "overall_approval": True,
+                            "quality_score": validation_result["quality_score"],
+                            "validation_details": validation_result["details"],
+                            "feedback": actionable_feedback,
+                            "technical_feedback": actionable_feedback,
+                            "force_accepted": True,
+                            "force_accept_reason": f"Max retries ({max_retries}) reached with quality issues",
+                            "unresolved_issues": validation_result.get("issues", []),
+                            "retry_count": retry_count,
+                        },
+                        "quality_score": validation_result["quality_score"],
+                        "validation_details": validation_result["details"],
+                        "feedback": actionable_feedback,
+                    }
+            
+            # Normal rejection with categorized feedback (still within retry limit)
             actionable_feedback = validation_result.get(
                 "actionable_feedback", validation_result.get("suggestions", [])
             )
