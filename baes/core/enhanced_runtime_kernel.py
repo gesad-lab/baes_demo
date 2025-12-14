@@ -801,6 +801,9 @@ class EnhancedRuntimeKernel:
 
             while not task_success and retry_count <= max_retries:
                 try:
+                    # Initialize result to avoid UnboundLocalError in exception handlers
+                    result = {}
+                    
                     # Show retry if this isn't the first attempt
                     if retry_count > 0:
                         simplified_name = self._get_simplified_task_name(task_name)
@@ -1288,7 +1291,7 @@ class EnhancedRuntimeKernel:
                                 {
                                     "task": task_name,
                                     "success": True,  # Mark as success to continue
-                                    "result": result if 'result' in locals() else {},
+                                    "result": result,
                                     "techlead_approved": True,
                                     "force_accepted": True,
                                     "force_accept_reason": f"Execution errors after {max_retries + 1} attempts",
