@@ -901,12 +901,24 @@ class EnhancedRuntimeKernel:
                         if review_result.get("success") and review_result.get("data", {}).get(
                             "overall_approval", False
                         ):
-                            # Final review approved
+                            # Final review approved (or force-accepted)
                             quality_score = review_result.get("data", {}).get(
                                 "system_quality_score", 0.0
                             )
+                            force_accepted = review_result.get("force_accepted", False)
                             simplified_name = self._get_simplified_task_name(task_name)
 
+                            # Log force-accept status
+                            if force_accepted:
+                                logger.warning(
+                                    "⚠️  %s FORCE-ACCEPTED after max retries - System deployed with quality issues",
+                                    task_name
+                                )
+                                force_accept_reason = review_result.get("data", {}).get(
+                                    "force_accept_reason", "Max retries reached"
+                                )
+                                logger.info(f"   Reason: {force_accept_reason}")
+                            
                             # Presentation logging
                             presentation_logger.techlead_review(
                                 True, simplified_name, quality_score
@@ -915,10 +927,16 @@ class EnhancedRuntimeKernel:
 
                             # Debug logging
                             if is_debug_mode():
-                                logger.info(
-                                    "✅ %s APPROVED by TechLeadSWEA - System ready for deployment",
-                                    task_name,
-                                )
+                                if force_accepted:
+                                    logger.info(
+                                        "⚠️  %s FORCE-ACCEPTED by TechLeadSWEA - System deployed with warnings",
+                                        task_name,
+                                    )
+                                else:
+                                    logger.info(
+                                        "✅ %s APPROVED by TechLeadSWEA - System ready for deployment",
+                                        task_name,
+                                    )
 
                             results.append(
                                 {
@@ -926,12 +944,15 @@ class EnhancedRuntimeKernel:
                                     "success": True,
                                     "result": result,
                                     "techlead_approved": True,
+                                    "force_accepted": force_accepted,
                                     "final_review": True,
                                     "deployment_ready": review_result.get("data", {}).get(
                                         "deployment_ready", False
-                                    ),
+                                    ) if not force_accepted else False,  # Force-accepted means not truly deployment ready
                                     "system_quality_score": quality_score,
                                     "retry_count": retry_count,
+                                    # Include force-accept metadata if applicable
+                                    **({"force_accept_metadata": review_result.get("data", {})} if force_accepted else {})
                                 }
                             )
                             task_success = True
@@ -1030,10 +1051,22 @@ class EnhancedRuntimeKernel:
                         if review_result.get("success") and review_result.get("data", {}).get(
                             "overall_approval", False
                         ):
-                            # Task approved by TechLeadSWEA
+                            # Task approved by TechLeadSWEA (or force-accepted)
                             quality_score = review_result.get("data", {}).get("quality_score", 0.0)
+                            force_accepted = review_result.get("force_accepted", False)
                             simplified_name = self._get_simplified_task_name(task_name)
 
+                            # Log force-accept status
+                            if force_accepted:
+                                logger.warning(
+                                    "⚠️  %s FORCE-ACCEPTED after max retries - quality issues remain",
+                                    task_name
+                                )
+                                force_accept_reason = review_result.get("data", {}).get(
+                                    "force_accept_reason", "Max retries reached"
+                                )
+                                logger.info(f"   Reason: {force_accept_reason}")
+                            
                             # Presentation logging
                             presentation_logger.techlead_review(
                                 True, simplified_name, quality_score
@@ -1046,7 +1079,10 @@ class EnhancedRuntimeKernel:
 
                             # Debug logging
                             if is_debug_mode():
-                                logger.info("✅ %s APPROVED by TechLeadSWEA", task_name)
+                                if force_accepted:
+                                    logger.info("⚠️  %s FORCE-ACCEPTED by TechLeadSWEA", task_name)
+                                else:
+                                    logger.info("✅ %s APPROVED by TechLeadSWEA", task_name)
 
                             results.append(
                                 {
@@ -1054,8 +1090,11 @@ class EnhancedRuntimeKernel:
                                     "success": True,
                                     "result": result,
                                     "techlead_approved": True,
+                                    "force_accepted": force_accepted,
                                     "quality_score": quality_score,
                                     "retry_count": retry_count,
+                                    # Include force-accept metadata if applicable
+                                    **({"force_accept_metadata": review_result.get("data", {})} if force_accepted else {})
                                 }
                             )
                             task_success = True
@@ -1143,33 +1182,60 @@ class EnhancedRuntimeKernel:
                                         technical_feedback[0],
                                     )
                             elif not task_success:
-                                # Max retries reached
-                                logger.error(
-                                    "🛑 %s FAILED after %d attempts - stopping coordination plan",
-                                    task_name,
-                                    max_retries + 1,
-                                )
-                                results.append(
-                                    {
-                                        "task": task_name,
-                                        "success": False,
-                                        "error": f"Task rejected by TechLeadSWEA after {max_retries + 1} attempts",
-                                        "techlead_rejected": True,
-                                        "feedback_history": feedback_history,
-                                        "retry_count": retry_count,
-                                    }
-                                )
+                                # Max retries reached - check if we should fail-fast or force-accept
+                                # Note: This code should rarely be reached in force-accept mode because
+                                # TechLeadSWEA will approve with force_accepted=True before we get here.
+                                # This is a safety check for edge cases.
+                                strict_mode = os.getenv("BAE_STRICT_MODE", "false").lower() in ("true", "1", "yes", "on")
+                                
+                                if strict_mode:
+                                    # STRICT MODE: Fail fast and interrupt generation
+                                    logger.error(
+                                        "🛑 [STRICT MODE] %s FAILED after %d attempts - stopping coordination plan",
+                                        task_name,
+                                        max_retries + 1,
+                                    )
+                                    results.append(
+                                        {
+                                            "task": task_name,
+                                            "success": False,
+                                            "error": f"Task rejected by TechLeadSWEA after {max_retries + 1} attempts",
+                                            "techlead_rejected": True,
+                                            "feedback_history": feedback_history,
+                                            "retry_count": retry_count,
+                                        }
+                                    )
 
-                                # Fail fast - stop execution
-                                raise MaxRetriesReachedError(
-                                    task_name,
-                                    swea_agent,
-                                    task_type,
-                                    retry_count,
-                                    max_retries,
-                                    f"Task rejected by TechLeadSWEA after {max_retries + 1} attempts",
-                                    feedback_history,
-                                )
+                                    # Fail fast - stop execution
+                                    raise MaxRetriesReachedError(
+                                        task_name,
+                                        swea_agent,
+                                        task_type,
+                                        retry_count,
+                                        max_retries,
+                                        f"Task rejected by TechLeadSWEA after {max_retries + 1} attempts",
+                                        feedback_history,
+                                    )
+                                else:
+                                    # FORCE-ACCEPT MODE: This shouldn't happen (TechLeadSWEA should have approved)
+                                    # but if it does, force-accept here as safety net
+                                    logger.warning(
+                                        "⚠️  [FORCE-ACCEPT MODE] Max retries reached but task not approved - force-accepting as safety net"
+                                    )
+                                    results.append(
+                                        {
+                                            "task": task_name,
+                                            "success": True,
+                                            "result": result,
+                                            "techlead_approved": True,
+                                            "force_accepted": True,
+                                            "force_accept_reason": "Safety net: max retries reached",
+                                            "quality_score": 0.0,
+                                            "retry_count": retry_count,
+                                            "feedback_history": feedback_history,
+                                        }
+                                    )
+                                    task_success = True
 
                 except Exception as e:
                     last_error = str(e)
@@ -1188,25 +1254,50 @@ class EnhancedRuntimeKernel:
                             max_retries + 1,
                         )
                     else:
-                        # Max retries reached
-                        logger.error(
-                            "🛑 %s FAILED after %d attempts - stopping coordination plan",
-                            task_name,
-                            max_retries + 1,
-                        )
-                        results.append(
-                            {
-                                "task": task_name,
-                                "success": False,
-                                "error": last_error,
-                                "retry_count": retry_count,
-                            }
-                        )
+                        # Max retries reached after execution errors
+                        strict_mode = os.getenv("BAE_STRICT_MODE", "false").lower() in ("true", "1", "yes", "on")
+                        
+                        if strict_mode:
+                            # STRICT MODE: Fail fast and interrupt generation
+                            logger.error(
+                                "🛑 [STRICT MODE] %s FAILED after %d attempts - stopping coordination plan",
+                                task_name,
+                                max_retries + 1,
+                            )
+                            results.append(
+                                {
+                                    "task": task_name,
+                                    "success": False,
+                                    "error": last_error,
+                                    "retry_count": retry_count,
+                                }
+                            )
 
-                        # Fail fast - stop execution
-                        raise MaxRetriesReachedError(
-                            task_name, swea_agent, task_type, retry_count, max_retries, last_error
-                        )
+                            # Fail fast - stop execution
+                            raise MaxRetriesReachedError(
+                                task_name, swea_agent, task_type, retry_count, max_retries, last_error
+                            )
+                        else:
+                            # FORCE-ACCEPT MODE: Accept what we have despite execution errors
+                            logger.warning(
+                                "⚠️  [FORCE-ACCEPT MODE] %s failed after %d attempts - force-accepting with errors",
+                                task_name,
+                                max_retries + 1,
+                            )
+                            results.append(
+                                {
+                                    "task": task_name,
+                                    "success": True,  # Mark as success to continue
+                                    "result": result if 'result' in locals() else {},
+                                    "techlead_approved": True,
+                                    "force_accepted": True,
+                                    "force_accept_reason": f"Execution errors after {max_retries + 1} attempts",
+                                    "execution_errors": [last_error],
+                                    "quality_score": 0.0,
+                                    "retry_count": retry_count,
+                                }
+                            )
+                            task_success = True
 
         # Phase 1 completion logging (generation only - no test execution yet)
         successful_tasks = len([r for r in results if r.get("success", False)])

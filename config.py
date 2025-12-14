@@ -52,6 +52,11 @@ class Config:
 
     # BAE System Retry Configuration
     BAE_MAX_RETRIES = int(os.getenv("BAE_MAX_RETRIES", "3"))
+    
+    # BAE Strict Mode Configuration
+    # When False (default): After max retries, force-accept code and continue (research/evaluation mode)
+    # When True: After max retries, interrupt generation and return error (strict quality gate mode)
+    BAE_STRICT_MODE = os.getenv("BAE_STRICT_MODE", "false").lower() in ("true", "1", "yes", "on")
 
     # Managed System Configuration
     @classmethod
