@@ -249,14 +249,14 @@ class TestForceAcceptMode:
         for value in ["true", "True", "TRUE", "1", "yes", "on"]:
             os.environ["BAE_STRICT_MODE"] = value
             importlib.reload(config)
-            from config import Config
+            Config = getattr(config, 'Config')
             assert Config.BAE_STRICT_MODE == True, f"Config.BAE_STRICT_MODE should be True for BAE_STRICT_MODE={value}"
         
         # Test various false values
         for value in ["false", "False", "FALSE", "0", "no", "off", ""]:
             os.environ["BAE_STRICT_MODE"] = value
             importlib.reload(config)
-            from config import Config
+            Config = getattr(config, 'Config')
             assert Config.BAE_STRICT_MODE == False, f"Config.BAE_STRICT_MODE should be False for BAE_STRICT_MODE={value}"
 
     def test_force_accept_metadata_tracking(self):
