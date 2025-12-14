@@ -801,6 +801,9 @@ class EnhancedRuntimeKernel:
 
             while not task_success and retry_count <= max_retries:
                 try:
+                    # Initialize result to avoid UnboundLocalError in exception handlers
+                    result = {}
+                    
                     # Show retry if this isn't the first attempt
                     if retry_count > 0:
                         simplified_name = self._get_simplified_task_name(task_name)
@@ -938,6 +941,8 @@ class EnhancedRuntimeKernel:
                                         task_name,
                                     )
 
+                            # Extract deployment_ready logic for better readability
+                            deployment_ready = False if force_accepted else review_result.get("data", {}).get("deployment_ready", False)
                             results.append(
                                 {
                                     "task": task_name,
@@ -946,9 +951,7 @@ class EnhancedRuntimeKernel:
                                     "techlead_approved": True,
                                     "force_accepted": force_accepted,
                                     "final_review": True,
-                                    "deployment_ready": review_result.get("data", {}).get(
-                                        "deployment_ready", False
-                                    ) if not force_accepted else False,  # Force-accepted means not truly deployment ready
+                                    "deployment_ready": deployment_ready,
                                     "system_quality_score": quality_score,
                                     "retry_count": retry_count,
                                     # Include force-accept metadata if applicable
@@ -1186,6 +1189,7 @@ class EnhancedRuntimeKernel:
                                 # Note: This code should rarely be reached in force-accept mode because
                                 # TechLeadSWEA will approve with force_accepted=True before we get here.
                                 # This is a safety check for edge cases.
+                                strict_mode = Config.BAE_STRICT_MODE
                                 
                                 if Config.BAE_STRICT_MODE:
                                     # STRICT MODE: Fail fast and interrupt generation
@@ -1254,6 +1258,7 @@ class EnhancedRuntimeKernel:
                         )
                     else:
                         # Max retries reached after execution errors
+                        strict_mode = Config.BAE_STRICT_MODE
                         
                         if Config.BAE_STRICT_MODE:
                             # STRICT MODE: Fail fast and interrupt generation
@@ -1286,7 +1291,7 @@ class EnhancedRuntimeKernel:
                                 {
                                     "task": task_name,
                                     "success": True,  # Mark as success to continue
-                                    "result": result if 'result' in locals() else {},
+                                    "result": result,
                                     "techlead_approved": True,
                                     "force_accepted": True,
                                     "force_accept_reason": f"Execution errors after {max_retries + 1} attempts",
