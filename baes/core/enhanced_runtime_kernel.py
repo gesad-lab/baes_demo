@@ -1191,7 +1191,7 @@ class EnhancedRuntimeKernel:
                                 # This is a safety check for edge cases.
                                 strict_mode = Config.BAE_STRICT_MODE
                                 
-                                if strict_mode:
+                                if Config.BAE_STRICT_MODE:
                                     # STRICT MODE: Fail fast and interrupt generation
                                     logger.error(
                                         "🛑 [STRICT MODE] %s FAILED after %d attempts - stopping coordination plan",
@@ -1260,7 +1260,7 @@ class EnhancedRuntimeKernel:
                         # Max retries reached after execution errors
                         strict_mode = Config.BAE_STRICT_MODE
                         
-                        if strict_mode:
+                        if Config.BAE_STRICT_MODE:
                             # STRICT MODE: Fail fast and interrupt generation
                             logger.error(
                                 "🛑 [STRICT MODE] %s FAILED after %d attempts - stopping coordination plan",

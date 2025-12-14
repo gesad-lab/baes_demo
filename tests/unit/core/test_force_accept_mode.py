@@ -10,6 +10,7 @@ This module tests both strict mode and force-accept mode to ensure:
 import os
 import pytest
 from unittest.mock import patch
+import importlib
 
 from baes.swea_agents.techlead_swea import TechLeadSWEA
 from config import Config
@@ -239,24 +240,20 @@ class TestForceAcceptMode:
         assert len(unresolved) > 0, "Should have tracked unresolved issues"
 
     def test_config_strict_mode_parsing(self):
-        """Test that BAE_STRICT_MODE environment variable is parsed correctly"""
-        import importlib
-        import config
-        
-        def reload_config_and_get_strict_mode():
-            """Helper to reload config and get BAE_STRICT_MODE value"""
-            importlib.reload(config)
-            return config.Config.BAE_STRICT_MODE
-        
+        """Test that BAE_STRICT_MODE environment variable is parsed correctly by Config"""
         # Test various true values
         for value in ["true", "True", "TRUE", "1", "yes", "on"]:
             os.environ["BAE_STRICT_MODE"] = value
-            assert reload_config_and_get_strict_mode() == True, f"Should be True for BAE_STRICT_MODE={value}"
+            importlib.reload(config)
+            Config = getattr(config, 'Config')
+            assert Config.BAE_STRICT_MODE == True, f"Config.BAE_STRICT_MODE should be True for BAE_STRICT_MODE={value}"
         
         # Test various false values
         for value in ["false", "False", "FALSE", "0", "no", "off", ""]:
             os.environ["BAE_STRICT_MODE"] = value
-            assert reload_config_and_get_strict_mode() == False, f"Should be False for BAE_STRICT_MODE={value}"
+            importlib.reload(config)
+            Config = getattr(config, 'Config')
+            assert Config.BAE_STRICT_MODE == False, f"Config.BAE_STRICT_MODE should be False for BAE_STRICT_MODE={value}"
 
     def test_force_accept_metadata_tracking(self):
         """Test that force-accepted artifacts include proper metadata"""
