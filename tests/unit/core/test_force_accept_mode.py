@@ -240,25 +240,24 @@ class TestForceAcceptMode:
 
     def test_config_strict_mode_parsing(self):
         """Test that BAE_STRICT_MODE environment variable is parsed correctly"""
+        import importlib
+        import config
+        
+        def reload_config_and_get_strict_mode():
+            """Helper to reload config and get BAE_STRICT_MODE value"""
+            importlib.reload(config)
+            from config import Config
+            return Config.BAE_STRICT_MODE
+        
         # Test various true values
         for value in ["true", "True", "TRUE", "1", "yes", "on"]:
             os.environ["BAE_STRICT_MODE"] = value
-            # Force reload of Config to pick up new environment variable
-            import importlib
-            import config
-            importlib.reload(config)
-            from config import Config
-            assert Config.BAE_STRICT_MODE == True, f"Should be True for BAE_STRICT_MODE={value}"
+            assert reload_config_and_get_strict_mode() == True, f"Should be True for BAE_STRICT_MODE={value}"
         
         # Test various false values
         for value in ["false", "False", "FALSE", "0", "no", "off", ""]:
             os.environ["BAE_STRICT_MODE"] = value
-            # Force reload of Config to pick up new environment variable
-            import importlib
-            import config
-            importlib.reload(config)
-            from config import Config
-            assert Config.BAE_STRICT_MODE == False, f"Should be False for BAE_STRICT_MODE={value}"
+            assert reload_config_and_get_strict_mode() == False, f"Should be False for BAE_STRICT_MODE={value}"
 
     def test_force_accept_metadata_tracking(self):
         """Test that force-accepted artifacts include proper metadata"""
