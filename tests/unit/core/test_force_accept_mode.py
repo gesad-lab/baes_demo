@@ -246,8 +246,7 @@ class TestForceAcceptMode:
         def reload_config_and_get_strict_mode():
             """Helper to reload config and get BAE_STRICT_MODE value"""
             importlib.reload(config)
-            from config import Config
-            return Config.BAE_STRICT_MODE
+            return config.Config.BAE_STRICT_MODE
         
         # Test various true values
         for value in ["true", "True", "TRUE", "1", "yes", "on"]:
@@ -261,8 +260,6 @@ class TestForceAcceptMode:
 
     def test_force_accept_metadata_tracking(self):
         """Test that force-accepted artifacts include proper metadata"""
-        os.environ["BAE_STRICT_MODE"] = "false"
-        
         techlead = TechLeadSWEA()
         
         mock_validation_result = {
@@ -282,8 +279,11 @@ class TestForceAcceptMode:
             "retry_count": 3,
         }
         
-        with patch.object(techlead, '_validate_with_llm', return_value=mock_validation_result):
-            result = techlead._review_and_approve(payload)
+        # Mock Config.BAE_STRICT_MODE to False (force-accept mode) and validation method
+        with patch('baes.swea_agents.techlead_swea.Config.BAE_STRICT_MODE', False):
+            with patch('baes.swea_agents.techlead_swea.Config.BAE_MAX_RETRIES', 3):
+                with patch.object(techlead, '_validate_with_llm', return_value=mock_validation_result):
+                    result = techlead._review_and_approve(payload)
         
         # Verify comprehensive metadata
         assert result["force_accepted"] == True
