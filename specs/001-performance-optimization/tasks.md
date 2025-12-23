@@ -166,11 +166,11 @@ BAES Framework structure at repository root:
 - [X] T074 [P] [US4] Create TestCompressedStandard in baes/standards/compressed_standards.py: lifecycle testing, error cases, cleanup patterns (~25 lines)
 - [X] T075 [P] [US4] Add token counting utility in baes/standards/compressed_standards.py using tiktoken for OpenAI models
 - [X] T076 [US4] Modify BackendSWEA to use compressed standards in prompts with fallback to full standards if approval rate <85%
-- [ ] T077 [US4] Modify DatabaseSWEA to use compressed standards in prompts with fallback to full standards if approval rate <85%
-- [ ] T078 [US4] Modify FrontendSWEA to use compressed standards in prompts with fallback to full standards if approval rate <85%
-- [ ] T079 [US4] Modify TestSWEA to use compressed standards in prompts with fallback to full standards if approval rate <85%
-- [ ] T080 [US4] Add approval rate monitoring per SWEA in baes/utils/optimization_metrics.py: track compressed vs full standards usage
-- [ ] T081 [US4] Update OptimizationMetrics to log standards_type (compressed/full), prompt_token_count
+- [X] T077 [US4] Modify DatabaseSWEA to use compressed standards in prompts with fallback to full standards if approval rate <85%
+- [X] T078 [US4] Modify FrontendSWEA to use compressed standards in prompts with fallback to full standards if approval rate <85%
+- [X] T079 [US4] Modify TestSWEA to use compressed standards in prompts with fallback to full standards if approval rate <85%
+- [X] T080 [US4] Add approval rate monitoring per SWEA in baes/utils/optimization_metrics.py: track compressed vs full standards usage
+- [X] T081 [US4] Update OptimizationMetrics to log standards_type (compressed/full), prompt_token_count
 
 ### Tests for US4
 

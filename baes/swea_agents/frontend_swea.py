@@ -16,6 +16,7 @@ from baes.utils.template_registry import (
     SWEAType,
 )
 from baes.utils.presentation_logger import get_presentation_logger
+from baes.standards.compressed_standards import get_compressed_standard
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -188,6 +189,22 @@ class FrontendSWEA(BaseAgent):
             self._template_registry = TemplateRegistry()
         return self._template_registry
 
+    def _get_standards_text(self) -> tuple[str, str]:
+        """
+        Get coding standards text based on configuration (US4).
+        
+        Returns:
+            Tuple of (standards_text, standards_type) where standards_type is
+            "compressed" or "full"
+        """
+        if Config.ENABLE_COMPRESSED_STANDARDS:
+            compressed = get_compressed_standard("frontend")
+            if compressed:
+                return compressed.content, "compressed"
+        
+        # Fallback to full standards (embedded in prompt)
+        return "", "full"
+
     def _get_do_not_ignore_warning(self) -> str:
         """
         Generate standard 'Do Not Ignore' warning text for all LLM prompts.
@@ -318,6 +335,12 @@ COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and 
 
         # Stage 4 Improvement #1: Get structured feedback injection
         structured_feedback = self._get_structured_feedback_injection(entity, "FrontendSWEA", "generate_ui")
+        
+        # Get standards (compressed or full) - Feature 001-performance-optimization US4
+        standards_text, standards_type = self._get_standards_text()
+        
+        # Log standards type for metrics
+        presentation_logger.info(f"FrontendSWEA using {standards_type} standards for {entity}")
 
         prompt = f"""
 {self._get_do_not_ignore_warning()}
@@ -326,7 +349,7 @@ You are a FrontendSWEA agent specialized in generating Streamlit UI code for dom
 
 {structured_feedback}
 
-CRITICAL REQUIREMENTS - Your code MUST include ALL of the following:
+{standards_text if standards_text else '''CRITICAL REQUIREMENTS - Your code MUST include ALL of the following:
 
 1. **MANDATORY: NO st.set_page_config() in entity pages**
    - Entity pages are imported into the main app, which already has st.set_page_config()
@@ -361,7 +384,7 @@ CRITICAL REQUIREMENTS - Your code MUST include ALL of the following:
    - NEVER include 'id' field in create/update forms (it's auto-generated)
    - NEVER include 'id' in data dictionaries sent to API
    - Display 'id' as read-only text in edit forms only
-   - The 'id' field should NEVER be user-editable
+   - The 'id' field should NEVER be user-editable'''}
 
 Entity: {entity}
 Attributes: {attributes}

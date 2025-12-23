@@ -59,6 +59,15 @@ class PerformanceMetrics:
         template_id: ID of template used (if applicable)
         template_fallback_count: Number of times LLM fallback was needed
         
+        # Compressed standards metrics
+        standards_type: Type of standards used (compressed/full)
+        prompt_token_count: Number of tokens in the prompt sent to LLM
+        
+        # Validation metrics
+        template_used: Whether template-based generation was used
+        template_id: ID of template used (if applicable)
+        template_fallback_count: Number of times LLM fallback was needed
+        
         # Validation metrics
         validation_outcome: Classification (confident_approval/confident_rejection/uncertain)
         validation_llm_called: Whether LLM was called for validation
@@ -100,6 +109,10 @@ class PerformanceMetrics:
     template_used: bool = False
     template_id: Optional[str] = None
     template_fallback_count: int = 0
+    
+    # Compressed standards metrics (US4)
+    standards_type: Optional[str] = None  # "compressed" or "full"
+    prompt_token_count: int = 0
     
     # Validation metrics
     validation_outcome: str = "uncertain"  # confident_approval, confident_rejection, uncertain

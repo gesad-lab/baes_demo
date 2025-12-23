@@ -20,6 +20,7 @@ from baes.utils.template_registry import (
     SWEAType,
 )
 from baes.utils.presentation_logger import get_presentation_logger
+from baes.standards.compressed_standards import get_compressed_standard
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -212,6 +213,22 @@ class TestSWEA(BaseAgent):
         if self._template_registry is None:
             self._template_registry = TemplateRegistry()
         return self._template_registry
+
+    def _get_standards_text(self) -> tuple[str, str]:
+        """
+        Get coding standards text based on configuration (US4).
+        
+        Returns:
+            Tuple of (standards_text, standards_type) where standards_type is
+            "compressed" or "full"
+        """
+        if Config.ENABLE_COMPRESSED_STANDARDS:
+            compressed = get_compressed_standard("test")
+            if compressed:
+                return compressed.content, "compressed"
+        
+        # Fallback to full standards (embedded in prompt)
+        return "", "full"
 
     def _get_do_not_ignore_warning(self) -> str:
         """
@@ -1065,6 +1082,12 @@ COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and 
         
         # Generic validation helper for any entity
         validation_helpers = self._get_validation_helpers(entity, actual_attributes)
+        
+        # Get standards (compressed or full) - Feature 001-performance-optimization US4
+        standards_text, standards_type = self._get_standards_text()
+        
+        # Log standards type for metrics
+        presentation_logger.info(f"TestSWEA using {standards_type} standards for {entity}")
 
         base_prompt = """
 You are a TestSWEA (Test Software Engineering Autonomous Agent) responsible for generating comprehensive tests.
@@ -1078,19 +1101,7 @@ Test Type: %s
 Generated Code to Test:
 %s
 
-CRITICAL REQUIREMENTS:
-1. Use pytest framework with proper fixtures and mocking
-2. Mock external dependencies (OpenAI API, file operations, etc.)
-3. Include both positive and negative test cases
-4. Test edge cases and error conditions
-5. Use proper assertions and test structure
-6. Include setup and teardown as needed
-7. Generate complete, runnable test code
-8. Focus on testing business logic and domain coherence
-9. ALWAYS validate that imports will work before generating tests
-10. Use robust error handling and fallback mechanisms
-11. Use ONLY the actual attributes from the generated code for test data
-12. Follow exact endpoint URL patterns as specified
+%s
 
 VALIDATION HELPERS:
 %s
@@ -1102,6 +1113,19 @@ VALIDATION HELPERS:
             context,
             test_type,
             generated_code,
+            standards_text if standards_text else """CRITICAL REQUIREMENTS:
+1. Use pytest framework with proper fixtures and mocking
+2. Mock external dependencies (OpenAI API, file operations, etc.)
+3. Include both positive and negative test cases
+4. Test edge cases and error conditions
+5. Use proper assertions and test structure
+6. Include setup and teardown as needed
+7. Generate complete, runnable test code
+8. Focus on testing business logic and domain coherence
+9. ALWAYS validate that imports will work before generating tests
+10. Use robust error handling and fallback mechanisms
+11. Use ONLY the actual attributes from the generated code for test data
+12. Follow exact endpoint URL patterns as specified""",
             validation_helpers,
         )
 
