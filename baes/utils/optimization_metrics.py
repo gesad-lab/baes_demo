@@ -52,6 +52,7 @@ class PerformanceMetrics:
         # Cache metrics
         cache_hit: Whether entity recognition was served from cache
         cache_hit_time: Time to retrieve from cache (milliseconds)
+        cache_tier: Cache tier used (memory/persistent) if cache_hit is True
         
         # Template metrics
         template_used: Whether template-based generation was used
@@ -93,6 +94,7 @@ class PerformanceMetrics:
     # Cache metrics
     cache_hit: bool = False
     cache_hit_time: float = 0.0
+    cache_tier: Optional[str] = None  # "memory" or "persistent"
     
     # Template metrics
     template_used: bool = False

@@ -8,7 +8,9 @@ from typing import Any, Dict, List
 
 from ..agents.base_agent import BaseAgent
 from ..core.context_store import ContextStore
+from ..core.recognition_cache import RecognitionCache
 from ..llm.openai_client import OpenAIClient
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,14 @@ class BaseBae(BaseAgent):
         self.domain_knowledge = {}
         self.context_configurations = {}
         self.business_rules = []
+
+        # Initialize recognition cache if enabled
+        self.cache = None
+        if Config.ENABLE_RECOGNITION_CACHE:
+            try:
+                self.cache = RecognitionCache()
+            except Exception as e:
+                logger.warning(f"Failed to initialize recognition cache for {entity_name}BAE: {e}")
 
         # Initialize domain-specific attributes
         self._initialize_domain_knowledge()
@@ -1269,6 +1279,14 @@ class BaseBae(BaseAgent):
         self.update_memory("current_schema", schema)
         self._update_domain_knowledge(context, attributes)
 
+        # Invalidate cache when new schema is generated
+        if self.cache:
+            try:
+                self.cache.cache_invalidate(entity_name=self.entity_name)
+                logger.info(f"🔄 Cache invalidated for {self.entity_name} after schema generation")
+            except Exception as e:
+                logger.warning(f"Failed to invalidate cache for {self.entity_name}: {e}")
+
         return schema
 
     def _evolve_schema(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -1322,6 +1340,21 @@ class BaseBae(BaseAgent):
 
         self.current_schema = evolved_schema
         self.update_memory("current_schema", evolved_schema)
+
+        # Invalidate cache when schema evolves (attributes changed)
+        if self.cache:
+            # Check if attributes actually changed
+            old_attrs = {attr.get('name') for attr in current_schema.get('attributes', [])}
+            new_attrs = {attr.get('name') for attr in updated_attributes}
+            
+            schema_changed = old_attrs != new_attrs or len(new_attributes) > 0
+            
+            if schema_changed:
+                try:
+                    self.cache.cache_invalidate(entity_name=self.entity_name)
+                    logger.info(f"🔄 Cache invalidated for {self.entity_name} after schema evolution (attributes changed)")
+                except Exception as e:
+                    logger.warning(f"Failed to invalidate cache for {self.entity_name}: {e}")
 
         return evolved_schema
 

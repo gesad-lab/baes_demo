@@ -138,8 +138,8 @@ BAES Framework structure at repository root:
 - [X] T060 [P] [US3] Add thread-safety with threading.Lock() for in-memory cache operations
 - [X] T061 [US3] Integrate RecognitionCache into EntityRecognizer in baes/core/entity_recognizer.py: cache_read before OpenAI, cache_write after
 - [X] T062 [US3] Add cache versioning and migration detection in RecognitionCache: check cache_version on read, invalidate if mismatch
-- [ ] T063 [US3] Add entity schema evolution detection in baes/domain_entities/base_bae.py: invalidate cache when attributes change
-- [ ] T064 [US3] Update OptimizationMetrics to log cache_hit (bool), cache_hit_time (ms), cache_tier (memory/persistent)
+- [X] T063 [US3] Add entity schema evolution detection in baes/domain_entities/base_bae.py: invalidate cache when attributes change
+- [X] T064 [US3] Update OptimizationMetrics to log cache_hit (bool), cache_hit_time (ms), cache_tier (memory/persistent)
 
 ### Tests for US3
 
