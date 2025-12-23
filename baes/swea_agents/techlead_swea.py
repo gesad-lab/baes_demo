@@ -1712,6 +1712,176 @@ class TechLeadSWEA(BaseAgent):
             # Return original response if processing fails
             return validation_response
 
+    def analyze_feedback_for_retry_strategy(
+        self, validation_result: Dict[str, Any], code: str
+    ) -> Dict[str, Any]:
+        """
+        US6: Analyze validation feedback to determine optimal retry strategy.
+        
+        Determines if issues are:
+        - Single/localized: One specific issue that can be fixed with targeted patch
+        - Multiple/structural: Multiple issues or architectural problems requiring full regeneration
+        
+        Returns:
+            Dict with:
+                - retry_strategy: "targeted_patch" or "full_regeneration"
+                - is_localized: bool (True if single localized issue)
+                - issue_count: int (number of distinct issues)
+                - issue_types: List[str] (categories of issues)
+                - patch_feasibility: float (0.0-1.0, confidence that patch will work)
+                - patch_target: Optional[str] (specific code location to patch)
+                - rationale: str (explanation of decision)
+        
+        Args:
+            validation_result: Validation result with issues and feedback
+            code: Original code being validated
+            
+        Returns:
+            Analysis result with retry strategy recommendation
+        """
+        try:
+            issues = validation_result.get("issues", [])
+            categorized_feedback = validation_result.get("categorized_feedback", [])
+            actionable_feedback = validation_result.get("actionable_feedback", [])
+            
+            # Extract all feedback sources
+            all_feedback = []
+            if categorized_feedback:
+                all_feedback.extend([f.get("issue", "") for f in categorized_feedback if isinstance(f, dict)])
+            if issues:
+                all_feedback.extend([str(i) for i in issues])
+            if actionable_feedback:
+                all_feedback.extend([str(f) for f in actionable_feedback if isinstance(f, str)])
+            
+            if not all_feedback:
+                return {
+                    "retry_strategy": "full_regeneration",
+                    "is_localized": False,
+                    "issue_count": 0,
+                    "issue_types": [],
+                    "patch_feasibility": 0.0,
+                    "patch_target": None,
+                    "rationale": "No specific feedback provided, full regeneration required"
+                }
+            
+            # Analyze issue patterns
+            issue_patterns = {
+                "missing_decorator": r"@contextmanager|context\s+manager|decorator",
+                "wrong_status_code": r"status\s+code|HTTP_\d+|201|404|204",
+                "missing_import": r"import|from.*import",
+                "missing_error_handling": r"try|except|HTTPException|error\s+handling",
+                "missing_docstring": r"docstring|documentation",
+                "type_hint": r"type\s+hint|return\s+type|->",
+                "empty_function": r"empty|placeholder|TODO|pass\s+statement",
+                "multiple_endpoints": r"endpoint|route|CRUD|POST|GET|PUT|DELETE",
+                "architecture": r"architecture|structure|design|refactor",
+                "validation": r"validation|validate|check"
+            }
+            
+            # Count issue types
+            detected_issues = {}
+            for pattern_name, pattern in issue_patterns.items():
+                count = sum(1 for feedback in all_feedback if re.search(pattern, str(feedback), re.IGNORECASE))
+                if count > 0:
+                    detected_issues[pattern_name] = count
+            
+            issue_count = len(detected_issues)
+            issue_types = list(detected_issues.keys())
+            
+            # Determine if single localized issue
+            single_issue_patterns = [
+                "missing_decorator", "wrong_status_code", "missing_import",
+                "missing_docstring", "type_hint"
+            ]
+            
+            is_localized = (
+                issue_count == 1 and 
+                issue_types[0] in single_issue_patterns
+            )
+            
+            # Determine patch feasibility
+            patch_feasibility = 0.0
+            patch_target = None
+            rationale = ""
+            
+            if is_localized:
+                # High feasibility for single localized issues
+                issue_type = issue_types[0]
+                
+                if issue_type == "missing_decorator":
+                    patch_feasibility = 0.9
+                    patch_target = "function_definition"
+                    rationale = "Single missing @contextmanager decorator can be added via AST manipulation"
+                    
+                elif issue_type == "wrong_status_code":
+                    patch_feasibility = 0.85
+                    patch_target = "status_code_parameter"
+                    rationale = "Single incorrect status code can be fixed via regex replacement"
+                    
+                elif issue_type == "missing_import":
+                    patch_feasibility = 0.9
+                    patch_target = "import_section"
+                    rationale = "Single missing import can be added at file top"
+                    
+                elif issue_type == "missing_docstring":
+                    patch_feasibility = 0.8
+                    patch_target = "function_definition"
+                    rationale = "Docstring can be generated and inserted via AST"
+                    
+                elif issue_type == "type_hint":
+                    patch_feasibility = 0.75
+                    patch_target = "function_signature"
+                    rationale = "Type hint can be added via AST, but requires type inference"
+                    
+            elif issue_count == 2 and not any(
+                structural in issue_types 
+                for structural in ["architecture", "multiple_endpoints", "empty_function"]
+            ):
+                # Medium feasibility for two simple issues
+                patch_feasibility = 0.6
+                patch_target = "multiple_locations"
+                rationale = f"Two localized issues ({', '.join(issue_types)}) - patch may be feasible but riskier"
+                
+            else:
+                # Low feasibility for multiple or structural issues
+                patch_feasibility = 0.2
+                rationale = f"Multiple issues ({issue_count}) or structural problems - full regeneration recommended"
+            
+            # Determine retry strategy based on feasibility
+            retry_strategy = "targeted_patch" if patch_feasibility >= 0.7 else "full_regeneration"
+            
+            # Log analysis
+            logger.info(f"🔍 US6 Feedback Analysis:")
+            logger.info(f"   Issue count: {issue_count}")
+            logger.info(f"   Issue types: {', '.join(issue_types)}")
+            logger.info(f"   Localized: {is_localized}")
+            logger.info(f"   Patch feasibility: {patch_feasibility:.2f}")
+            logger.info(f"   Strategy: {retry_strategy}")
+            logger.info(f"   Rationale: {rationale}")
+            
+            return {
+                "retry_strategy": retry_strategy,
+                "is_localized": is_localized,
+                "issue_count": issue_count,
+                "issue_types": issue_types,
+                "patch_feasibility": patch_feasibility,
+                "patch_target": patch_target,
+                "rationale": rationale,
+                "detected_issues": detected_issues
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to analyze feedback for retry strategy: {e}")
+            return {
+                "retry_strategy": "full_regeneration",
+                "is_localized": False,
+                "issue_count": 0,
+                "issue_types": [],
+                "patch_feasibility": 0.0,
+                "patch_target": None,
+                "rationale": f"Analysis failed: {str(e)}, defaulting to full regeneration"
+            }
+
     def _extract_structured_feedback(
         self, validation_result: Dict[str, Any], entity: str, swea_agent: str, task_type: str
     ) -> Dict[str, Any]:
