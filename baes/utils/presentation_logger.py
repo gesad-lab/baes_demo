@@ -770,6 +770,38 @@ class PresentationLogger:
         """Log fallback from template to LLM generation"""
         print(f"   {Colors.WARNING}⚠️  Template fallback: {swea_type}/{template_id} - {reason}{Colors.RESET}")
     
+    def validation_result(self, entity: str, swea_type: str, outcome: str, confidence_score: float,
+                         validation_time_ms: float, passed_count: int, failed_count: int,
+                         requires_llm: bool):
+        """
+        Log validation result with outcome classification
+        
+        Args:
+            entity: Entity being validated
+            swea_type: SWEA type (backend, database, frontend, test)
+            outcome: confident_approval, confident_rejection, or uncertain
+            confidence_score: Confidence score (-1.0 to 1.0)
+            validation_time_ms: Time taken for validation
+            passed_count: Number of rules passed
+            failed_count: Number of rules failed
+            requires_llm: Whether LLM validation is required
+        """
+        if outcome == "confident_approval":
+            print(
+                f"   {Colors.SUCCESS}✅ Rule validation: APPROVED "
+                f"({passed_count}/{passed_count+failed_count} rules, {validation_time_ms:.1f}ms, 0 tokens){Colors.RESET}"
+            )
+        elif outcome == "confident_rejection":
+            print(
+                f"   {Colors.ERROR}❌ Rule validation: REJECTED "
+                f"({failed_count} issues, {validation_time_ms:.1f}ms, 0 tokens){Colors.RESET}"
+            )
+        else:  # uncertain
+            print(
+                f"   {Colors.REVIEW}🤔 Rule validation: UNCERTAIN "
+                f"(score: {confidence_score:.2f}, {validation_time_ms:.1f}ms, falling back to LLM){Colors.RESET}"
+            )
+    
     def validation_confident_approval(self, swea_type: str, confidence_score: float, pattern_name: str):
         """Log confident approval via regex validation (no LLM call)"""
         print(f"   {Colors.SUCCESS}✅ Confident approval: {swea_type} ({confidence_score:.0%} via {pattern_name}){Colors.RESET}")

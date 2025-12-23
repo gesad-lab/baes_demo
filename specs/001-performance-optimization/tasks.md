@@ -94,23 +94,23 @@ BAES Framework structure at repository root:
 
 ### Implementation for US2
 
-- [ ] T033 [P] [US2] Create ValidationRule and ValidationResult data classes in baes/standards/validation_rules.py
-- [ ] T034 [P] [US2] Implement base validation logic: validate_code() with regex pattern matching and confidence classification
-- [ ] T035 [P] [US2] Define backend validation rules in baes/standards/validation_rules.py: context_manager, http_status, error_handling, response_models, dependency_injection
-- [ ] T036 [P] [US2] Define frontend validation rules in baes/standards/validation_rules.py: form_validation, error_display, success_feedback
-- [ ] T037 [P] [US2] Define database validation rules in baes/standards/validation_rules.py: primary_key, indexes, constraints
-- [ ] T038 [P] [US2] Define test validation rules in baes/standards/validation_rules.py: integration_lifecycle, error_cases, cleanup
-- [ ] T039 [P] [US2] Implement AST-based structural validation for type hints, docstrings, PEP 8 naming in baes/standards/validation_rules.py
-- [ ] T040 [P] [US2] Implement rule management operations: add_rule(), update_rule(), disable_rule(), list_rules() in baes/standards/validation_rules.py
-- [ ] T041 [US2] Modify TechLeadSWEA.evaluate_artifact() in baes/swea_agents/techlead_swea.py to use confidence-based validation with ValidationRule
-- [ ] T042 [US2] Add LLM fallback logic in TechLeadSWEA when ValidationResult.overall_outcome == "uncertain"
-- [ ] T043 [US2] Add confident rejection feedback with line numbers from ValidationResult.rule_results to TechLeadSWEA response
-- [ ] T044 [US2] Update OptimizationMetrics to log validation_outcome (confident_approval/confident_rejection/uncertain), validation_llm_called
+- [X] T033 [P] [US2] Create ValidationRule and ValidationResult data classes in baes/standards/validation_rules.py
+- [X] T034 [P] [US2] Implement base validation logic: validate_code() with regex pattern matching and confidence classification
+- [X] T035 [P] [US2] Define backend validation rules in baes/standards/validation_rules.py: context_manager, http_status, error_handling, response_models, dependency_injection
+- [X] T036 [P] [US2] Define frontend validation rules in baes/standards/validation_rules.py: form_validation, error_display, success_feedback
+- [X] T037 [P] [US2] Define database validation rules in baes/standards/validation_rules.py: primary_key, indexes, constraints
+- [X] T038 [P] [US2] Define test validation rules in baes/standards/validation_rules.py: integration_lifecycle, error_cases, cleanup
+- [X] T039 [P] [US2] Implement AST-based structural validation for type hints, docstrings, PEP 8 naming in baes/standards/validation_rules.py
+- [X] T040 [P] [US2] Implement rule management operations: add_rule(), update_rule(), disable_rule(), list_rules() in baes/standards/validation_rules.py
+- [X] T041 [US2] Modify TechLeadSWEA.evaluate_artifact() in baes/swea_agents/techlead_swea.py to use confidence-based validation with ValidationRule
+- [X] T042 [US2] Add LLM fallback logic in TechLeadSWEA when ValidationResult.overall_outcome == "uncertain"
+- [X] T043 [US2] Add confident rejection feedback with line numbers from ValidationResult.rule_results to TechLeadSWEA response
+- [X] T044 [US2] Update OptimizationMetrics to log validation_outcome (confident_approval/confident_rejection/uncertain), validation_llm_called
 
 ### Tests for US2 (MANDATORY)
 
-- [ ] T045 [P] [US2] Unit test for ValidationRule in tests/unit/test_validation_rules.py: pattern matching, confidence classification, rule catalog
-- [ ] T046 [P] [US2] Unit test for AST structural validation in tests/unit/test_validation_rules.py: type hints, docstrings, PEP 8
+- [X] T045 [P] [US2] Unit test for ValidationRule in tests/unit/test_validation_rules.py: pattern matching, confidence classification, rule catalog
+- [X] T046 [P] [US2] Unit test for AST structural validation in tests/unit/test_validation_rules.py: type hints, docstrings, PEP 8
 - [ ] T047 [US2] Integration test for confidence-based validation in tests/integration/test_confidence_validation.py: confident_approval rate 60-70%, confident_rejection with feedback, uncertain triggers LLM
 - [ ] T048 [US2] Integration test for validation accuracy in tests/integration/test_confidence_validation.py: no false approvals on violating code, approval rate ≥85%
 - [ ] T049 [US2] Manual testing: Generate 10 entities (5 template, 5 custom), verify confident validation rate 70-80%, <100ms validation time

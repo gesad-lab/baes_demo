@@ -6,6 +6,8 @@ from typing import Any, Dict, List
 
 from ..agents.base_agent import BaseAgent
 from ..llm.openai_client import OpenAIClient
+from ..standards.validation_rules import ValidationRuleEngine, ValidationOutcome
+from ..utils.presentation_logger import presentation_logger
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,8 @@ class TechLeadSWEA(BaseAgent):
     def __init__(self):
         super().__init__("TechLeadSWEA", "Technical Leadership and Coordination Agent", "SWEA")
         self.llm_client = OpenAIClient()
+        # Initialize validation rule engine (US2: Rule-Based Code Validation)
+        self.validation_engine = ValidationRuleEngine()
         # Technical decision tracking
         self.architecture_decisions = {}
         self.quality_standards = {}
@@ -953,7 +957,13 @@ class TechLeadSWEA(BaseAgent):
     ) -> Dict[str, Any]:
         """
         Standards-based validation for code artifacts (BackendSWEA, FrontendSWEA, etc.).
-        Now uses the appropriate standards for each SWEA type to ensure perfect alignment.
+        
+        US2 Implementation: Confidence-based hybrid validation
+        1. Try rule-based validation first (regex/AST patterns) - 0 tokens, <100ms
+        2. If confident_approval or confident_rejection: Return immediately
+        3. If uncertain: Fall back to LLM validation
+        
+        Target: 70-80% confident decisions → 20-30% token savings
         """
         try:
             # Extract artifact information - handle nested data structure from SWEAs
@@ -989,7 +999,96 @@ class TechLeadSWEA(BaseAgent):
             logger.info(f"🔍 TechLeadSWEA: Extracted code length: {len(code)} characters")
             logger.info(f"🔍 TechLeadSWEA: File path: {file_path}")
             
-            # Use standards-based validation for each SWEA type
+            # US2 PHASE 1: Try rule-based validation first (if enabled)
+            if Config.ENABLE_RULE_VALIDATION:
+                swea_type_map = {
+                    "BackendSWEA": "backend",
+                    "DatabaseSWEA": "database",
+                    "FrontendSWEA": "frontend",
+                    "TestSWEA": "test"
+                }
+                swea_type = swea_type_map.get(swea_agent)
+                
+                if swea_type:
+                    logger.info(f"🔍 TechLeadSWEA: Attempting rule-based validation for {swea_agent}")
+                    
+                    # Run pattern-based validation
+                    rule_result = self.validation_engine.validate_code(code, swea_type)
+                    
+                    # Log metrics for observability
+                    presentation_logger.validation_result(
+                        entity=entity,
+                        swea_type=swea_type,
+                        outcome=rule_result.overall_outcome,
+                        confidence_score=rule_result.confidence_score,
+                        validation_time_ms=rule_result.validation_time_ms,
+                        passed_count=rule_result.passed_count,
+                        failed_count=rule_result.failed_count,
+                        requires_llm=rule_result.requires_llm
+                    )
+                    
+                    # CONFIDENT APPROVAL: Accept immediately (0 tokens)
+                    if rule_result.overall_outcome == "confident_approval":
+                        logger.info(
+                            f"✅ TechLeadSWEA: Rule-based CONFIDENT APPROVAL for {entity} "
+                            f"(score: {rule_result.confidence_score:.2f}, time: {rule_result.validation_time_ms:.1f}ms, "
+                            f"0 tokens)"
+                        )
+                        return {
+                            "is_valid": True,
+                            "quality_score": rule_result.confidence_score,
+                            "details": rule_result.feedback_message,
+                            "issues": [],
+                            "suggestions": [rule_result.feedback_message],
+                            "actionable_feedback": [rule_result.feedback_message],
+                            "validation_method": "RuleBasedValidation",
+                            "validation_time_ms": rule_result.validation_time_ms,
+                            "tokens_used": 0,
+                            "entity": entity,
+                            "task_type": task_type
+                        }
+                    
+                    # CONFIDENT REJECTION: Reject with specific feedback (0 tokens)
+                    elif rule_result.overall_outcome == "confident_rejection":
+                        logger.warning(
+                            f"❌ TechLeadSWEA: Rule-based CONFIDENT REJECTION for {entity} "
+                            f"(score: {rule_result.confidence_score:.2f}, time: {rule_result.validation_time_ms:.1f}ms, "
+                            f"0 tokens)"
+                        )
+                        
+                        # Extract specific issues from rule results
+                        issues = []
+                        suggestions = []
+                        for match in rule_result.rule_results:
+                            if not match.passed:
+                                location = f" (line {match.line_number})" if match.line_number else ""
+                                issues.append(f"[{match.rule_id}] {match.message}{location}")
+                                if match.suggestion:
+                                    suggestions.append(f"{match.suggestion}")
+                        
+                        return {
+                            "is_valid": False,
+                            "quality_score": abs(rule_result.confidence_score),  # Convert to positive
+                            "details": rule_result.feedback_message,
+                            "issues": issues if issues else [rule_result.feedback_message],
+                            "suggestions": suggestions if suggestions else ["Review code against validation rules"],
+                            "actionable_feedback": suggestions if suggestions else ["Review code against validation rules"],
+                            "validation_method": "RuleBasedValidation",
+                            "validation_time_ms": rule_result.validation_time_ms,
+                            "tokens_used": 0,
+                            "entity": entity,
+                            "task_type": task_type
+                        }
+                    
+                    # UNCERTAIN: Fall back to LLM validation
+                    else:
+                        logger.info(
+                            f"🔄 TechLeadSWEA: Rule-based validation UNCERTAIN for {entity} "
+                            f"(score: {rule_result.confidence_score:.2f}), falling back to LLM"
+                        )
+                        # Continue to LLM validation below
+            
+            # US2 PHASE 2: Use standards-based validation or LLM as fallback
             if swea_agent == "BackendSWEA":
                 return self._validate_backend_with_standards(entity, code, task_type)
             elif swea_agent == "FrontendSWEA":
