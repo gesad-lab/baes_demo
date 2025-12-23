@@ -70,12 +70,6 @@ class Config:
     # Two-tier persistent cache: Normalize and cache recognition results (10-15% token savings on cache hits)
     ENABLE_RECOGNITION_CACHE = os.getenv("ENABLE_RECOGNITION_CACHE", "true").lower() in ("true", "1", "yes", "on")
     
-    # Confidence-based validation: Skip LLM validation for high-confidence regex patterns (deprecated, use ENABLE_RULE_VALIDATION)
-    ENABLE_CONFIDENCE_VALIDATION = os.getenv("ENABLE_CONFIDENCE_VALIDATION", "true").lower() in ("true", "1", "yes", "on")
-    
-    # Two-tier persistent cache: Normalize and cache recognition results (10-15% token savings on cache hits)
-    ENABLE_RECOGNITION_CACHE = os.getenv("ENABLE_RECOGNITION_CACHE", "true").lower() in ("true", "1", "yes", "on")
-    
     # Compressed prompts: Use token-efficient coding standards (15-20% token savings)
     ENABLE_COMPRESSED_STANDARDS = os.getenv("ENABLE_COMPRESSED_STANDARDS", "true").lower() in ("true", "1", "yes", "on")
     
@@ -83,7 +77,7 @@ class Config:
     ENABLE_PARALLEL_EXECUTION = os.getenv("ENABLE_PARALLEL_EXECUTION", "true").lower() in ("true", "1", "yes", "on")
     
     # Smart retry with exponential backoff: Reduce retry overhead (5-10% time savings on retries)
-    ENABLE_SMART_RETRY = os.getenv("ENABLE_SMART_RETRY", "false").lower() in ("true", "1", "yes", "on")
+    ENABLE_SMART_RETRY = os.getenv("ENABLE_SMART_RETRY", "true").lower() in ("true", "1", "yes", "on")
 
     # Managed System Configuration
     @classmethod
