@@ -1353,6 +1353,7 @@ class EnhancedRuntimeKernel:
 
         results = []
         entity_name = getattr(coordinating_bae, "entity_name", "System")
+        entity_type = coordinating_bae.__class__.__name__ if coordinating_bae else "UnknownBAE"
 
         # Initialize performance metrics (Feature 001-performance-optimization)
         import uuid
@@ -1360,6 +1361,7 @@ class EnhancedRuntimeKernel:
         self.current_metrics = PerformanceMetrics(
             request_id=request_id,
             entity_name=entity_name,
+            entity_type=entity_type,
             timestamp=datetime.now()
         )
         import time
