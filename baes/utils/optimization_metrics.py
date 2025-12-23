@@ -59,14 +59,16 @@ class PerformanceMetrics:
         template_id: ID of template used (if applicable)
         template_fallback_count: Number of times LLM fallback was needed
         
-        # Compressed standards metrics
+        # Compressed standards metrics (US4)
         standards_type: Type of standards used (compressed/full)
         prompt_token_count: Number of tokens in the prompt sent to LLM
         
-        # Validation metrics
-        template_used: Whether template-based generation was used
-        template_id: ID of template used (if applicable)
-        template_fallback_count: Number of times LLM fallback was needed
+        # Parallel execution metrics (US5)
+        parallel_execution_enabled: Whether parallel execution was used
+        sequential_time_estimate: Estimated time if run sequentially (seconds)
+        parallel_time_actual: Actual time with parallel execution (seconds)
+        parallel_savings_pct: Percentage time saved (0.0-100.0)
+        execution_waves_count: Number of parallel execution waves
         
         # Validation metrics
         validation_outcome: Classification (confident_approval/confident_rejection/uncertain)
@@ -114,6 +116,13 @@ class PerformanceMetrics:
     standards_type: Optional[str] = None  # "compressed" or "full"
     prompt_token_count: int = 0
     
+    # Parallel execution metrics (US5)
+    parallel_execution_enabled: bool = False
+    sequential_time_estimate: float = 0.0  # Estimated time if run sequentially
+    parallel_time_actual: float = 0.0  # Actual time with parallel execution
+    parallel_savings_pct: float = 0.0  # Percentage time saved (calculated)
+    execution_waves_count: int = 0  # Number of parallel execution waves
+    
     # Validation metrics
     validation_outcome: str = "uncertain"  # confident_approval, confident_rejection, uncertain
     validation_llm_called: bool = False
@@ -146,9 +155,17 @@ class PerformanceMetrics:
             "validation_tokens": self.validation_tokens,
             "cache_hit": self.cache_hit,
             "cache_hit_time": self.cache_hit_time,
+            "cache_tier": self.cache_tier,
             "template_used": self.template_used,
             "template_id": self.template_id,
             "template_fallback_count": self.template_fallback_count,
+            "standards_type": self.standards_type,
+            "prompt_token_count": self.prompt_token_count,
+            "parallel_execution_enabled": self.parallel_execution_enabled,
+            "sequential_time_estimate": self.sequential_time_estimate,
+            "parallel_time_actual": self.parallel_time_actual,
+            "parallel_savings_pct": self.parallel_savings_pct,
+            "execution_waves_count": self.execution_waves_count,
             "validation_outcome": self.validation_outcome,
             "validation_llm_called": self.validation_llm_called,
             "approval_granted": self.approval_granted,

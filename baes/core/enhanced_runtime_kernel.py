@@ -1,12 +1,16 @@
 import argparse
+import asyncio
 import importlib
 import logging
 import os
 import subprocess  # nosec B404
 import sys
+import time
 from collections import defaultdict, deque
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List
+from enum import Enum
+from typing import Any, Dict, List, Optional, Set
 
 from dotenv import load_dotenv
 
@@ -29,6 +33,7 @@ from baes.utils.presentation_logger import (
     is_debug_mode,
 )
 from config import Config
+from config import Config
 
 load_dotenv(override=True)
 
@@ -38,6 +43,119 @@ if not is_debug_mode():
 
 logger = logging.getLogger(__name__)
 presentation_logger = get_presentation_logger()
+
+
+# ============================================================================
+# Parallel Execution Data Structures (Feature 001-performance-optimization US5)
+# ============================================================================
+
+class TaskStatus(Enum):
+    """Status of a task in the execution pipeline."""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+@dataclass
+class TaskNode:
+    """
+    Represents a single SWEA task in the dependency graph.
+    
+    Attributes:
+        task_id: Unique identifier (e.g., "backend_generate_api")
+        swea_type: SWEA agent type (backend, database, frontend, test)
+        task_type: Specific task within SWEA (generate_api, setup_database, etc.)
+        dependencies: Set of task_ids that must complete before this task
+        status: Current execution status
+        result: Result from task execution (if completed)
+        error: Error information (if failed)
+        start_time: When task execution started
+        end_time: When task execution completed
+    """
+    task_id: str
+    swea_type: str
+    task_type: str
+    payload: Dict[str, Any]
+    dependencies: Set[str] = field(default_factory=set)
+    status: TaskStatus = TaskStatus.PENDING
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+    
+    @property
+    def duration(self) -> Optional[float]:
+        """Calculate task duration in seconds."""
+        if self.start_time and self.end_time:
+            return self.end_time - self.start_time
+        return None
+
+
+@dataclass
+class ExecutionWave:
+    """
+    Represents a wave of tasks that can execute in parallel.
+    
+    Tasks within a wave have no dependencies on each other and can
+    run concurrently using asyncio.gather().
+    """
+    wave_number: int
+    tasks: List[TaskNode]
+    
+    def __repr__(self) -> str:
+        task_ids = [task.task_id for task in self.tasks]
+        return f"Wave {self.wave_number}: {task_ids}"
+
+
+@dataclass
+class TaskDependencyGraph:
+    """
+    Dependency graph for SWEA task execution with topological ordering.
+    
+    Identifies hard dependencies between SWEA tasks:
+    - Backend must complete before Database (database needs backend models)
+    - Database must complete before Frontend (frontend needs database schema)
+    - Tests must wait for all other SWEAs (tests validate complete system)
+    
+    Groups tasks into execution waves where tasks within a wave can run
+    in parallel (e.g., Database + Frontend if Backend is complete).
+    
+    Attributes:
+        tasks: Dictionary of task_id -> TaskNode
+        waves: List of ExecutionWaves ordered by dependencies
+        task_order: Topologically sorted list of task_ids
+    """
+    tasks: Dict[str, TaskNode] = field(default_factory=dict)
+    waves: List[ExecutionWave] = field(default_factory=list)
+    task_order: List[str] = field(default_factory=list)
+    
+    def add_task(self, task: TaskNode) -> None:
+        """Add a task to the graph."""
+        self.tasks[task.task_id] = task
+    
+    def add_dependency(self, task_id: str, depends_on: str) -> None:
+        """Add a dependency relationship."""
+        if task_id in self.tasks:
+            self.tasks[task_id].dependencies.add(depends_on)
+    
+    def get_task(self, task_id: str) -> Optional[TaskNode]:
+        """Retrieve a task by ID."""
+        return self.tasks.get(task_id)
+    
+    def is_ready(self, task_id: str) -> bool:
+        """Check if all dependencies for a task are completed."""
+        task = self.tasks.get(task_id)
+        if not task:
+            return False
+        
+        for dep_id in task.dependencies:
+            dep_task = self.tasks.get(dep_id)
+            if not dep_task or dep_task.status != TaskStatus.COMPLETED:
+                return False
+        
+        return True
 
 
 class UnknownSWEAAgentError(Exception):
@@ -174,6 +292,326 @@ class EnhancedRuntimeKernel:
         if self._techlead_swea is None:
             self._techlead_swea = TechLeadSWEA()
         return self._techlead_swea
+
+    # ========================================================================
+    # Parallel Execution Methods (Feature 001-performance-optimization US5)
+    # ========================================================================
+
+    def _build_dependency_graph(
+        self, 
+        entity: str, 
+        attributes: List[Dict[str, Any]], 
+        context: str
+    ) -> TaskDependencyGraph:
+        """
+        Build dependency graph for SWEA tasks with hard dependencies.
+        
+        Hard Dependencies (must execute in order):
+        - Backend generation → Database setup (DB needs backend models)
+        - Backend/Database → Frontend generation (UI needs API + DB)
+        - All SWEAs → Tests (tests validate complete system)
+        
+        Soft Dependencies (can parallelize if conditions met):
+        - Database + Frontend can run in parallel after Backend completes
+        
+        Args:
+            entity: Entity name (e.g., "Student")
+            attributes: Entity attributes
+            context: Domain context
+            
+        Returns:
+            TaskDependencyGraph with tasks and dependencies
+        """
+        graph = TaskDependencyGraph()
+        
+        # Create task nodes for each SWEA
+        backend_task = TaskNode(
+            task_id="backend_generate_api",
+            swea_type="backend",
+            task_type="generate_api",
+            payload={
+                "entity": entity,
+                "attributes": attributes,
+                "context": context
+            }
+        )
+        
+        database_task = TaskNode(
+            task_id="database_setup",
+            swea_type="database",
+            task_type="setup_database",
+            payload={
+                "entity": entity,
+                "attributes": attributes,
+                "context": context
+            },
+            dependencies={"backend_generate_api"}  # Wait for backend
+        )
+        
+        frontend_task = TaskNode(
+            task_id="frontend_generate_ui",
+            swea_type="frontend",
+            task_type="generate_ui",
+            payload={
+                "entity": entity,
+                "attributes": attributes,
+                "context": context
+            },
+            dependencies={"backend_generate_api"}  # Wait for backend
+        )
+        
+        test_task = TaskNode(
+            task_id="test_generate",
+            swea_type="test",
+            task_type="generate_integration_tests",
+            payload={
+                "entity": entity,
+                "attributes": attributes,
+                "context": context
+            },
+            dependencies={"backend_generate_api", "database_setup", "frontend_generate_ui"}  # Wait for all
+        )
+        
+        # Add tasks to graph
+        graph.add_task(backend_task)
+        graph.add_task(database_task)
+        graph.add_task(frontend_task)
+        graph.add_task(test_task)
+        
+        logger.info(f"📊 Built dependency graph for {entity}: 4 tasks with dependencies")
+        
+        return graph
+
+    def _topological_sort(self, graph: TaskDependencyGraph) -> List[ExecutionWave]:
+        """
+        Perform topological sort to group tasks into execution waves.
+        
+        Each wave contains tasks that can execute in parallel (no dependencies
+        on each other). Tasks in later waves depend on tasks in earlier waves.
+        
+        Algorithm:
+        1. Find all tasks with no dependencies → Wave 0
+        2. Remove Wave 0 tasks from dependency lists
+        3. Find all tasks with satisfied dependencies → Wave 1
+        4. Repeat until all tasks are assigned
+        
+        Args:
+            graph: TaskDependencyGraph with tasks and dependencies
+            
+        Returns:
+            List of ExecutionWaves ordered by dependency level
+        """
+        waves: List[ExecutionWave] = []
+        remaining_tasks = set(graph.tasks.keys())
+        completed_tasks = set()
+        wave_number = 0
+        
+        while remaining_tasks:
+            # Find tasks ready to execute (all dependencies completed)
+            ready_tasks = []
+            for task_id in remaining_tasks:
+                task = graph.tasks[task_id]
+                if task.dependencies.issubset(completed_tasks):
+                    ready_tasks.append(task)
+            
+            if not ready_tasks:
+                # Circular dependency or error
+                logger.error(f"❌ Cannot resolve dependencies for remaining tasks: {remaining_tasks}")
+                raise ValueError(f"Circular dependency detected in task graph: {remaining_tasks}")
+            
+            # Create execution wave
+            wave = ExecutionWave(wave_number=wave_number, tasks=ready_tasks)
+            waves.append(wave)
+            
+            # Mark tasks as assigned
+            for task in ready_tasks:
+                remaining_tasks.remove(task.task_id)
+                completed_tasks.add(task.task_id)
+            
+            logger.info(f"📈 Wave {wave_number}: {len(ready_tasks)} tasks can run in parallel")
+            
+            wave_number += 1
+        
+        graph.waves = waves
+        graph.task_order = [task.task_id for wave in waves for task in wave.tasks]
+        
+        return waves
+
+    async def execute_parallel_tasks(
+        self,
+        entity: str,
+        attributes: List[Dict[str, Any]],
+        context: str
+    ) -> Dict[str, Any]:
+        """
+        Execute SWEA tasks in parallel waves using asyncio.
+        
+        Execution Strategy:
+        - Wave 0: Backend (alone, others depend on it)
+        - Wave 1: Database + Frontend (parallel after Backend)
+        - Wave 2: Tests (after all other SWEAs)
+        
+        Each wave uses asyncio.gather() to run tasks concurrently.
+        If any task fails, remaining tasks in that wave are cancelled.
+        
+        Args:
+            entity: Entity name
+            attributes: Entity attributes
+            context: Domain context
+            
+        Returns:
+            Dict with results from all tasks and timing metrics
+            
+        Raises:
+            Exception: If any task fails during execution
+        """
+        if not Config.ENABLE_PARALLEL_EXECUTION:
+            logger.info("⚠️ Parallel execution disabled, using sequential execution")
+            return await self._execute_sequential(entity, attributes, context)
+        
+        start_time = time.time()
+        
+        # Build dependency graph
+        graph = self._build_dependency_graph(entity, attributes, context)
+        
+        # Perform topological sort to get execution waves
+        waves = self._topological_sort(graph)
+        
+        logger.info(f"🚀 Starting parallel execution: {len(waves)} waves for {entity}")
+        
+        results = {}
+        
+        # Execute each wave
+        for wave in waves:
+            logger.info(f"▶️  Executing Wave {wave.wave_number}: {len(wave.tasks)} tasks")
+            
+            # Create coroutines for all tasks in this wave
+            wave_coroutines = []
+            for task in wave.tasks:
+                coro = self._execute_task_async(task)
+                wave_coroutines.append(coro)
+            
+            try:
+                # Execute all tasks in wave concurrently
+                wave_results = await asyncio.gather(*wave_coroutines, return_exceptions=True)
+                
+                # Process results
+                for task, result in zip(wave.tasks, wave_results):
+                    if isinstance(result, Exception):
+                        task.status = TaskStatus.FAILED
+                        task.error = str(result)
+                        logger.error(f"❌ Task {task.task_id} failed: {result}")
+                        # Cancel remaining waves
+                        raise result
+                    else:
+                        task.status = TaskStatus.COMPLETED
+                        task.result = result
+                        results[task.task_id] = result
+                        logger.info(f"✅ Task {task.task_id} completed in {task.duration:.2f}s")
+                
+            except Exception as e:
+                logger.error(f"❌ Wave {wave.wave_number} failed, cancelling remaining tasks")
+                # Mark remaining tasks as cancelled
+                for remaining_wave in waves[wave.wave_number + 1:]:
+                    for task in remaining_wave.tasks:
+                        task.status = TaskStatus.CANCELLED
+                raise e
+        
+        end_time = time.time()
+        total_time = end_time - start_time
+        
+        logger.info(f"🏁 Parallel execution completed in {total_time:.2f}s")
+        
+        return {
+            "success": True,
+            "results": results,
+            "execution_time": total_time,
+            "waves_executed": len(waves),
+            "parallel_execution": True
+        }
+
+    async def _execute_task_async(self, task: TaskNode) -> Dict[str, Any]:
+        """
+        Execute a single SWEA task asynchronously.
+        
+        Wraps synchronous SWEA methods with async execution using
+        asyncio.to_thread() to avoid blocking the event loop.
+        
+        Args:
+            task: TaskNode with task details
+            
+        Returns:
+            Task execution result
+        """
+        task.status = TaskStatus.RUNNING
+        task.start_time = time.time()
+        
+        logger.info(f"▶️  Starting task: {task.task_id}")
+        
+        try:
+            # Get appropriate SWEA agent
+            if task.swea_type == "backend":
+                swea = self.backend_swea
+            elif task.swea_type == "database":
+                swea = self.database_swea
+            elif task.swea_type == "frontend":
+                swea = self.frontend_swea
+            elif task.swea_type == "test":
+                swea = self.test_swea
+            else:
+                raise ValueError(f"Unknown SWEA type: {task.swea_type}")
+            
+            # Execute task in thread pool to avoid blocking
+            result = await asyncio.to_thread(
+                swea.handle_task,
+                task.task_type,
+                task.payload
+            )
+            
+            task.end_time = time.time()
+            
+            return result
+            
+        except Exception as e:
+            task.end_time = time.time()
+            task.status = TaskStatus.FAILED
+            task.error = str(e)
+            logger.error(f"❌ Task {task.task_id} failed: {e}")
+            raise
+
+    async def _execute_sequential(
+        self,
+        entity: str,
+        attributes: List[Dict[str, Any]],
+        context: str
+    ) -> Dict[str, Any]:
+        """
+        Fallback: Execute tasks sequentially (non-parallel mode).
+        
+        Used when parallel execution is disabled or as a fallback.
+        """
+        start_time = time.time()
+        
+        # Build graph for sequential execution
+        graph = self._build_dependency_graph(entity, attributes, context)
+        waves = self._topological_sort(graph)
+        
+        results = {}
+        
+        # Execute waves sequentially (but could still have multiple tasks per wave)
+        for wave in waves:
+            for task in wave.tasks:
+                result = await self._execute_task_async(task)
+                results[task.task_id] = result
+        
+        end_time = time.time()
+        
+        return {
+            "success": True,
+            "results": results,
+            "execution_time": end_time - start_time,
+            "parallel_execution": False
+        }
 
     def process_natural_language_request(
         self, request: str, context: str = "academic", start_servers: bool = True

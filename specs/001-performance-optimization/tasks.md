@@ -189,13 +189,13 @@ BAES Framework structure at repository root:
 
 ### Implementation for US5
 
-- [ ] T086 [P] [US5] Create TaskDependencyGraph data class in baes/core/enhanced_runtime_kernel.py with task dependencies
-- [ ] T087 [P] [US5] Implement dependency analysis in EnhancedRuntimeKernel._build_dependency_graph(): identify hard dependencies (Backend→Database, Tests→All)
-- [ ] T088 [P] [US5] Implement topological sort in EnhancedRuntimeKernel._topological_sort(): group tasks into execution waves
-- [ ] T089 [US5] Implement parallel execution in EnhancedRuntimeKernel.execute_parallel_tasks() using asyncio.gather() for each wave
-- [ ] T090 [US5] Add parallel execution error handling: cancel remaining tasks on failure, propagate exception with context
-- [ ] T091 [US5] Convert SWEA execute methods to async: BackendSWEA, DatabaseSWEA, FrontendSWEA, TestSWEA (maintain sync compatibility)
-- [ ] T092 [US5] Update OptimizationMetrics to log parallel_execution_enabled (bool), sequential_time (estimated), parallel_time (actual), parallel_savings_pct
+- [X] T086 [P] [US5] Create TaskDependencyGraph data class in baes/core/enhanced_runtime_kernel.py with task dependencies
+- [X] T087 [P] [US5] Implement dependency analysis in EnhancedRuntimeKernel._build_dependency_graph(): identify hard dependencies (Backend→Database, Tests→All)
+- [X] T088 [P] [US5] Implement topological sort in EnhancedRuntimeKernel._topological_sort(): group tasks into execution waves
+- [X] T089 [US5] Implement parallel execution in EnhancedRuntimeKernel.execute_parallel_tasks() using asyncio.gather() for each wave
+- [X] T090 [US5] Add parallel execution error handling: cancel remaining tasks on failure, propagate exception with context
+- [X] T091 [US5] Convert SWEA execute methods to async: BackendSWEA, DatabaseSWEA, FrontendSWEA, TestSWEA (maintain sync compatibility)
+- [X] T092 [US5] Update OptimizationMetrics to log parallel_execution_enabled (bool), sequential_time (estimated), parallel_time (actual), parallel_savings_pct
 
 ### Tests for US5
 
