@@ -841,6 +841,7 @@ Please provide the JSON response with database improvements."""
 
             # Add foreign key columns for relationships
             existing_columns = {}
+            missing_referenced_tables = []
             with sqlite3.connect(db_file) as conn:
                 cursor = conn.cursor()
                 
@@ -860,6 +861,44 @@ Please provide the JSON response with database improvements."""
                             current_columns_map['id'] = 'INTEGER PRIMARY KEY AUTOINCREMENT'
                         else:
                             current_columns_map[col_name] = col_type
+                
+                # CRITICAL: Verify that all referenced tables exist before creating foreign keys
+                logger.info("🔍 Validating referenced tables for foreign keys...")
+                for rel in relationships:
+                    target_table = f"{rel['target_entity'].lower()}s"
+                    
+                    # Check if the referenced table exists
+                    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{target_table}'")
+                    referenced_table_exists = cursor.fetchone() is not None
+                    
+                    if not referenced_table_exists:
+                        logger.error(f"❌ Referenced table '{target_table}' does not exist! Cannot create foreign key.")
+                        missing_referenced_tables.append(target_table)
+                        
+                        # Defensive programming: Auto-create missing table with minimal schema
+                        logger.warning(f"⚠️  Auto-creating missing table: {target_table}")
+                        logger.warning(f"    This indicates entity '{rel['target_entity']}' was not properly created.")
+                        logger.warning(f"    Creating minimal table structure to prevent database corruption.")
+                        
+                        cursor.execute(f"""
+                            CREATE TABLE IF NOT EXISTS {target_table} (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                name TEXT NOT NULL,
+                                email TEXT,
+                                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            )
+                        """)
+                        conn.commit()
+                        logger.info(f"✅ Created missing table: {target_table} (minimal schema)")
+                        logger.warning(f"⚠️  NOTE: You may need to run 'Create {rel['target_entity']} entity' again with proper attributes")
+                    else:
+                        logger.info(f"✓ Referenced table '{target_table}' exists")
+                
+                # Log summary of validation
+                if missing_referenced_tables:
+                    logger.warning(f"⚠️  Auto-created {len(missing_referenced_tables)} missing tables: {missing_referenced_tables}")
+                else:
+                    logger.info(f"✅ All referenced tables exist")
                 
                 # Add foreign key columns to the schema
                 for rel in relationships:
