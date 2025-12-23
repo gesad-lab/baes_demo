@@ -255,11 +255,23 @@ class EntityRecognizer:
                             if isinstance(knowledge, dict) and "attributes" in knowledge:
                                 attrs = knowledge["attributes"]
                                 if attrs:
-                                    context_parts.append(f"  Attributes: {', '.join(attrs)}")
+                                    # Handle both list of strings and list of dicts
+                                    if isinstance(attrs, list) and len(attrs) > 0:
+                                        if isinstance(attrs[0], dict):
+                                            attr_names = [a.get("name", str(a)) for a in attrs]
+                                            context_parts.append(f"  Attributes: {', '.join(attr_names)}")
+                                        else:
+                                            context_parts.append(f"  Attributes: {', '.join(attrs)}")
                         elif "attributes" in data:
                             attrs = data["attributes"]
                             if attrs:
-                                context_parts.append(f"  Attributes: {', '.join(attrs)}")
+                                # Handle both list of strings and list of dicts
+                                if isinstance(attrs, list) and len(attrs) > 0:
+                                    if isinstance(attrs[0], dict):
+                                        attr_names = [a.get("name", str(a)) for a in attrs]
+                                        context_parts.append(f"  Attributes: {', '.join(attr_names)}")
+                                    else:
+                                        context_parts.append(f"  Attributes: {', '.join(attrs)}")
             else:
                 context_parts.append("### Existing Entities: None")
         except Exception as e:
