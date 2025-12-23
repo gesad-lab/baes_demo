@@ -215,12 +215,12 @@ BAES Framework structure at repository root:
 
 ### Implementation for US6
 
-- [ ] T098 [P] [US6] Implement TechLeadSWEA feedback analysis in baes/swea_agents/techlead_swea.py: determine if single localized issue vs multiple/structural
-- [ ] T099 [P] [US6] Create targeted patch generation logic using AST manipulation in baes/utils/code_patcher.py: add decorator, fix status code, add error handling
-- [ ] T100 [P] [US6] Implement patch application in baes/utils/code_patcher.py: modify code section, preserve formatting, validate syntax
-- [ ] T101 [US6] Add retry decision logic to all SWEAs: if feedback indicates targeted fix feasible, use patch; else full regeneration
-- [ ] T102 [US6] Add fallback to full regeneration if patch application fails (parse error, semantic mismatch)
-- [ ] T103 [US6] Update OptimizationMetrics to log retry_method (targeted_patch/full_regen), retry_tokens, retry_success
+- [X] T098 [P] [US6] Implement TechLeadSWEA feedback analysis in baes/swea_agents/techlead_swea.py: determine if single localized issue vs multiple/structural
+- [X] T099 [P] [US6] Create targeted patch generation logic using AST manipulation in baes/utils/code_patcher.py: add decorator, fix status code, add error handling
+- [X] T100 [P] [US6] Implement patch application in baes/utils/code_patcher.py: modify code section, preserve formatting, validate syntax
+- [X] T101 [US6] Add retry decision logic to all SWEAs: if feedback indicates targeted fix feasible, use patch; else full regeneration
+- [X] T102 [US6] Add fallback to full regeneration if patch application fails (parse error, semantic mismatch)
+- [X] T103 [US6] Update OptimizationMetrics to log retry_method (targeted_patch/full_regen), retry_tokens, retry_success
 
 ### Tests for US6
 

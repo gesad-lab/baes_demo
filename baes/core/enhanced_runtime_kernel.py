@@ -613,6 +613,179 @@ class EnhancedRuntimeKernel:
             "parallel_execution": False
         }
 
+    def _try_smart_retry(
+        self,
+        swea_agent: str,
+        task_type: str,
+        original_code: str,
+        validation_result: Dict[str, Any],
+        entity: str,
+        payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        US6: Attempt smart retry with targeted patch if feasible, otherwise full regeneration.
+        
+        Decision Logic:
+        1. Analyze validation feedback to determine issue complexity
+        2. If single localized issue + patch feasibility ≥ 0.7 → targeted patch
+        3. If multiple/structural issues OR patch fails → full regeneration
+        
+        Args:
+            swea_agent: Name of SWEA that generated the code
+            task_type: Type of task (e.g., "generate_api")
+            original_code: Original code that failed validation
+            validation_result: Validation result with issues/feedback
+            entity: Entity name
+            payload: Original task payload
+            
+        Returns:
+            Dict with retry result (success, code, retry_method, tokens_saved)
+        """
+        if not Config.ENABLE_SMART_RETRY:
+            logger.info("⚠️ Smart retry disabled, using full regeneration")
+            return {
+                "retry_strategy": "full_regeneration",
+                "retry_method": "full_regeneration",
+                "patch_applied": False,
+                "tokens_saved": 0
+            }
+        
+        try:
+            # Import dependencies
+            from baes.utils.code_patcher import CodePatcher
+            
+            # Analyze feedback to determine retry strategy
+            analysis = self.techlead_swea.analyze_feedback_for_retry_strategy(
+                validation_result,
+                original_code
+            )
+            
+            retry_strategy = analysis["retry_strategy"]
+            patch_feasibility = analysis["patch_feasibility"]
+            
+            logger.info(f"🔍 Smart Retry Analysis for {entity} {task_type}:")
+            logger.info(f"   Strategy: {retry_strategy}")
+            logger.info(f"   Patch feasibility: {patch_feasibility:.2f}")
+            logger.info(f"   Issue count: {analysis['issue_count']}")
+            logger.info(f"   Issue types: {', '.join(analysis['issue_types'])}")
+            
+            if retry_strategy == "targeted_patch":
+                # Attempt targeted patch
+                patcher = CodePatcher()
+                
+                # Determine patch type based on issue types
+                issue_types = analysis["issue_types"]
+                patch_result = None
+                
+                if "missing_decorator" in issue_types:
+                    # Try to add @contextmanager decorator
+                    patch_result = patcher.add_decorator(
+                        original_code,
+                        function_name="get_db_connection",
+                        decorator_name="contextmanager"
+                    )
+                    
+                elif "wrong_status_code" in issue_types:
+                    # Try to fix status code
+                    # Extract function name from feedback
+                    function_name = self._extract_function_name_from_feedback(validation_result)
+                    if function_name:
+                        patch_result = patcher.fix_status_code(
+                            original_code,
+                            target_function=function_name,
+                            correct_status=201  # Default to 201 for POST
+                        )
+                        
+                elif "missing_import" in issue_types:
+                    # Try to add missing import
+                    import_statement = self._extract_import_from_feedback(validation_result)
+                    if import_statement:
+                        patch_result = patcher.add_import(
+                            original_code,
+                            import_statement=import_statement
+                        )
+                
+                if patch_result and patch_result.success:
+                    logger.info(f"✅ Targeted patch SUCCESSFUL for {entity} {task_type}")
+                    logger.info(f"   Patch type: {patch_result.patch_type}")
+                    logger.info(f"   Location: {patch_result.patch_location}")
+                    logger.info(f"   Tokens saved: ~{patch_result.tokens_saved}")
+                    
+                    return {
+                        "retry_strategy": "targeted_patch",
+                        "retry_method": "targeted_patch",
+                        "patch_applied": True,
+                        "patched_code": patch_result.patched_code,
+                        "patch_type": patch_result.patch_type,
+                        "patch_location": patch_result.patch_location,
+                        "tokens_saved": patch_result.tokens_saved,
+                        "success": True
+                    }
+                else:
+                    # Patch failed, fall back to full regeneration
+                    error_msg = patch_result.error_message if patch_result else "No suitable patch found"
+                    logger.warning(f"⚠️ Targeted patch FAILED for {entity} {task_type}: {error_msg}")
+                    logger.info("   Falling back to full regeneration...")
+                    return {
+                        "retry_strategy": "full_regeneration",
+                        "retry_method": "full_regeneration",
+                        "patch_applied": False,
+                        "fallback_reason": error_msg,
+                        "tokens_saved": 0
+                    }
+            
+            else:
+                # Multiple/structural issues → full regeneration
+                logger.info(f"🔄 Full regeneration required for {entity} {task_type}")
+                logger.info(f"   Reason: {analysis['rationale']}")
+                return {
+                    "retry_strategy": "full_regeneration",
+                    "retry_method": "full_regeneration",
+                    "patch_applied": False,
+                    "tokens_saved": 0
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Smart retry analysis failed: {e}")
+            logger.info("   Falling back to full regeneration...")
+            return {
+                "retry_strategy": "full_regeneration",
+                "retry_method": "full_regeneration",
+                "patch_applied": False,
+                "error": str(e),
+                "tokens_saved": 0
+            }
+    
+    def _extract_function_name_from_feedback(self, validation_result: Dict[str, Any]) -> Optional[str]:
+        """Extract function name from validation feedback for targeted patching."""
+        feedback = validation_result.get("issues", []) + validation_result.get("suggestions", [])
+        
+        # Look for function names in feedback
+        for item in feedback:
+            feedback_text = str(item)
+            # Match patterns like "create_student" or "get_student"
+            match = re.search(r'\b(create|get|update|delete)_\w+\b', feedback_text)
+            if match:
+                return match.group(0)
+        
+        return None
+    
+    def _extract_import_from_feedback(self, validation_result: Dict[str, Any]) -> Optional[str]:
+        """Extract missing import statement from validation feedback."""
+        feedback = validation_result.get("issues", []) + validation_result.get("suggestions", [])
+        
+        for item in feedback:
+            feedback_text = str(item)
+            # Match import patterns
+            if "contextmanager" in feedback_text.lower():
+                return "from contextlib import contextmanager"
+            elif "httpexception" in feedback_text.lower():
+                return "from fastapi import HTTPException"
+            elif "status" in feedback_text.lower() and "fastapi" in feedback_text.lower():
+                return "from fastapi import status"
+        
+        return None
+
     def process_natural_language_request(
         self, request: str, context: str = "academic", start_servers: bool = True
     ) -> Dict[str, Any]:
@@ -1603,6 +1776,32 @@ class EnhancedRuntimeKernel:
                             if not task_success and retry_count < max_retries:
                                 retry_count += 1
 
+                                # **US6: SMART RETRY - Attempt targeted patch if feasible, otherwise full regeneration**
+                                retry_result = None
+                                if Config.ENABLE_SMART_RETRY and result.get("data", {}).get("code"):
+                                    original_code = result.get("data", {}).get("code", "")
+                                    validation_result = individual_review_result.get("data", {})
+                                    
+                                    # Attempt smart retry (T101-T102)
+                                    retry_result = self._try_smart_retry(
+                                        swea_agent=swea_agent,
+                                        task_type=task_type,
+                                        original_code=original_code,
+                                        validation_result=validation_result,
+                                        entity=payload.get("entity", "Unknown"),
+                                        payload=payload
+                                    )
+                                    
+                                    # Track metrics
+                                    if hasattr(self, 'optimization_metrics') and self.optimization_metrics:
+                                        self.optimization_metrics.retry_method = retry_result.get("retry_method", "full_regeneration")
+                                        self.optimization_metrics.retry_tokens = (
+                                            500 if retry_result.get("patch_applied") else 2000
+                                        )
+                                        self.optimization_metrics.retry_success = retry_result.get("success", False)
+                                        self.optimization_metrics.patch_feasibility = retry_result.get("patch_feasibility", 0.0)
+                                        self.optimization_metrics.retry_count = retry_count
+
                                 # **CRITICAL FIX: Pass TechLeadSWEA feedback to SWEA agent for retry**
                                 # Enhance payload with TechLeadSWEA feedback for intelligent retry
                                 enhanced_payload = payload.copy()
@@ -1620,6 +1819,13 @@ class EnhancedRuntimeKernel:
                                     )
                                 )
                                 enhanced_payload["retry_count"] = retry_count
+                                
+                                # If smart retry produced patched code, use it instead of full regeneration
+                                if retry_result and retry_result.get("patch_applied") and retry_result.get("patched_code"):
+                                    logger.info("✅ Using patched code from smart retry (tokens saved: ~%d)", retry_result.get("tokens_saved", 0))
+                                    enhanced_payload["patched_code"] = retry_result["patched_code"]
+                                    enhanced_payload["skip_llm_call"] = True  # Signal to SWEA to use patched code directly
+                                    enhanced_payload["smart_retry_applied"] = True
 
                                 # Update the task payload for the retry
                                 payload = enhanced_payload

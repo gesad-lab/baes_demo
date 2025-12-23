@@ -70,6 +70,18 @@ class PerformanceMetrics:
         parallel_savings_pct: Percentage time saved (0.0-100.0)
         execution_waves_count: Number of parallel execution waves
         
+        # Smart retry metrics (US6)
+        retry_method: Retry strategy used (targeted_patch/full_regeneration)
+        retry_tokens: Tokens consumed during retry operation
+        retry_success: Whether retry successfully resolved the issue
+        patch_feasibility: Feasibility score for targeted patch (0.0-1.0)
+        retry_count: Number of retry attempts for this request
+        
+        # Validation metrics
+        validation_outcome: Classification (confident_approval/confident_rejection/uncertain)
+        validation_llm_called: Whether LLM was called for validation
+        execution_waves_count: Number of parallel execution waves
+        
         # Validation metrics
         validation_outcome: Classification (confident_approval/confident_rejection/uncertain)
         validation_llm_called: Whether LLM was called for validation
@@ -123,6 +135,13 @@ class PerformanceMetrics:
     parallel_savings_pct: float = 0.0  # Percentage time saved (calculated)
     execution_waves_count: int = 0  # Number of parallel execution waves
     
+    # Smart retry metrics (US6)
+    retry_method: Optional[str] = None  # "targeted_patch" or "full_regeneration"
+    retry_tokens: int = 0  # Tokens used for retry (patch or full regen)
+    retry_success: bool = False  # Whether retry resolved the issue
+    patch_feasibility: float = 0.0  # Feasibility score for targeted patch (0.0-1.0)
+    retry_count: int = 0  # Number of retry attempts
+    
     # Validation metrics
     validation_outcome: str = "uncertain"  # confident_approval, confident_rejection, uncertain
     validation_llm_called: bool = False
@@ -166,6 +185,11 @@ class PerformanceMetrics:
             "parallel_time_actual": self.parallel_time_actual,
             "parallel_savings_pct": self.parallel_savings_pct,
             "execution_waves_count": self.execution_waves_count,
+            "retry_method": self.retry_method,
+            "retry_tokens": self.retry_tokens,
+            "retry_success": self.retry_success,
+            "patch_feasibility": self.patch_feasibility,
+            "retry_count": self.retry_count,
             "validation_outcome": self.validation_outcome,
             "validation_llm_called": self.validation_llm_called,
             "approval_granted": self.approval_granted,
