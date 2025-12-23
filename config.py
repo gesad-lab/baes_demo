@@ -80,7 +80,7 @@ class Config:
     ENABLE_COMPRESSED_STANDARDS = os.getenv("ENABLE_COMPRESSED_STANDARDS", "true").lower() in ("true", "1", "yes", "on")
     
     # Parallel SWEA execution: Run independent SWEAs concurrently (30-40% time savings, no token impact)
-    ENABLE_PARALLEL_EXECUTION = os.getenv("ENABLE_PARALLEL_EXECUTION", "false").lower() in ("true", "1", "yes", "on")
+    ENABLE_PARALLEL_EXECUTION = os.getenv("ENABLE_PARALLEL_EXECUTION", "true").lower() in ("true", "1", "yes", "on")
     
     # Smart retry with exponential backoff: Reduce retry overhead (5-10% time savings on retries)
     ENABLE_SMART_RETRY = os.getenv("ENABLE_SMART_RETRY", "false").lower() in ("true", "1", "yes", "on")
