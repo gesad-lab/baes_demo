@@ -744,6 +744,55 @@ class PresentationLogger:
         """Log error message"""
         print(f"{Colors.ERROR}{message}{Colors.RESET}")
 
+    # Performance Optimization Logging (Feature 001-performance-optimization)
+    
+    def cache_hit(self, entity_name: str, cache_key: str, elapsed_ms: float):
+        """Log successful cache hit for recognition results"""
+        print(f"   {Colors.SUCCESS}💾 Cache HIT: {entity_name} ({elapsed_ms:.1f}ms){Colors.RESET}")
+    
+    def cache_miss(self, entity_name: str, cache_key: str):
+        """Log cache miss requiring LLM recognition"""
+        print(f"   {Colors.INFO}🔍 Cache MISS: {entity_name} - recognizing via LLM{Colors.RESET}")
+    
+    def cache_write(self, entity_name: str, cache_key: str, elapsed_ms: float):
+        """Log cache write operation"""
+        print(f"   {Colors.INFO}💾 Cache WRITE: {entity_name} ({elapsed_ms:.1f}ms){Colors.RESET}")
+    
+    def cache_cleanup(self, entries_removed: int, elapsed_ms: float):
+        """Log cache cleanup operation (LRU eviction)"""
+        print(f"   {Colors.WARNING}🧹 Cache cleanup: {entries_removed} entries evicted ({elapsed_ms:.1f}ms){Colors.RESET}")
+    
+    def template_selected(self, swea_type: str, template_id: str, token_savings: int):
+        """Log template selection for code generation"""
+        print(f"   {Colors.SUCCESS}📝 Template: {swea_type}/{template_id} (saves ~{token_savings} tokens){Colors.RESET}")
+    
+    def template_fallback(self, swea_type: str, template_id: str, reason: str):
+        """Log fallback from template to LLM generation"""
+        print(f"   {Colors.WARNING}⚠️  Template fallback: {swea_type}/{template_id} - {reason}{Colors.RESET}")
+    
+    def validation_confident_approval(self, swea_type: str, confidence_score: float, pattern_name: str):
+        """Log confident approval via regex validation (no LLM call)"""
+        print(f"   {Colors.SUCCESS}✅ Confident approval: {swea_type} ({confidence_score:.0%} via {pattern_name}){Colors.RESET}")
+    
+    def validation_confident_rejection(self, swea_type: str, confidence_score: float, pattern_name: str):
+        """Log confident rejection via regex validation (no LLM call)"""
+        print(f"   {Colors.ERROR}❌ Confident rejection: {swea_type} ({confidence_score:.0%} via {pattern_name}){Colors.RESET}")
+    
+    def validation_uncertain_llm_required(self, swea_type: str, confidence_score: float):
+        """Log uncertain validation requiring LLM review"""
+        print(f"   {Colors.REVIEW}🤔 Uncertain ({confidence_score:.0%}) - LLM validation required for {swea_type}{Colors.RESET}")
+    
+    def optimization_summary(self, total_time: float, total_tokens: int, cache_hit_rate: float, 
+                            template_usage_rate: float, confident_validation_rate: float,
+                            token_reduction_pct: float, time_reduction_pct: float):
+        """Log optimization performance summary at generation end"""
+        print(f"\n{Colors.REVIEW}📊 Performance Optimization Summary:{Colors.RESET}")
+        print(f"   Time: {total_time:.1f}s (↓{time_reduction_pct:.1f}% vs baseline)")
+        print(f"   Tokens: {total_tokens} (↓{token_reduction_pct:.1f}% vs baseline)")
+        print(f"   Cache hit rate: {cache_hit_rate:.1%}")
+        print(f"   Template usage: {template_usage_rate:.1%}")
+        print(f"   Confident validation: {confident_validation_rate:.1%}")
+
 
 # Global instance for easy access
 presentation_logger = PresentationLogger()

@@ -19,6 +19,10 @@ from baes.swea_agents.database_swea import DatabaseSWEA
 from baes.swea_agents.frontend_swea import FrontendSWEA
 from baes.swea_agents.techlead_swea import TechLeadSWEA
 from baes.swea_agents.test_swea import TestSWEA
+from baes.utils.optimization_metrics import (
+    PerformanceMetrics,
+    log_performance_metrics,
+)
 from baes.utils.presentation_logger import (
     configure_presentation_logging,
     get_presentation_logger,
@@ -109,6 +113,10 @@ class EnhancedRuntimeKernel:
         self._techlead_swea = None
 
         self.execution_history = []
+
+        # Performance optimization metrics (Feature 001-performance-optimization)
+        # Initialize metrics collection for each generation request
+        self.current_metrics: PerformanceMetrics = None
 
         # Phase 3: Retry pattern monitoring and prevention
         self.retry_patterns = defaultdict(
@@ -735,6 +743,17 @@ class EnhancedRuntimeKernel:
         results = []
         entity_name = getattr(coordinating_bae, "entity_name", "System")
 
+        # Initialize performance metrics (Feature 001-performance-optimization)
+        import uuid
+        request_id = str(uuid.uuid4())
+        self.current_metrics = PerformanceMetrics(
+            request_id=request_id,
+            entity_name=entity_name,
+            timestamp=datetime.now()
+        )
+        import time
+        metrics_start_time = time.time()
+
         # Start presentation logging
         presentation_logger.start_generation(entity_name)
 
@@ -1307,6 +1326,14 @@ class EnhancedRuntimeKernel:
 
         # Phase 1 completes here - tests generated but not executed
         presentation_logger.phase_1_complete(entity_name, successful_tasks, len(results))
+
+        # Finalize performance metrics (Feature 001-performance-optimization)
+        if self.current_metrics:
+            self.current_metrics.total_time = time.time() - metrics_start_time
+            self.current_metrics.approval_rate = successful_tasks / len(results) if results else 0.0
+            
+            # Log metrics for analysis
+            log_performance_metrics(self.current_metrics)
 
         # Debug summary
         if is_debug_mode():

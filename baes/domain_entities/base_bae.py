@@ -119,6 +119,115 @@ class BaseBae(BaseAgent):
         """Get business rules for this domain entity - must be implemented by concrete BAEs"""
         pass
 
+    def _detect_custom_logic(self, schema: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Detect if entity requires custom logic beyond standard CRUD templates
+
+        This method classifies entities as STANDARD (template-eligible) or CUSTOM
+        (requiring LLM generation) based on complexity analysis.
+
+        Classification criteria for STANDARD entities:
+        - Basic attribute types only (str, int, float, bool, date, datetime)
+        - No computed properties or dynamic attributes
+        - No complex validation rules beyond type checking
+        - Simple relationships (foreign keys only, no many-to-many)
+        - No custom business logic in attributes
+
+        Constitutional compliance:
+        - Fail-fast: Misclassification caught by template rendering errors
+        - Observability: Classification reason logged for analysis
+        - Semantic coherence: Business rules preserved in classification
+
+        Args:
+            schema: Entity schema with attributes, relationships, business_rules
+
+        Returns:
+            Dictionary with classification:
+            {
+                "entity_type": "STANDARD" | "CUSTOM",
+                "requires_custom_logic": bool,
+                "custom_logic_reasons": List[str],  # Empty for STANDARD
+                "template_eligible": bool
+            }
+
+        Feature: 001-performance-optimization / US1: Template-Based Generation
+        """
+        from baes.utils.template_registry import EntityType
+
+        custom_logic_reasons = []
+
+        # Check 1: Attribute type complexity
+        attributes = schema.get("attributes", [])
+        if isinstance(attributes, list):
+            for attr in attributes:
+                if isinstance(attr, dict):
+                    attr_type = attr.get("type", "str")
+                elif isinstance(attr, str):
+                    # Parse "name:str" format
+                    parts = attr.split(":")
+                    attr_type = parts[1] if len(parts) > 1 else "str"
+                else:
+                    attr_type = "str"
+
+                # Check for complex types
+                if attr_type.lower() not in ["str", "string", "text", "int", "integer", "float", "decimal", "bool", "boolean", "date", "datetime", "timestamp"]:
+                    custom_logic_reasons.append(f"Complex attribute type: {attr_type}")
+
+        # Check 2: Computed properties (attributes with logic in description)
+        business_rules = schema.get("business_rules", [])
+        computed_property_keywords = ["compute", "calculate", "derive", "aggregate", "sum", "average", "weighted"]
+        for rule in business_rules:
+            rule_lower = rule.lower() if isinstance(rule, str) else ""
+            if any(keyword in rule_lower for keyword in computed_property_keywords):
+                custom_logic_reasons.append(f"Computed property detected: {rule}")
+
+        # Check 3: Complex validation rules (beyond type checking)
+        validation_keywords = ["validate", "check", "must be", "should be", "greater than", "less than", "between", "regex", "pattern"]
+        for rule in business_rules:
+            rule_lower = rule.lower() if isinstance(rule, str) else ""
+            if any(keyword in rule_lower for keyword in validation_keywords):
+                # Only flag if validation is complex (not simple "must not be empty")
+                if "not be empty" not in rule_lower and "required" not in rule_lower:
+                    custom_logic_reasons.append(f"Complex validation rule: {rule}")
+
+        # Check 4: Complex relationships (many-to-many, self-referential)
+        relationships = schema.get("relationships", {})
+        if isinstance(relationships, dict):
+            for rel_name, rel_info in relationships.items():
+                if isinstance(rel_info, dict):
+                    cardinality = rel_info.get("cardinality", "one")
+                    if cardinality == "many-to-many":
+                        custom_logic_reasons.append(f"Many-to-many relationship: {rel_name}")
+
+        # Check 5: Custom business logic (state machines, workflows)
+        custom_logic_keywords = ["state", "workflow", "transition", "status change", "approve", "reject"]
+        for rule in business_rules:
+            rule_lower = rule.lower() if isinstance(rule, str) else ""
+            if any(keyword in rule_lower for keyword in custom_logic_keywords):
+                custom_logic_reasons.append(f"Custom business logic: {rule}")
+
+        # Classification result
+        requires_custom_logic = len(custom_logic_reasons) > 0
+        entity_type = EntityType.CUSTOM if requires_custom_logic else EntityType.STANDARD
+
+        logger.info(
+            "%sBAE entity classification: %s (template_eligible=%s, reasons=%d)",
+            self.entity_name,
+            entity_type.value.upper(),
+            not requires_custom_logic,
+            len(custom_logic_reasons)
+        )
+
+        if custom_logic_reasons:
+            logger.debug("Custom logic reasons for %s: %s", self.entity_name, custom_logic_reasons)
+
+        return {
+            "entity_type": entity_type.value,
+            "requires_custom_logic": requires_custom_logic,
+            "custom_logic_reasons": custom_logic_reasons,
+            "template_eligible": not requires_custom_logic,
+        }
+
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Handle domain entity tasks - backward compatibility method"""
         return self.handle(task, payload)

@@ -1,0 +1,159 @@
+{#
+Backend Model Template - SQLAlchemy + Pydantic for Standard CRUD
+Feature: 001-performance-optimization / US1: Template-Based Generation
+
+Constitutional Compliance:
+- PEP 8: snake_case variables, 4-space indent, docstrings, 79-char lines
+- DRY: Single model definition for database and API
+- Fail-fast: Type hints + Pydantic validation catch errors early
+- Semantic coherence: Entity name preserved throughout code
+
+Context variables:
+- entity_name (str): Business entity name (e.g., "Student", "Course")
+- attributes (dict): {attribute_name: type_string} (e.g., {"name": "str", "gpa": "float"})
+- relationships (dict, optional): {rel_name: {type: entity, cardinality: one/many}}
+- table_name (str, optional): Override table name (default: snake_case entity_name)
+#}
+"""
+{{ entity_name }} Model - SQLAlchemy ORM and Pydantic Schemas
+
+This module defines the database model and API schemas for {{ entity_name }} entity.
+Generated using BAES Template System for standard CRUD operations.
+
+Constitutional Compliance: PEP 8, Type Hints, DRY Principle
+Feature: 001-performance-optimization (Template-based generation)
+"""
+
+from datetime import date, datetime
+from typing import Optional
+
+from pydantic import BaseModel, Field
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, Boolean, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import validates
+
+Base = declarative_base()
+
+
+class {{ entity_name }}Model(Base):
+    """
+    SQLAlchemy ORM model for {{ entity_name }} entity
+
+    Represents {{ entity_name|lower }} records in the database with full CRUD support.
+    Follows BAES constitutional principles: PEP 8 naming, type safety, semantic coherence.
+    """
+
+    __tablename__ = "{{ table_name or (entity_name | snake_case) }}"
+
+    # Primary key (auto-increment integer)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+
+    # Entity attributes
+{%- for attr_name, attr_type in attributes.items() %}
+{%- if attr_type | python_type == 'str' %}
+    {{ attr_name }} = Column(String(255), nullable=False, comment="{{ attr_name | replace('_', ' ') | title }}")
+{%- elif attr_type | python_type == 'int' %}
+    {{ attr_name }} = Column(Integer, nullable=False, comment="{{ attr_name | replace('_', ' ') | title }}")
+{%- elif attr_type | python_type == 'float' %}
+    {{ attr_name }} = Column(Float, nullable=False, comment="{{ attr_name | replace('_', ' ') | title }}")
+{%- elif attr_type | python_type == 'bool' %}
+    {{ attr_name }} = Column(Boolean, nullable=False, default=False, comment="{{ attr_name | replace('_', ' ') | title }}")
+{%- elif attr_type | python_type == 'datetime.date' %}
+    {{ attr_name }} = Column(Date, nullable=False, comment="{{ attr_name | replace('_', ' ') | title }}")
+{%- elif attr_type | python_type == 'datetime.datetime' %}
+    {{ attr_name }} = Column(DateTime, nullable=False, default=datetime.utcnow, comment="{{ attr_name | replace('_', ' ') | title }}")
+{%- else %}
+    {{ attr_name }} = Column(Text, nullable=False, comment="{{ attr_name | replace('_', ' ') | title }}")
+{%- endif %}
+{%- endfor %}
+
+    # Audit fields (constitutional requirement: observability)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, comment="Record creation timestamp")
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow, comment="Record last update timestamp")
+
+    def __repr__(self):
+        """String representation for debugging (PEP 8 requirement)"""
+        return f"<{{ entity_name }}(id={self.id})>"
+
+
+class {{ entity_name }}Base(BaseModel):
+    """
+    Pydantic base schema for {{ entity_name }} (shared attributes)
+
+    Used for API request validation and response serialization.
+    Constitutional compliance: Type hints, validation, semantic coherence.
+    """
+
+{%- for attr_name, attr_type in attributes.items() %}
+    {{ attr_name }}: {{ attr_type | python_type }} = Field(..., description="{{ attr_name | replace('_', ' ') | title }}")
+{%- endfor %}
+
+    class Config:
+        """Pydantic configuration"""
+        from_attributes = True  # Enable ORM mode for SQLAlchemy compatibility
+        json_schema_extra = {
+            "example": {
+{%- for attr_name, attr_type in attributes.items() %}
+{%- if attr_type | python_type == 'str' %}
+                "{{ attr_name }}": "example_{{ attr_name }}",
+{%- elif attr_type | python_type == 'int' %}
+                "{{ attr_name }}": 1,
+{%- elif attr_type | python_type == 'float' %}
+                "{{ attr_name }}": 1.0,
+{%- elif attr_type | python_type == 'bool' %}
+                "{{ attr_name }}": True,
+{%- elif attr_type | python_type == 'datetime.date' %}
+                "{{ attr_name }}": "2025-01-01",
+{%- elif attr_type | python_type == 'datetime.datetime' %}
+                "{{ attr_name }}": "2025-01-01T00:00:00",
+{%- else %}
+                "{{ attr_name }}": "example_text",
+{%- endif %}
+{%- endfor %}
+            }
+        }
+
+
+class {{ entity_name }}Create({{ entity_name }}Base):
+    """
+    Pydantic schema for creating new {{ entity_name }} (POST request)
+
+    Validates input data before database insertion.
+    Constitutional compliance: Fail-fast validation, type safety.
+    """
+
+    pass
+
+
+class {{ entity_name }}Update(BaseModel):
+    """
+    Pydantic schema for updating existing {{ entity_name }} (PUT request)
+
+    All fields optional to support partial updates.
+    Constitutional compliance: Flexible updates, type safety.
+    """
+
+{%- for attr_name, attr_type in attributes.items() %}
+    {{ attr_name }}: Optional[{{ attr_type | python_type }}] = Field(None, description="{{ attr_name | replace('_', ' ') | title }}")
+{%- endfor %}
+
+    class Config:
+        """Pydantic configuration"""
+        from_attributes = True
+
+
+class {{ entity_name }}Response({{ entity_name }}Base):
+    """
+    Pydantic schema for {{ entity_name }} API responses (GET request)
+
+    Includes database-generated fields (id, timestamps).
+    Constitutional compliance: Complete data representation, observability.
+    """
+
+    id: int = Field(..., description="Unique {{ entity_name|lower }} identifier")
+    created_at: datetime = Field(..., description="Record creation timestamp")
+    updated_at: datetime = Field(..., description="Record last update timestamp")
+
+    class Config:
+        """Pydantic configuration"""
+        from_attributes = True

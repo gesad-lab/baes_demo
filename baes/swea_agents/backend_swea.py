@@ -4,9 +4,19 @@ from typing import Any, Dict, List
 from baes.agents.base_agent import BaseAgent
 from baes.llm.openai_client import OpenAIClient
 from baes.core.managed_system_manager import ManagedSystemManager
+from baes.utils.template_registry import (
+    TemplateRegistry,
+    TemplateInput,
+    EntityType,
+    SWEAType,
+)
+from baes.utils.presentation_logger import get_presentation_logger
+from config import Config
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+presentation_logger = get_presentation_logger()
+
 
 class BackendSWEA(BaseAgent):
     """
@@ -22,6 +32,7 @@ class BackendSWEA(BaseAgent):
         super().__init__("BackendSWEA", "Backend Generation Agent", "SWEA")
         self.llm_client = OpenAIClient()
         self._managed_system_manager = None  # Lazy initialization
+        self._template_registry = None  # Lazy initialization (Feature 001-performance-optimization)
 
     @property
     def managed_system_manager(self):
@@ -29,6 +40,13 @@ class BackendSWEA(BaseAgent):
         if self._managed_system_manager is None:
             self._managed_system_manager = ManagedSystemManager()
         return self._managed_system_manager
+
+    @property
+    def template_registry(self):
+        """Lazy initialization of TemplateRegistry (Feature 001-performance-optimization)"""
+        if self._template_registry is None:
+            self._template_registry = TemplateRegistry()
+        return self._template_registry
 
     def handle_task(self, task: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Handle backend SWEA tasks. Always use the full attribute list from the payload."""
@@ -72,6 +90,76 @@ class BackendSWEA(BaseAgent):
         use_only_specified = payload.get("use_only_specified_attributes", False)
         do_not_add_extra = payload.get("do_not_add_extra_fields", False)
         attribute_constraints = payload.get("attribute_constraints", {})
+
+        # Template-based generation (Feature 001-performance-optimization)
+        if Config.ENABLE_TEMPLATES and not is_evolution and not techlead_feedback:
+            # Try template generation for standard CRUD
+            entity_type_classification = payload.get("entity_classification", {})
+            entity_type_str = entity_type_classification.get("entity_type", "STANDARD")
+            entity_type = EntityType.STANDARD if entity_type_str == "STANDARD" else EntityType.CUSTOM
+
+            # Convert attributes to template format
+            attr_dict = {}
+            for attr in attributes:
+                if isinstance(attr, dict):
+                    attr_dict[attr["name"]] = attr.get("type", "str")
+                elif isinstance(attr, str):
+                    parts = attr.split(":")
+                    attr_dict[parts[0]] = parts[1] if len(parts) > 1 else "str"
+
+            template_input = TemplateInput(
+                entity_name=entity,
+                entity_type=entity_type,
+                swea_type=SWEAType.BACKEND,
+                attributes=attr_dict,
+            )
+
+            template_output = self.template_registry.render_template(template_input)
+
+            if template_output.template_used:
+                # Template generation successful
+                code = template_output.generated_code
+                file_path = self.managed_system_manager.write_entity_artifact(entity, "routes", code)
+                
+                # Log optimization metrics
+                presentation_logger.template_selected(
+                    "backend",
+                    template_output.template_id,
+                    template_output.token_estimate
+                )
+                
+                logger.info(
+                    "BackendSWEA used template %s for %s (saved ~%d tokens, %.1fms)",
+                    template_output.template_id,
+                    entity,
+                    template_output.token_estimate,
+                    template_output.rendering_time_ms
+                )
+                
+                return self.create_success_response(
+                    "generate_api",
+                    {
+                        "file_path": file_path,
+                        "code": code,
+                        "entity": entity,
+                        "attributes": attributes,
+                        "template_used": True,
+                        "template_id": template_output.template_id,
+                        "token_estimate": template_output.token_estimate,
+                    },
+                )
+            else:
+                # Template fallback to LLM
+                presentation_logger.template_fallback(
+                    "backend",
+                    template_output.template_id or "backend_routes_crud",
+                    template_output.fallback_reason
+                )
+                logger.info(
+                    "BackendSWEA template fallback for %s: %s",
+                    entity,
+                    template_output.fallback_reason
+                )
         
         # Build prompt with evolution-aware instructions and strict attribute constraints
         prompt = self._build_api_prompt(
@@ -95,7 +183,7 @@ class BackendSWEA(BaseAgent):
         file_path = self.managed_system_manager.write_entity_artifact(entity, "routes", code)
         return self.create_success_response(
             "generate_api",
-            {"file_path": file_path, "code": code, "entity": entity, "attributes": attributes},
+            {"file_path": file_path, "code": code, "entity": entity, "attributes": attributes, "template_used": False},
         )
 
     def _build_model_prompt(self, entity: str, attributes: List[str], context: str, 

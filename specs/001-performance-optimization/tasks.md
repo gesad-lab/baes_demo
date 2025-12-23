@@ -26,10 +26,10 @@ BAES Framework structure at repository root:
 
 **Purpose**: Project initialization and dependency installation
 
-- [ ] T001 Install new dependencies: Jinja2>=3.1.0 and NLTK>=3.8.0 in requirements.txt and pyproject.toml
-- [ ] T002 Download NLTK data: wordnet and omw-1.4 for cache normalization (one-time setup script)
-- [ ] T003 [P] Create templates directory structure: baes/templates/backend/, baes/templates/database/, baes/templates/frontend/, baes/templates/tests/
-- [ ] T004 [P] Create persistent cache database directory: database/recognition_cache.db (initialize empty SQLite DB with schema)
+- [X] T001 Install new dependencies: Jinja2>=3.1.0 and NLTK>=3.8.0 in requirements.txt and pyproject.toml
+- [X] T002 Download NLTK data: wordnet and omw-1.4 for cache normalization (one-time setup script)
+- [X] T003 [P] Create templates directory structure: baes/templates/backend/, baes/templates/database/, baes/templates/frontend/, baes/templates/tests/
+- [X] T004 [P] Create persistent cache database directory: database/recognition_cache.db (initialize empty SQLite DB with schema)
 
 ---
 
@@ -39,12 +39,12 @@ BAES Framework structure at repository root:
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T005 Create OptimizationMetrics data class in baes/utils/optimization_metrics.py with PerformanceMetrics and AggregatedMetrics
-- [ ] T006 [P] Create CompressedStandards base class in baes/standards/compressed_standards.py with token counting
-- [ ] T007 [P] Add optimization configuration flags to config.py: enable_cache, enable_templates, enable_confidence_validation, enable_parallel_execution, enable_smart_retry
-- [ ] T008 Setup structured logging for optimization events in baes/utils/presentation_logger.py (cache operations, template usage, validation methods)
-- [ ] T009 Document constitutional compliance for optimizations in docs/PERFORMANCE_OPTIMIZATION.md (PEP 8, DRY, fail-fast, generator-first fixes)
-- [ ] T010 Add metrics collection hooks in baes/core/enhanced_runtime_kernel.py for request_id, timestamps, token counts
+- [X] T005 Create OptimizationMetrics data class in baes/utils/optimization_metrics.py with PerformanceMetrics and AggregatedMetrics
+- [X] T006 [P] Create CompressedStandards base class in baes/standards/compressed_standards.py with token counting
+- [X] T007 [P] Add optimization configuration flags to config.py: enable_cache, enable_templates, enable_confidence_validation, enable_parallel_execution, enable_smart_retry
+- [X] T008 Setup structured logging for optimization events in baes/utils/presentation_logger.py (cache operations, template usage, validation methods)
+- [X] T009 Document constitutional compliance for optimizations in docs/PERFORMANCE_OPTIMIZATION.md (PEP 8, DRY, fail-fast, generator-first fixes)
+- [X] T010 Add metrics collection hooks in baes/core/enhanced_runtime_kernel.py for request_id, timestamps, token counts
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -58,30 +58,30 @@ BAES Framework structure at repository root:
 
 ### Implementation for US1
 
-- [ ] T011 [P] [US1] Create TemplateMetadata and TemplateInput/TemplateOutput data classes in baes/utils/template_registry.py
-- [ ] T012 [P] [US1] Implement TemplateRegistry class with Jinja2 environment configuration (trim_blocks, lstrip_blocks, keep_trailing_newline, autoescape=False)
-- [ ] T013 [P] [US1] Add custom Jinja2 filters to TemplateRegistry: snake_case(), pascal_case(), python_type() for code generation
-- [ ] T014 [P] [US1] Implement template selection logic in TemplateRegistry.select_template() based on entity_type, swea_type, requires_custom_logic
-- [ ] T015 [P] [US1] Implement template rendering in TemplateRegistry.render_template() with error handling and fallback_used flag
-- [ ] T016 [P] [US1] Create backend model template: baes/templates/backend/model_crud.py.j2 (SQLAlchemy model + Pydantic schema)
-- [ ] T017 [P] [US1] Create backend routes template: baes/templates/backend/routes_crud.py.j2 (FastAPI CRUD endpoints)
-- [ ] T018 [P] [US1] Create database schema template: baes/templates/database/schema_crud.sql.j2 (CREATE TABLE with indexes)
-- [ ] T019 [P] [US1] Create frontend form template: baes/templates/frontend/streamlit_form.py.j2 (create/update form)
-- [ ] T020 [P] [US1] Create frontend table template: baes/templates/frontend/streamlit_table.py.j2 (list view with pagination)
-- [ ] T021 [P] [US1] Create integration test template: baes/templates/tests/integration_crud.py.j2 (full CRUD lifecycle test)
-- [ ] T022 [US1] Add template detection logic to baes/domain_entities/base_bae.py._detect_custom_logic() checking for: basic attribute types only, no computed properties, no complex validation, simple relationships
-- [ ] T023 [US1] Modify BackendSWEA.generate_api_code() in baes/swea_agents/backend_swea.py to use TemplateRegistry with LLM fallback
-- [ ] T024 [US1] Modify DatabaseSWEA.generate_schema() in baes/swea_agents/database_swea.py to use TemplateRegistry with LLM fallback
-- [ ] T025 [US1] Modify FrontendSWEA.generate_page_code() in baes/swea_agents/frontend_swea.py to use TemplateRegistry with LLM fallback
-- [ ] T026 [US1] Modify TestSWEA.generate_test_code() in baes/swea_agents/test_swea.py to use TemplateRegistry with LLM fallback
-- [ ] T027 [US1] Update OptimizationMetrics collection in all SWEAs to log template_used, template_id, fallback_used
+- [X] T011 [P] [US1] Create TemplateMetadata and TemplateInput/TemplateOutput data classes in baes/utils/template_registry.py
+- [X] T012 [P] [US1] Implement TemplateRegistry class with Jinja2 environment configuration (trim_blocks, lstrip_blocks, keep_trailing_newline, autoescape=False)
+- [X] T013 [P] [US1] Add custom Jinja2 filters to TemplateRegistry: snake_case(), pascal_case(), python_type() for code generation
+- [X] T014 [P] [US1] Implement template selection logic in TemplateRegistry.select_template() based on entity_type, swea_type, requires_custom_logic
+- [X] T015 [P] [US1] Implement template rendering in TemplateRegistry.render_template() with error handling and fallback_used flag
+- [X] T016 [P] [US1] Create backend model template: baes/templates/backend/model_crud.py.j2 (SQLAlchemy model + Pydantic schema)
+- [X] T017 [P] [US1] Create backend routes template: baes/templates/backend/routes_crud.py.j2 (FastAPI CRUD endpoints)
+- [X] T018 [P] [US1] Create database schema template: baes/templates/database/schema_crud.sql.j2 (CREATE TABLE with indexes)
+- [X] T019 [P] [US1] Create frontend form template: baes/templates/frontend/streamlit_form.py.j2 (create/update form)
+- [X] T020 [P] [US1] Create frontend table template: baes/templates/frontend/streamlit_table.py.j2 (list view with pagination)
+- [X] T021 [P] [US1] Create integration test template: baes/templates/tests/integration_crud.py.j2 (full CRUD lifecycle test)
+- [X] T022 [US1] Add template detection logic to baes/domain_entities/base_bae.py._detect_custom_logic() checking for: basic attribute types only, no computed properties, no complex validation, simple relationships
+- [X] T023 [US1] Modify BackendSWEA.generate_api_code() in baes/swea_agents/backend_swea.py to use TemplateRegistry with LLM fallback
+- [X] T024 [US1] Modify DatabaseSWEA.generate_schema() in baes/swea_agents/database_swea.py to use TemplateRegistry with LLM fallback
+- [X] T025 [US1] Modify FrontendSWEA.generate_page_code() in baes/swea_agents/frontend_swea.py to use TemplateRegistry with LLM fallback
+- [X] T026 [US1] Modify TestSWEA.generate_test_code() in baes/swea_agents/test_swea.py to use TemplateRegistry with LLM fallback
+- [X] T027 [US1] Update OptimizationMetrics collection in all SWEAs to log template_used, template_id, fallback_used
 
 ### Tests for US1 (MANDATORY)
 
-- [ ] T028 [P] [US1] Unit test for TemplateRegistry in tests/unit/test_template_registry.py: template selection, rendering, custom filters
-- [ ] T029 [P] [US1] Unit test for custom logic detection in tests/unit/test_base_bae.py: standard vs custom classification
-- [ ] T030 [US1] Integration test for template-generated Student entity in tests/integration/test_template_generation.py: full CRUD, code quality, test pass rate
-- [ ] T031 [US1] Integration test for template fallback on custom logic in tests/integration/test_template_generation.py: complex entity triggers LLM
+- [X] T028 [P] [US1] Unit test for TemplateRegistry in tests/unit/test_template_registry.py: template selection, rendering, custom filters
+- [X] T029 [P] [US1] Unit test for custom logic detection in tests/unit/test_base_bae.py: standard vs custom classification
+- [X] T030 [US1] Integration test for template-generated Student entity in tests/integration/test_template_generation.py: full CRUD, code quality, test pass rate
+- [X] T031 [US1] Integration test for template fallback on custom logic in tests/integration/test_template_generation.py: complex entity triggers LLM
 - [ ] T032 [US1] Manual testing: Generate 5 different standard CRUD entities, verify <15s, <2000 tokens, 100% test pass rate
 
 ---

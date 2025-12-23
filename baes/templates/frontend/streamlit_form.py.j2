@@ -1,0 +1,168 @@
+{#
+Frontend Form Template - Streamlit Create/Update Form for Standard CRUD
+Feature: 001-performance-optimization / US1: Template-Based Generation
+
+Constitutional Compliance:
+- PEP 8: snake_case functions, 4-space indent, docstrings
+- Form validation before submission
+- User feedback on success/error
+- Semantic coherence: Entity name in all UI elements
+
+Context variables:
+- entity_name (str): Business entity name (e.g., "Student", "Course")
+- attributes (dict): {attribute_name: type_string}
+- form_mode (str, optional): "create" or "update" (default: "create")
+- validation_rules (dict, optional): Custom validation logic
+#}
+"""
+{{ entity_name }} Form - Streamlit Create/Update UI
+
+This module implements the create/update form for {{ entity_name }} entity.
+Generated using BAES Template System for standard CRUD operations.
+
+Constitutional Compliance: PEP 8, Form Validation, User Feedback, Semantic Coherence
+Feature: 001-performance-optimization (Template-based generation)
+"""
+
+import streamlit as st
+from datetime import date, datetime
+from typing import Optional, Dict, Any
+import requests
+
+# API configuration
+API_BASE_URL = "http://localhost:8100/api"
+
+
+def render_{{ entity_name | snake_case }}_form(
+    mode: str = "{{ form_mode or 'create' }}",
+    existing_data: Optional[Dict[str, Any]] = None
+) -> None:
+    """
+    Render {{ entity_name }} create/update form
+
+    Args:
+        mode: Form mode - "create" or "update"
+        existing_data: Pre-filled data for update mode (None for create)
+
+    Constitutional compliance:
+    - Form validation before submission
+    - User feedback on success/error
+    - Semantic coherence in labels
+    """
+    st.subheader(f"{'Create' if mode == 'create' else 'Update'} {{ entity_name }}")
+
+    # Initialize form data
+    if existing_data is None:
+        existing_data = {}
+
+    # Form fields
+    with st.form(key=f"{{ entity_name | snake_case }}_form_{mode}"):
+{%- for attr_name, attr_type in attributes.items() %}
+{%- if attr_type | python_type == 'str' %}
+        {{ attr_name }} = st.text_input(
+            "{{ attr_name | replace('_', ' ') | title }}",
+            value=existing_data.get("{{ attr_name }}", ""),
+            help="Enter {{ attr_name | replace('_', ' ') }}"
+        )
+{%- elif attr_type | python_type == 'int' %}
+        {{ attr_name }} = st.number_input(
+            "{{ attr_name | replace('_', ' ') | title }}",
+            value=existing_data.get("{{ attr_name }}", 0),
+            step=1,
+            help="Enter {{ attr_name | replace('_', ' ') }}"
+        )
+{%- elif attr_type | python_type == 'float' %}
+        {{ attr_name }} = st.number_input(
+            "{{ attr_name | replace('_', ' ') | title }}",
+            value=existing_data.get("{{ attr_name }}", 0.0),
+            step=0.1,
+            format="%.2f",
+            help="Enter {{ attr_name | replace('_', ' ') }}"
+        )
+{%- elif attr_type | python_type == 'bool' %}
+        {{ attr_name }} = st.checkbox(
+            "{{ attr_name | replace('_', ' ') | title }}",
+            value=existing_data.get("{{ attr_name }}", False),
+            help="Check if {{ attr_name | replace('_', ' ') }}"
+        )
+{%- elif attr_type | python_type == 'datetime.date' %}
+        {{ attr_name }} = st.date_input(
+            "{{ attr_name | replace('_', ' ') | title }}",
+            value=existing_data.get("{{ attr_name }}", date.today()),
+            help="Select {{ attr_name | replace('_', ' ') }}"
+        )
+{%- elif attr_type | python_type == 'datetime.datetime' %}
+        {{ attr_name }} = st.date_input(
+            "{{ attr_name | replace('_', ' ') | title }}",
+            value=existing_data.get("{{ attr_name }}", datetime.now()),
+            help="Select {{ attr_name | replace('_', ' ') }}"
+        )
+{%- else %}
+        {{ attr_name }} = st.text_area(
+            "{{ attr_name | replace('_', ' ') | title }}",
+            value=existing_data.get("{{ attr_name }}", ""),
+            help="Enter {{ attr_name | replace('_', ' ') }}"
+        )
+{%- endif %}
+{%- endfor %}
+
+        submitted = st.form_submit_button(f"{'Create' if mode == 'create' else 'Update'} {{ entity_name }}")
+
+        if submitted:
+            # Validate form data
+            validation_errors = []
+{%- for attr_name, attr_type in attributes.items() %}
+{%- if attr_type | python_type == 'str' %}
+            if not {{ attr_name }} or not {{ attr_name }}.strip():
+                validation_errors.append("{{ attr_name | replace('_', ' ') | title }} is required")
+{%- endif %}
+{%- endfor %}
+
+            if validation_errors:
+                # Display validation errors
+                for error in validation_errors:
+                    st.error(f"❌ {error}")
+            else:
+                # Prepare request payload
+                payload = {
+{%- for attr_name, attr_type in attributes.items() %}
+{%- if attr_type | python_type in ['datetime.date', 'datetime.datetime'] %}
+                    "{{ attr_name }}": {{ attr_name }}.isoformat(),
+{%- else %}
+                    "{{ attr_name }}": {{ attr_name }},
+{%- endif %}
+{%- endfor %}
+                }
+
+                try:
+                    # Submit to API
+                    if mode == "create":
+                        response = requests.post(
+                            f"{API_BASE_URL}/{{ entity_name | snake_case }}/",
+                            json=payload,
+                            timeout=10
+                        )
+                    else:
+                        {{ entity_name | snake_case }}_id = existing_data.get("id")
+                        response = requests.put(
+                            f"{API_BASE_URL}/{{ entity_name | snake_case }}/{{{ entity_name | snake_case }}_id}",
+                            json=payload,
+                            timeout=10
+                        )
+
+                    if response.status_code in [200, 201]:
+                        st.success(f"✅ {{ entity_name }} {'created' if mode == 'create' else 'updated'} successfully!")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Failed to {'create' if mode == 'create' else 'update'} {{ entity_name }}: {response.text}")
+
+                except requests.RequestException as e:
+                    st.error(f"❌ API request failed: {str(e)}")
+                except Exception as e:
+                    st.error(f"❌ Unexpected error: {str(e)}")
+
+
+if __name__ == "__main__":
+    # Example usage
+    st.title("{{ entity_name }} Management")
+    render_{{ entity_name | snake_case }}_form(mode="create")
