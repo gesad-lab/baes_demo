@@ -67,6 +67,9 @@ class Config:
     # Rule-based validation: Use regex/AST patterns for confident approval/rejection (20-30% token savings)
     ENABLE_RULE_VALIDATION = os.getenv("ENABLE_RULE_VALIDATION", "true").lower() in ("true", "1", "yes", "on")
     
+    # Two-tier persistent cache: Normalize and cache recognition results (10-15% token savings on cache hits)
+    ENABLE_RECOGNITION_CACHE = os.getenv("ENABLE_RECOGNITION_CACHE", "true").lower() in ("true", "1", "yes", "on")
+    
     # Confidence-based validation: Skip LLM validation for high-confidence regex patterns (deprecated, use ENABLE_RULE_VALIDATION)
     ENABLE_CONFIDENCE_VALIDATION = os.getenv("ENABLE_CONFIDENCE_VALIDATION", "true").lower() in ("true", "1", "yes", "on")
     

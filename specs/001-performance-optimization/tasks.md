@@ -125,19 +125,19 @@ BAES Framework structure at repository root:
 
 ### Implementation for US3
 
-- [ ] T050 [P] [US3] Create CachedRecognition data class in baes/core/recognition_cache.py with all required attributes
-- [ ] T051 [P] [US3] Create SQLite schema in baes/core/recognition_cache.py: recognition_cache table with indexes, WAL mode, user_version pragma
-- [ ] T052 [P] [US3] Implement cache normalization in RecognitionCache._normalize_key() using NLTK lemmatization and stop word removal
-- [ ] T053 [P] [US3] Implement in-memory cache with LRU eviction (max 100 entries) using OrderedDict in RecognitionCache
-- [ ] T054 [P] [US3] Implement SQLite persistent cache with ACID transactions in RecognitionCache
-- [ ] T055 [P] [US3] Implement cache_write() in RecognitionCache: immediate memory write, async SQLite write
-- [ ] T056 [P] [US3] Implement cache_read() in RecognitionCache: check memory first, then persistent, promote cold→hot on hit
-- [ ] T057 [P] [US3] Implement cache_cleanup() in RecognitionCache: remove entries older than 30 days from SQLite
-- [ ] T058 [P] [US3] Implement cache_stats() in RecognitionCache: hit rate, sizes, oldest/newest entries
-- [ ] T059 [P] [US3] Implement cache_invalidate() in RecognitionCache: by entity name or clear all
-- [ ] T060 [P] [US3] Add thread-safety with threading.Lock() for in-memory cache operations
-- [ ] T061 [US3] Integrate RecognitionCache into EntityRecognizer in baes/core/entity_recognizer.py: cache_read before OpenAI, cache_write after
-- [ ] T062 [US3] Add cache versioning and migration detection in RecognitionCache: check cache_version on read, invalidate if mismatch
+- [X] T050 [P] [US3] Create CachedRecognition data class in baes/core/recognition_cache.py with all required attributes
+- [X] T051 [P] [US3] Create SQLite schema in baes/core/recognition_cache.py: recognition_cache table with indexes, WAL mode, user_version pragma
+- [X] T052 [P] [US3] Implement cache normalization in RecognitionCache._normalize_key() using NLTK lemmatization and stop word removal
+- [X] T053 [P] [US3] Implement in-memory cache with LRU eviction (max 100 entries) using OrderedDict in RecognitionCache
+- [X] T054 [P] [US3] Implement SQLite persistent cache with ACID transactions in RecognitionCache
+- [X] T055 [P] [US3] Implement cache_write() in RecognitionCache: immediate memory write, async SQLite write
+- [X] T056 [P] [US3] Implement cache_read() in RecognitionCache: check memory first, then persistent, promote cold→hot on hit
+- [X] T057 [P] [US3] Implement cache_cleanup() in RecognitionCache: remove entries older than 30 days from SQLite
+- [X] T058 [P] [US3] Implement cache_stats() in RecognitionCache: hit rate, sizes, oldest/newest entries
+- [X] T059 [P] [US3] Implement cache_invalidate() in RecognitionCache: by entity name or clear all
+- [X] T060 [P] [US3] Add thread-safety with threading.Lock() for in-memory cache operations
+- [X] T061 [US3] Integrate RecognitionCache into EntityRecognizer in baes/core/entity_recognizer.py: cache_read before OpenAI, cache_write after
+- [X] T062 [US3] Add cache versioning and migration detection in RecognitionCache: check cache_version on read, invalidate if mismatch
 - [ ] T063 [US3] Add entity schema evolution detection in baes/domain_entities/base_bae.py: invalidate cache when attributes change
 - [ ] T064 [US3] Update OptimizationMetrics to log cache_hit (bool), cache_hit_time (ms), cache_tier (memory/persistent)
 

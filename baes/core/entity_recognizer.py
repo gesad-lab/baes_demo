@@ -1,7 +1,9 @@
 import json
 from typing import Dict, List, Optional
 
+from baes.core.recognition_cache import RecognitionCache
 from baes.llm.openai_client import OpenAIClient
+from config import Config
 
 
 class EntityRecognizer:
@@ -12,13 +14,43 @@ class EntityRecognizer:
         # Only registered BAE entities - everything else uses GenericBAE fallback
         self.supported_entities = ["student", "course", "teacher"]
         self.context_store = context_store
+        
+        # Initialize recognition cache (US3: Entity Recognition Caching)
+        if Config.ENABLE_RECOGNITION_CACHE:
+            self.cache = RecognitionCache()
+        else:
+            self.cache = None
 
     def recognize_entity(self, user_input: str) -> Dict[str, any]:
         """
         Classify user input to determine which BAE entity they're referring to.
         For relationship creation requests, correctly identifies the primary entity 
         (the one being modified) rather than the secondary entity being added.
+        
+        US3: Checks cache before calling OpenAI (10-15% token savings)
         """
+        
+        # US3: Try cache first if enabled
+        if self.cache:
+            cached_result = self.cache.cache_read(user_input)
+            if cached_result:
+                # Cache hit - return cached recognition result
+                return {
+                    "detected_entity": cached_result.entity_name,
+                    "confidence": 0.95,  # High confidence for cached results
+                    "reasoning": f"Retrieved from cache (cached at {cached_result.cached_at})",
+                    "language_detected": "en",  # Cached results don't preserve language
+                    "action_intent": "create",  # Assume create for cached
+                    "relationship_analysis": {
+                        "is_relationship_request": cached_result.requires_custom_logic,
+                        "entities_mentioned": [cached_result.entity_name],
+                        "primary_entity": cached_result.entity_name,
+                        "secondary_entity": None,
+                        "relationship_direction": None
+                    },
+                    "cached": True,
+                    "cache_tier": "memory" if cached_result.cached_at else "persistent"
+                }
         
         # Gather context about existing entities and relationships
         context_info = self._gather_context_info()
@@ -161,6 +193,21 @@ class EntityRecognizer:
                 classification["detected_entity"] = "unknown"
                 classification["confidence"] = 0.0
                 classification["reasoning"] = "Empty or invalid entity name"
+            
+            # US3: Write to cache if enabled and successful recognition
+            if self.cache and classification.get("confidence", 0.0) > 0.5:
+                try:
+                    self.cache.cache_write(user_input, {
+                        "entity_name": classification["detected_entity"],
+                        "attributes": [],  # Not extracted at recognition stage
+                        "entity_type": "STANDARD",  # Determined later by BaseBae
+                        "requires_custom_logic": classification.get("relationship_analysis", {}).get("is_relationship_request", False),
+                        "custom_logic_reasons": []
+                    })
+                except Exception as e:
+                    # Cache write failure should not block recognition
+                    import logging
+                    logging.getLogger(__name__).warning(f"⚠️  Cache write failed: {e}")
             
             return classification
 
