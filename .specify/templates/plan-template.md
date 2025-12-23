@@ -31,7 +31,21 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+**Core Principle Compliance:**
+
+- [ ] **Domain-Driven Autonomy**: Does this feature maintain BAE domain knowledge ownership and semantic coherence?
+- [ ] **PEP 8 Compliance**: Will all code adhere to PEP 8 style guidelines (snake_case, type hints, docstrings, 100 char lines)?
+- [ ] **DRY Principle**: Are there opportunities to reuse existing base classes, utilities, or standards? No code duplication?
+- [ ] **Integration Testing**: Will integration tests validate complete user workflows? Will manual testing verify UX?
+- [ ] **Observability**: Will logging, metrics tracking, and LLM request logging be implemented?
+- [ ] **Fail-Fast Error Handling**: Will errors fail immediately with clear messages rather than using fallbacks that mask issues?
+- [ ] **Semantic Coherence**: Will LLM-generated content be validated against schemas and standards?
+
+**SWEA Governance (if applicable):**
+
+- [ ] Are SWEA responsibilities clearly defined without duplication?
+- [ ] Will generated code pass domain-specific standards validation?
+- [ ] Is TechLeadSWEA review and feedback tracking included?
 
 ## Project Structure
 
