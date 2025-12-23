@@ -236,9 +236,9 @@ BAES Framework structure at repository root:
 
 **Purpose**: Final integration, documentation, and performance validation
 
-- [ ] T109 [P] Create comprehensive quickstart guide in docs/PERFORMANCE_OPTIMIZATION_QUICKSTART.md (already exists at specs/001-performance-optimization/quickstart.md, copy to docs/)
-- [ ] T110 [P] Create API documentation for new components in docs/API.md: TemplateRegistry, RecognitionCache, ValidationRule, OptimizationMetrics
-- [ ] T111 [P] Update main README.md with performance optimization overview and links to quickstart
+- [X] T109 [P] Create comprehensive quickstart guide in docs/PERFORMANCE_OPTIMIZATION_QUICKSTART.md (already exists at specs/001-performance-optimization/quickstart.md, copy to docs/)
+- [X] T110 [P] Create API documentation for new components in docs/API.md: TemplateRegistry, RecognitionCache, ValidationRule, OptimizationMetrics
+- [X] T111 [P] Update main README.md with performance optimization overview and links to quickstart
 - [ ] T112 [P] Add troubleshooting guide for common issues: low cache hit rate, low template usage, low confident validation rate
 - [ ] T113 Add configuration examples in examples/optimization_config.py: enable/disable individual optimizations, adjust thresholds
 - [ ] T114 [P] Create metrics export CLI in baes/utils/metrics_export.py: export aggregated metrics to CSV for analysis
