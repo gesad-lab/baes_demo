@@ -119,6 +119,52 @@ class BaseBae(BaseAgent):
         )
         self.current_schema = None
 
+    def _save_stored_schema(self):
+        """
+        Save current schema to persistent storage (context_store)
+        
+        This is CRITICAL for evolution: when step 1 creates an entity and step 2
+        evolves it, the schema MUST be persisted so step 2 knows what attributes
+        exist. Without this, evolution fails because there's no record of the
+        current state.
+        
+        Constitutional compliance:
+        - Observability: Logs when schema is persisted
+        - Fail-fast: Errors logged but don't block generation
+        - Generator-first: Schema saved after successful generation
+        """
+        if not self.current_schema:
+            logger.debug(f"No schema to save for {self.entity_name}")
+            return
+        
+        try:
+            # Save to BaseAgent memory (in-memory)
+            self.update_memory("current_schema", self.current_schema)
+            
+            # Save to ContextStore (persistent)
+            context_store_path = os.environ.get(
+                "BAE_CONTEXT_STORE_PATH", "database/context_store.json"
+            )
+            context_store = ContextStore(context_store_path)
+            
+            # Store as agent memory with current_schema key
+            memory_data = {
+                "current_schema": self.current_schema,
+                "last_updated": datetime.now().isoformat()
+            }
+            
+            context_store.store_agent_memory(self.name, memory_data)
+            
+            logger.info(
+                f"💾 Saved schema for {self.entity_name} to context store with "
+                f"{len(self.current_schema.get('attributes', []))} attributes: "
+                f"{[attr.get('name') for attr in self.current_schema.get('attributes', [])]}"
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to save schema for {self.entity_name}: {e}")
+            # Don't raise - schema save failure shouldn't block generation
+
     @abstractmethod
     def _initialize_domain_knowledge(self):
         """Initialize domain-specific knowledge - must be implemented by concrete BAEs"""
@@ -902,6 +948,9 @@ class BaseBae(BaseAgent):
                 "interpretation": interpretation,
             }
             
+            # CRITICAL: Save schema to persistent storage for evolution
+            self._save_stored_schema()
+            
         elif operation_type in ["evolve", "remove", "modify"]:
             # Evolution - load current schema and apply changes
             self._load_stored_schema()
@@ -939,6 +988,10 @@ class BaseBae(BaseAgent):
                     "is_evolution": True,
                     "interpretation": interpretation,
                 }
+            
+            # CRITICAL: Save evolved schema to persistent storage
+            self._save_stored_schema()
+            
         else:
             # Unknown operation type - fallback to create
             raw_attributes = interpretation.get("attributes", self._get_default_attributes())
@@ -1278,6 +1331,9 @@ class BaseBae(BaseAgent):
         self.current_schema = schema
         self.update_memory("current_schema", schema)
         self._update_domain_knowledge(context, attributes)
+        
+        # CRITICAL: Save schema to persistent storage
+        self._save_stored_schema()
 
         # Invalidate cache when new schema is generated
         if self.cache:
@@ -1340,6 +1396,9 @@ class BaseBae(BaseAgent):
 
         self.current_schema = evolved_schema
         self.update_memory("current_schema", evolved_schema)
+        
+        # CRITICAL: Save evolved schema to persistent storage
+        self._save_stored_schema()
 
         # Invalidate cache when schema evolves (attributes changed)
         if self.cache:
