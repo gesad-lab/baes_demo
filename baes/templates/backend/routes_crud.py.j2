@@ -1,0 +1,281 @@
+{#
+Backend Routes Template - FastAPI CRUD Endpoints for Standard Entity
+Feature: 001-performance-optimization / US1: Template-Based Generation
+
+Constitutional Compliance:
+- PEP 8: snake_case functions, 4-space indent, docstrings
+- DRY: Consistent error handling pattern across all endpoints
+- Fail-fast: HTTP 4xx errors for invalid input, HTTP 404 for not found
+- Semantic coherence: Entity name in all paths and responses
+- Observability: Detailed error messages with context
+
+Context variables:
+- entity_name (str): Business entity name (e.g., "Student", "Course")
+- attributes (dict): {attribute_name: type_string}
+- base_path (str, optional): API base path (default: "/api")
+- pagination (bool, optional): Enable pagination for list endpoint (default: True)
+#}
+"""
+{{ entity_name }} Routes - FastAPI CRUD Endpoints
+
+This module implements RESTful API endpoints for {{ entity_name }} entity.
+Generated using BAES Template System for standard CRUD operations.
+
+Constitutional Compliance: PEP 8, HTTP Standards, Error Handling, Observability
+Feature: 001-performance-optimization (Template-based generation)
+"""
+
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+from .database import get_db
+from .models import {{ entity_name }}Model, {{ entity_name }}Create, {{ entity_name }}Update, {{ entity_name }}Response
+
+router = APIRouter(
+    prefix="{{ base_path or '/api' }}/{{ entity_name | snake_case }}",
+    tags=["{{ entity_name }}"],
+)
+
+
+@router.post(
+    "/",
+    response_model={{ entity_name }}Response,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create new {{ entity_name|lower }}",
+    description="Create a new {{ entity_name|lower }} record with provided attributes",
+)
+def create_{{ entity_name | snake_case }}(
+    {{ entity_name | snake_case }}: {{ entity_name }}Create,
+    db: Session = Depends(get_db),
+) -> {{ entity_name }}Response:
+    """
+    Create new {{ entity_name|lower }} (HTTP POST)
+
+    Args:
+        {{ entity_name | snake_case }}: {{ entity_name }} data from request body
+        db: Database session (dependency injection)
+
+    Returns:
+        Created {{ entity_name|lower }} with generated ID and timestamps
+
+    Raises:
+        HTTPException: 400 if validation fails, 500 for server errors
+
+    Constitutional compliance:
+    - HTTP 201 Created (not 200) for successful creation
+    - Fail-fast validation via Pydantic schema
+    - Detailed error messages for debugging
+    """
+    try:
+        # Create database model instance
+        db_{{ entity_name | snake_case }} = {{ entity_name }}Model(**{{ entity_name | snake_case }}.model_dump())
+
+        # Add to session and commit (ACID transaction)
+        db.add(db_{{ entity_name | snake_case }})
+        db.commit()
+        db.refresh(db_{{ entity_name | snake_case }})
+
+        return {{ entity_name }}Response.model_validate(db_{{ entity_name | snake_case }})
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create {{ entity_name|lower }}: {str(e)}",
+        )
+
+
+@router.get(
+    "/",
+    response_model=List[{{ entity_name }}Response],
+    summary="List all {{ entity_name|lower }}s",
+    description="Retrieve paginated list of {{ entity_name|lower }} records",
+)
+def list_{{ entity_name | snake_case }}(
+{%- if pagination %}
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(20, ge=1, le=100, description="Maximum records to return"),
+{%- endif %}
+    db: Session = Depends(get_db),
+) -> List[{{ entity_name }}Response]:
+    """
+    List all {{ entity_name|lower }}s (HTTP GET)
+
+    Args:
+{%- if pagination %}
+        skip: Offset for pagination (default: 0)
+        limit: Max records per page (default: 20, max: 100)
+{%- endif %}
+        db: Database session (dependency injection)
+
+    Returns:
+        List of {{ entity_name|lower }} records
+
+    Constitutional compliance:
+    - Pagination for performance (prevents large result sets)
+    - Observability via query parameters
+    """
+    query = db.query({{ entity_name }}Model).order_by({{ entity_name }}Model.id)
+{%- if pagination %}
+    query = query.offset(skip).limit(limit)
+{%- endif %}
+    {{ entity_name | snake_case }}s = query.all()
+
+    return [{{ entity_name }}Response.model_validate(item) for item in {{ entity_name | snake_case }}s]
+
+
+@router.get(
+    "/{{{ entity_name | snake_case }}_id}",
+    response_model={{ entity_name }}Response,
+    summary="Get {{ entity_name|lower }} by ID",
+    description="Retrieve single {{ entity_name|lower }} record by unique identifier",
+)
+def get_{{ entity_name | snake_case }}(
+    {{ entity_name | snake_case }}_id: int,
+    db: Session = Depends(get_db),
+) -> {{ entity_name }}Response:
+    """
+    Get single {{ entity_name|lower }} by ID (HTTP GET)
+
+    Args:
+        {{ entity_name | snake_case }}_id: Unique {{ entity_name|lower }} identifier
+        db: Database session (dependency injection)
+
+    Returns:
+        {{ entity_name }} record if found
+
+    Raises:
+        HTTPException: 404 if {{ entity_name|lower }} not found
+
+    Constitutional compliance:
+    - HTTP 404 Not Found (not 200 with empty body)
+    - Detailed error message with ID for debugging
+    """
+    db_{{ entity_name | snake_case }} = (
+        db.query({{ entity_name }}Model)
+        .filter({{ entity_name }}Model.id == {{ entity_name | snake_case }}_id)
+        .first()
+    )
+
+    if db_{{ entity_name | snake_case }} is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"{{ entity_name }} with ID {{{ entity_name | snake_case }}_id} not found",
+        )
+
+    return {{ entity_name }}Response.model_validate(db_{{ entity_name | snake_case }})
+
+
+@router.put(
+    "/{{{ entity_name | snake_case }}_id}",
+    response_model={{ entity_name }}Response,
+    summary="Update {{ entity_name|lower }} by ID",
+    description="Update existing {{ entity_name|lower }} record with provided attributes",
+)
+def update_{{ entity_name | snake_case }}(
+    {{ entity_name | snake_case }}_id: int,
+    {{ entity_name | snake_case }}_update: {{ entity_name }}Update,
+    db: Session = Depends(get_db),
+) -> {{ entity_name }}Response:
+    """
+    Update existing {{ entity_name|lower }} (HTTP PUT)
+
+    Args:
+        {{ entity_name | snake_case }}_id: Unique {{ entity_name|lower }} identifier
+        {{ entity_name | snake_case }}_update: {{ entity_name }} data to update (partial allowed)
+        db: Database session (dependency injection)
+
+    Returns:
+        Updated {{ entity_name|lower }} record
+
+    Raises:
+        HTTPException: 404 if {{ entity_name|lower }} not found, 400 for validation errors
+
+    Constitutional compliance:
+    - Partial updates supported (only changed fields)
+    - Fail-fast validation via Pydantic schema
+    - HTTP 404 for non-existent records
+    """
+    db_{{ entity_name | snake_case }} = (
+        db.query({{ entity_name }}Model)
+        .filter({{ entity_name }}Model.id == {{ entity_name | snake_case }}_id)
+        .first()
+    )
+
+    if db_{{ entity_name | snake_case }} is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"{{ entity_name }} with ID {{{ entity_name | snake_case }}_id} not found",
+        )
+
+    try:
+        # Update only provided fields (partial update)
+        update_data = {{ entity_name | snake_case }}_update.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(db_{{ entity_name | snake_case }}, field, value)
+
+        db.commit()
+        db.refresh(db_{{ entity_name | snake_case }})
+
+        return {{ entity_name }}Response.model_validate(db_{{ entity_name | snake_case }})
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update {{ entity_name|lower }}: {str(e)}",
+        )
+
+
+@router.delete(
+    "/{{{ entity_name | snake_case }}_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete {{ entity_name|lower }} by ID",
+    description="Delete existing {{ entity_name|lower }} record permanently",
+)
+def delete_{{ entity_name | snake_case }}(
+    {{ entity_name | snake_case }}_id: int,
+    db: Session = Depends(get_db),
+) -> None:
+    """
+    Delete existing {{ entity_name|lower }} (HTTP DELETE)
+
+    Args:
+        {{ entity_name | snake_case }}_id: Unique {{ entity_name|lower }} identifier
+        db: Database session (dependency injection)
+
+    Returns:
+        None (HTTP 204 No Content)
+
+    Raises:
+        HTTPException: 404 if {{ entity_name|lower }} not found
+
+    Constitutional compliance:
+    - HTTP 204 No Content (not 200) for successful deletion
+    - Permanent deletion with ACID transaction
+    - HTTP 404 for non-existent records
+    """
+    db_{{ entity_name | snake_case }} = (
+        db.query({{ entity_name }}Model)
+        .filter({{ entity_name }}Model.id == {{ entity_name | snake_case }}_id)
+        .first()
+    )
+
+    if db_{{ entity_name | snake_case }} is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"{{ entity_name }} with ID {{{ entity_name | snake_case }}_id} not found",
+        )
+
+    try:
+        db.delete(db_{{ entity_name | snake_case }})
+        db.commit()
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete {{ entity_name|lower }}: {str(e)}",
+        )

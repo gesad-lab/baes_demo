@@ -13,9 +13,18 @@ from typing import Any, Dict, List
 from baes.core.managed_system_manager import ManagedSystemManager
 from baes.domain_entities.base_bae import BaseAgent
 from baes.llm.openai_client import OpenAIClient
+from baes.utils.template_registry import (
+    TemplateRegistry,
+    TemplateInput,
+    EntityType,
+    SWEAType,
+)
+from baes.utils.presentation_logger import get_presentation_logger
+from baes.standards.compressed_standards import get_compressed_standard
 from config import Config
 
 logger = logging.getLogger(__name__)
+presentation_logger = get_presentation_logger()
 
 
 # Stage 2 Improvement #8: Feedback Loop Analytics for TestSWEA
@@ -182,6 +191,7 @@ class TestSWEA(BaseAgent):
         super().__init__("TestSWEA", "Test Generation and Execution Agent", "SWEA")
         self.llm_client = OpenAIClient()
         self._managed_system_manager = None  # Lazy initialization
+        self._template_registry = None  # Lazy initialization
         self.max_fix_iterations = 10  # Maximum attempts to fix issues autonomously
         self.collaboration_history = []  # Track SWEA collaboration attempts
         # Stage 2 Improvement #8: Feedback Loop Analytics
@@ -194,6 +204,31 @@ class TestSWEA(BaseAgent):
         if self._managed_system_manager is None:
             self._managed_system_manager = ManagedSystemManager()
         return self._managed_system_manager
+
+    @property
+    def template_registry(self):
+        """Lazy initialization of TemplateRegistry"""
+        if not Config.enable_templates:
+            return None
+        if self._template_registry is None:
+            self._template_registry = TemplateRegistry()
+        return self._template_registry
+
+    def _get_standards_text(self) -> tuple[str, str]:
+        """
+        Get coding standards text based on configuration (US4).
+        
+        Returns:
+            Tuple of (standards_text, standards_type) where standards_type is
+            "compressed" or "full"
+        """
+        if Config.ENABLE_COMPRESSED_STANDARDS:
+            compressed = get_compressed_standard("test")
+            if compressed:
+                return compressed.content, "compressed"
+        
+        # Fallback to full standards (embedded in prompt)
+        return "", "full"
 
     def _get_do_not_ignore_warning(self) -> str:
         """
@@ -1047,6 +1082,12 @@ COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and 
         
         # Generic validation helper for any entity
         validation_helpers = self._get_validation_helpers(entity, actual_attributes)
+        
+        # Get standards (compressed or full) - Feature 001-performance-optimization US4
+        standards_text, standards_type = self._get_standards_text()
+        
+        # Log standards type for metrics
+        presentation_logger.info(f"TestSWEA using {standards_type} standards for {entity}")
 
         base_prompt = """
 You are a TestSWEA (Test Software Engineering Autonomous Agent) responsible for generating comprehensive tests.
@@ -1060,19 +1101,7 @@ Test Type: %s
 Generated Code to Test:
 %s
 
-CRITICAL REQUIREMENTS:
-1. Use pytest framework with proper fixtures and mocking
-2. Mock external dependencies (OpenAI API, file operations, etc.)
-3. Include both positive and negative test cases
-4. Test edge cases and error conditions
-5. Use proper assertions and test structure
-6. Include setup and teardown as needed
-7. Generate complete, runnable test code
-8. Focus on testing business logic and domain coherence
-9. ALWAYS validate that imports will work before generating tests
-10. Use robust error handling and fallback mechanisms
-11. Use ONLY the actual attributes from the generated code for test data
-12. Follow exact endpoint URL patterns as specified
+%s
 
 VALIDATION HELPERS:
 %s
@@ -1084,6 +1113,19 @@ VALIDATION HELPERS:
             context,
             test_type,
             generated_code,
+            standards_text if standards_text else """CRITICAL REQUIREMENTS:
+1. Use pytest framework with proper fixtures and mocking
+2. Mock external dependencies (OpenAI API, file operations, etc.)
+3. Include both positive and negative test cases
+4. Test edge cases and error conditions
+5. Use proper assertions and test structure
+6. Include setup and teardown as needed
+7. Generate complete, runnable test code
+8. Focus on testing business logic and domain coherence
+9. ALWAYS validate that imports will work before generating tests
+10. Use robust error handling and fallback mechanisms
+11. Use ONLY the actual attributes from the generated code for test data
+12. Follow exact endpoint URL patterns as specified""",
             validation_helpers,
         )
 
@@ -1423,7 +1465,7 @@ VALIDATION HELPERS FOR {entity.upper()}:
     def _generate_robust_test_code(
         self, entity: str, test_type: str, attributes: List[str], context: str
     ) -> str:
-        """Generate robust test code that requires all dependencies to be present. If not, raise an error."""
+        """Generate robust test code using templates or LLM. Requires all dependencies to be present."""
         # Validate dependencies first
         validation = self._validate_test_dependencies(entity, test_type)
 
@@ -1443,37 +1485,95 @@ VALIDATION HELPERS FOR {entity.upper()}:
 
         # Get the actual generated code
         generated_code = self._get_generated_code(entity, test_type.replace("_tests", ""))
+        
+        # Try template-based generation first (only for integration tests currently)
+        test_code = None
+        template_used = False
+        if self.template_registry and test_type == "integration_tests":
+            try:
+                # Parse attributes to dictionary
+                attr_dict = {}
+                for attr in attributes:
+                    if isinstance(attr, dict):
+                        attr_dict[attr.get("name", "unknown")] = attr.get("type", "str")
+                    elif isinstance(attr, str):
+                        if ":" in attr:
+                            name, typ = [p.strip() for p in attr.split(":", 1)]
+                        else:
+                            name, typ = attr.strip(), "str"
+                        attr_dict[name] = typ
+                    else:
+                        attr_dict[str(attr)] = "str"
+                
+                from baes.utils.template_registry import EntityType
+                
+                # Create template input
+                template_input = TemplateInput(
+                    entity_name=entity,
+                    entity_type=EntityType.STANDARD,
+                    swea_type=SWEAType.TEST,
+                    attributes=attr_dict,
+                )
+                
+                # Try to render template
+                template_output = self.template_registry.render_template(template_input)
+                
+                if template_output.template_used:
+                    test_code = template_output.generated_code
+                    template_used = True
+                    
+                    # Log optimization metrics
+                    presentation_logger.template_selected(
+                        "test",
+                        template_output.template_id,
+                        template_output.token_estimate
+                    )
+                    
+                    logger.info("TestSWEA: Using template %s for %s", template_output.template_id, entity)
+                else:
+                    # Template indicated fallback needed
+                    presentation_logger.template_fallback(
+                        "test",
+                        template_output.template_id or "test_integration_crud",
+                        template_output.fallback_reason or "Unknown reason"
+                    )
+            except Exception as e:
+                logger.warning("TestSWEA: Template rendering failed: %s, falling back to LLM generation", str(e))
+        
+        # If template didn't work, use LLM generation
+        if not template_used:
+            # Build the test prompt with validation context
+            prompt = self._build_test_prompt(entity, attributes, test_type, context, generated_code)
 
-        # Build the test prompt with validation context
-        prompt = self._build_test_prompt(entity, attributes, test_type, context, generated_code)
+            # Add the "Do Not Ignore" warning to the prompt
+            prompt = self._get_do_not_ignore_warning() + "\n\n" + prompt
 
-        # Add the "Do Not Ignore" warning to the prompt
-        prompt = self._get_do_not_ignore_warning() + "\n\n" + prompt
+            # Add validation warnings to the prompt
+            if validation["warnings"]:
+                prompt += "\nVALIDATION WARNINGS:\n" + "\n".join(
+                    f"- {w}" for w in validation["warnings"]
+                )
+                prompt += "\n\nGenerate tests that handle these warnings gracefully."
 
-        # Add validation warnings to the prompt
-        if validation["warnings"]:
-            prompt += "\nVALIDATION WARNINGS:\n" + "\n".join(
-                f"- {w}" for w in validation["warnings"]
+            # Stage 2 Improvement #8: Track analytics timing
+            start_time = datetime.now()
+
+            # Generate test code
+            test_code = self.llm_client.generate_code_with_domain_focus(
+                prompt,
+                code_type=f"{test_type.replace('_', ' ').title()}",
+                entity_context={
+                    "entity": entity,
+                    "attributes": attributes,
+                    "test_type": test_type,
+                    "validation_warnings": validation["warnings"],
+                },
             )
-            prompt += "\n\nGenerate tests that handle these warnings gracefully."
 
-        # Stage 2 Improvement #8: Track analytics timing
-        start_time = datetime.now()
-
-        # Generate test code
-        test_code = self.llm_client.generate_code_with_domain_focus(
-            prompt,
-            code_type=f"{test_type.replace('_', ' ').title()}",
-            entity_context={
-                "entity": entity,
-                "attributes": attributes,
-                "test_type": test_type,
-                "validation_warnings": validation["warnings"],
-            },
-        )
-
-        # Stage 2 Improvement #8: Log analytics for test generation
-        response_time = (datetime.now() - start_time).total_seconds()
+            # Stage 2 Improvement #8: Log analytics for test generation
+            response_time = (datetime.now() - start_time).total_seconds()
+        else:
+            response_time = 0.0  # Template generation is fast
 
         # Strict validation – ensure we got code back
         if not isinstance(test_code, str) or len(test_code.strip()) == 0:

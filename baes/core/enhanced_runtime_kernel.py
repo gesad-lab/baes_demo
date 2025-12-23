@@ -1,12 +1,16 @@
 import argparse
+import asyncio
 import importlib
 import logging
 import os
 import subprocess  # nosec B404
 import sys
+import time
 from collections import defaultdict, deque
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List
+from enum import Enum
+from typing import Any, Dict, List, Optional, Set
 
 from dotenv import load_dotenv
 
@@ -19,11 +23,16 @@ from baes.swea_agents.database_swea import DatabaseSWEA
 from baes.swea_agents.frontend_swea import FrontendSWEA
 from baes.swea_agents.techlead_swea import TechLeadSWEA
 from baes.swea_agents.test_swea import TestSWEA
+from baes.utils.optimization_metrics import (
+    PerformanceMetrics,
+    log_performance_metrics,
+)
 from baes.utils.presentation_logger import (
     configure_presentation_logging,
     get_presentation_logger,
     is_debug_mode,
 )
+from config import Config
 from config import Config
 
 load_dotenv(override=True)
@@ -34,6 +43,119 @@ if not is_debug_mode():
 
 logger = logging.getLogger(__name__)
 presentation_logger = get_presentation_logger()
+
+
+# ============================================================================
+# Parallel Execution Data Structures (Feature 001-performance-optimization US5)
+# ============================================================================
+
+class TaskStatus(Enum):
+    """Status of a task in the execution pipeline."""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+@dataclass
+class TaskNode:
+    """
+    Represents a single SWEA task in the dependency graph.
+    
+    Attributes:
+        task_id: Unique identifier (e.g., "backend_generate_api")
+        swea_type: SWEA agent type (backend, database, frontend, test)
+        task_type: Specific task within SWEA (generate_api, setup_database, etc.)
+        dependencies: Set of task_ids that must complete before this task
+        status: Current execution status
+        result: Result from task execution (if completed)
+        error: Error information (if failed)
+        start_time: When task execution started
+        end_time: When task execution completed
+    """
+    task_id: str
+    swea_type: str
+    task_type: str
+    payload: Dict[str, Any]
+    dependencies: Set[str] = field(default_factory=set)
+    status: TaskStatus = TaskStatus.PENDING
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+    
+    @property
+    def duration(self) -> Optional[float]:
+        """Calculate task duration in seconds."""
+        if self.start_time and self.end_time:
+            return self.end_time - self.start_time
+        return None
+
+
+@dataclass
+class ExecutionWave:
+    """
+    Represents a wave of tasks that can execute in parallel.
+    
+    Tasks within a wave have no dependencies on each other and can
+    run concurrently using asyncio.gather().
+    """
+    wave_number: int
+    tasks: List[TaskNode]
+    
+    def __repr__(self) -> str:
+        task_ids = [task.task_id for task in self.tasks]
+        return f"Wave {self.wave_number}: {task_ids}"
+
+
+@dataclass
+class TaskDependencyGraph:
+    """
+    Dependency graph for SWEA task execution with topological ordering.
+    
+    Identifies hard dependencies between SWEA tasks:
+    - Backend must complete before Database (database needs backend models)
+    - Database must complete before Frontend (frontend needs database schema)
+    - Tests must wait for all other SWEAs (tests validate complete system)
+    
+    Groups tasks into execution waves where tasks within a wave can run
+    in parallel (e.g., Database + Frontend if Backend is complete).
+    
+    Attributes:
+        tasks: Dictionary of task_id -> TaskNode
+        waves: List of ExecutionWaves ordered by dependencies
+        task_order: Topologically sorted list of task_ids
+    """
+    tasks: Dict[str, TaskNode] = field(default_factory=dict)
+    waves: List[ExecutionWave] = field(default_factory=list)
+    task_order: List[str] = field(default_factory=list)
+    
+    def add_task(self, task: TaskNode) -> None:
+        """Add a task to the graph."""
+        self.tasks[task.task_id] = task
+    
+    def add_dependency(self, task_id: str, depends_on: str) -> None:
+        """Add a dependency relationship."""
+        if task_id in self.tasks:
+            self.tasks[task_id].dependencies.add(depends_on)
+    
+    def get_task(self, task_id: str) -> Optional[TaskNode]:
+        """Retrieve a task by ID."""
+        return self.tasks.get(task_id)
+    
+    def is_ready(self, task_id: str) -> bool:
+        """Check if all dependencies for a task are completed."""
+        task = self.tasks.get(task_id)
+        if not task:
+            return False
+        
+        for dep_id in task.dependencies:
+            dep_task = self.tasks.get(dep_id)
+            if not dep_task or dep_task.status != TaskStatus.COMPLETED:
+                return False
+        
+        return True
 
 
 class UnknownSWEAAgentError(Exception):
@@ -110,6 +232,10 @@ class EnhancedRuntimeKernel:
 
         self.execution_history = []
 
+        # Performance optimization metrics (Feature 001-performance-optimization)
+        # Initialize metrics collection for each generation request
+        self.current_metrics: PerformanceMetrics = None
+
         # Phase 3: Retry pattern monitoring and prevention
         self.retry_patterns = defaultdict(
             lambda: {"count": 0, "last_errors": deque(maxlen=5), "timestamps": deque(maxlen=10)}
@@ -166,6 +292,499 @@ class EnhancedRuntimeKernel:
         if self._techlead_swea is None:
             self._techlead_swea = TechLeadSWEA()
         return self._techlead_swea
+
+    # ========================================================================
+    # Parallel Execution Methods (Feature 001-performance-optimization US5)
+    # ========================================================================
+
+    def _build_dependency_graph(
+        self, 
+        entity: str, 
+        attributes: List[Dict[str, Any]], 
+        context: str
+    ) -> TaskDependencyGraph:
+        """
+        Build dependency graph for SWEA tasks with hard dependencies.
+        
+        Hard Dependencies (must execute in order):
+        - Backend generation → Database setup (DB needs backend models)
+        - Backend/Database → Frontend generation (UI needs API + DB)
+        - All SWEAs → Tests (tests validate complete system)
+        
+        Soft Dependencies (can parallelize if conditions met):
+        - Database + Frontend can run in parallel after Backend completes
+        
+        Args:
+            entity: Entity name (e.g., "Student")
+            attributes: Entity attributes
+            context: Domain context
+            
+        Returns:
+            TaskDependencyGraph with tasks and dependencies
+        """
+        graph = TaskDependencyGraph()
+        
+        # Create task nodes for each SWEA
+        backend_task = TaskNode(
+            task_id="backend_generate_api",
+            swea_type="backend",
+            task_type="generate_api",
+            payload={
+                "entity": entity,
+                "attributes": attributes,
+                "context": context
+            }
+        )
+        
+        database_task = TaskNode(
+            task_id="database_setup",
+            swea_type="database",
+            task_type="setup_database",
+            payload={
+                "entity": entity,
+                "attributes": attributes,
+                "context": context
+            },
+            dependencies={"backend_generate_api"}  # Wait for backend
+        )
+        
+        frontend_task = TaskNode(
+            task_id="frontend_generate_ui",
+            swea_type="frontend",
+            task_type="generate_ui",
+            payload={
+                "entity": entity,
+                "attributes": attributes,
+                "context": context
+            },
+            dependencies={"backend_generate_api"}  # Wait for backend
+        )
+        
+        test_task = TaskNode(
+            task_id="test_generate",
+            swea_type="test",
+            task_type="generate_integration_tests",
+            payload={
+                "entity": entity,
+                "attributes": attributes,
+                "context": context
+            },
+            dependencies={"backend_generate_api", "database_setup", "frontend_generate_ui"}  # Wait for all
+        )
+        
+        # Add tasks to graph
+        graph.add_task(backend_task)
+        graph.add_task(database_task)
+        graph.add_task(frontend_task)
+        graph.add_task(test_task)
+        
+        logger.info(f"📊 Built dependency graph for {entity}: 4 tasks with dependencies")
+        
+        return graph
+
+    def _topological_sort(self, graph: TaskDependencyGraph) -> List[ExecutionWave]:
+        """
+        Perform topological sort to group tasks into execution waves.
+        
+        Each wave contains tasks that can execute in parallel (no dependencies
+        on each other). Tasks in later waves depend on tasks in earlier waves.
+        
+        Algorithm:
+        1. Find all tasks with no dependencies → Wave 0
+        2. Remove Wave 0 tasks from dependency lists
+        3. Find all tasks with satisfied dependencies → Wave 1
+        4. Repeat until all tasks are assigned
+        
+        Args:
+            graph: TaskDependencyGraph with tasks and dependencies
+            
+        Returns:
+            List of ExecutionWaves ordered by dependency level
+        """
+        waves: List[ExecutionWave] = []
+        remaining_tasks = set(graph.tasks.keys())
+        completed_tasks = set()
+        wave_number = 0
+        
+        while remaining_tasks:
+            # Find tasks ready to execute (all dependencies completed)
+            ready_tasks = []
+            for task_id in remaining_tasks:
+                task = graph.tasks[task_id]
+                if task.dependencies.issubset(completed_tasks):
+                    ready_tasks.append(task)
+            
+            if not ready_tasks:
+                # Circular dependency or error
+                logger.error(f"❌ Cannot resolve dependencies for remaining tasks: {remaining_tasks}")
+                raise ValueError(f"Circular dependency detected in task graph: {remaining_tasks}")
+            
+            # Create execution wave
+            wave = ExecutionWave(wave_number=wave_number, tasks=ready_tasks)
+            waves.append(wave)
+            
+            # Mark tasks as assigned
+            for task in ready_tasks:
+                remaining_tasks.remove(task.task_id)
+                completed_tasks.add(task.task_id)
+            
+            logger.info(f"📈 Wave {wave_number}: {len(ready_tasks)} tasks can run in parallel")
+            
+            wave_number += 1
+        
+        graph.waves = waves
+        graph.task_order = [task.task_id for wave in waves for task in wave.tasks]
+        
+        return waves
+
+    async def execute_parallel_tasks(
+        self,
+        entity: str,
+        attributes: List[Dict[str, Any]],
+        context: str
+    ) -> Dict[str, Any]:
+        """
+        Execute SWEA tasks in parallel waves using asyncio.
+        
+        Execution Strategy:
+        - Wave 0: Backend (alone, others depend on it)
+        - Wave 1: Database + Frontend (parallel after Backend)
+        - Wave 2: Tests (after all other SWEAs)
+        
+        Each wave uses asyncio.gather() to run tasks concurrently.
+        If any task fails, remaining tasks in that wave are cancelled.
+        
+        Args:
+            entity: Entity name
+            attributes: Entity attributes
+            context: Domain context
+            
+        Returns:
+            Dict with results from all tasks and timing metrics
+            
+        Raises:
+            Exception: If any task fails during execution
+        """
+        if not Config.ENABLE_PARALLEL_EXECUTION:
+            logger.info("⚠️ Parallel execution disabled, using sequential execution")
+            return await self._execute_sequential(entity, attributes, context)
+        
+        start_time = time.time()
+        
+        # Build dependency graph
+        graph = self._build_dependency_graph(entity, attributes, context)
+        
+        # Perform topological sort to get execution waves
+        waves = self._topological_sort(graph)
+        
+        logger.info(f"🚀 Starting parallel execution: {len(waves)} waves for {entity}")
+        
+        results = {}
+        
+        # Execute each wave
+        for wave in waves:
+            logger.info(f"▶️  Executing Wave {wave.wave_number}: {len(wave.tasks)} tasks")
+            
+            # Create coroutines for all tasks in this wave
+            wave_coroutines = []
+            for task in wave.tasks:
+                coro = self._execute_task_async(task)
+                wave_coroutines.append(coro)
+            
+            try:
+                # Execute all tasks in wave concurrently
+                wave_results = await asyncio.gather(*wave_coroutines, return_exceptions=True)
+                
+                # Process results
+                for task, result in zip(wave.tasks, wave_results):
+                    if isinstance(result, Exception):
+                        task.status = TaskStatus.FAILED
+                        task.error = str(result)
+                        logger.error(f"❌ Task {task.task_id} failed: {result}")
+                        # Cancel remaining waves
+                        raise result
+                    else:
+                        task.status = TaskStatus.COMPLETED
+                        task.result = result
+                        results[task.task_id] = result
+                        logger.info(f"✅ Task {task.task_id} completed in {task.duration:.2f}s")
+                
+            except Exception as e:
+                logger.error(f"❌ Wave {wave.wave_number} failed, cancelling remaining tasks")
+                # Mark remaining tasks as cancelled
+                for remaining_wave in waves[wave.wave_number + 1:]:
+                    for task in remaining_wave.tasks:
+                        task.status = TaskStatus.CANCELLED
+                raise e
+        
+        end_time = time.time()
+        total_time = end_time - start_time
+        
+        logger.info(f"🏁 Parallel execution completed in {total_time:.2f}s")
+        
+        return {
+            "success": True,
+            "results": results,
+            "execution_time": total_time,
+            "waves_executed": len(waves),
+            "parallel_execution": True
+        }
+
+    async def _execute_task_async(self, task: TaskNode) -> Dict[str, Any]:
+        """
+        Execute a single SWEA task asynchronously.
+        
+        Wraps synchronous SWEA methods with async execution using
+        asyncio.to_thread() to avoid blocking the event loop.
+        
+        Args:
+            task: TaskNode with task details
+            
+        Returns:
+            Task execution result
+        """
+        task.status = TaskStatus.RUNNING
+        task.start_time = time.time()
+        
+        logger.info(f"▶️  Starting task: {task.task_id}")
+        
+        try:
+            # Get appropriate SWEA agent
+            if task.swea_type == "backend":
+                swea = self.backend_swea
+            elif task.swea_type == "database":
+                swea = self.database_swea
+            elif task.swea_type == "frontend":
+                swea = self.frontend_swea
+            elif task.swea_type == "test":
+                swea = self.test_swea
+            else:
+                raise ValueError(f"Unknown SWEA type: {task.swea_type}")
+            
+            # Execute task in thread pool to avoid blocking
+            result = await asyncio.to_thread(
+                swea.handle_task,
+                task.task_type,
+                task.payload
+            )
+            
+            task.end_time = time.time()
+            
+            return result
+            
+        except Exception as e:
+            task.end_time = time.time()
+            task.status = TaskStatus.FAILED
+            task.error = str(e)
+            logger.error(f"❌ Task {task.task_id} failed: {e}")
+            raise
+
+    async def _execute_sequential(
+        self,
+        entity: str,
+        attributes: List[Dict[str, Any]],
+        context: str
+    ) -> Dict[str, Any]:
+        """
+        Fallback: Execute tasks sequentially (non-parallel mode).
+        
+        Used when parallel execution is disabled or as a fallback.
+        """
+        start_time = time.time()
+        
+        # Build graph for sequential execution
+        graph = self._build_dependency_graph(entity, attributes, context)
+        waves = self._topological_sort(graph)
+        
+        results = {}
+        
+        # Execute waves sequentially (but could still have multiple tasks per wave)
+        for wave in waves:
+            for task in wave.tasks:
+                result = await self._execute_task_async(task)
+                results[task.task_id] = result
+        
+        end_time = time.time()
+        
+        return {
+            "success": True,
+            "results": results,
+            "execution_time": end_time - start_time,
+            "parallel_execution": False
+        }
+
+    def _try_smart_retry(
+        self,
+        swea_agent: str,
+        task_type: str,
+        original_code: str,
+        validation_result: Dict[str, Any],
+        entity: str,
+        payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        US6: Attempt smart retry with targeted patch if feasible, otherwise full regeneration.
+        
+        Decision Logic:
+        1. Analyze validation feedback to determine issue complexity
+        2. If single localized issue + patch feasibility ≥ 0.7 → targeted patch
+        3. If multiple/structural issues OR patch fails → full regeneration
+        
+        Args:
+            swea_agent: Name of SWEA that generated the code
+            task_type: Type of task (e.g., "generate_api")
+            original_code: Original code that failed validation
+            validation_result: Validation result with issues/feedback
+            entity: Entity name
+            payload: Original task payload
+            
+        Returns:
+            Dict with retry result (success, code, retry_method, tokens_saved)
+        """
+        if not Config.ENABLE_SMART_RETRY:
+            logger.info("⚠️ Smart retry disabled, using full regeneration")
+            return {
+                "retry_strategy": "full_regeneration",
+                "retry_method": "full_regeneration",
+                "patch_applied": False,
+                "tokens_saved": 0
+            }
+        
+        try:
+            # Import dependencies
+            from baes.utils.code_patcher import CodePatcher
+            
+            # Analyze feedback to determine retry strategy
+            analysis = self.techlead_swea.analyze_feedback_for_retry_strategy(
+                validation_result,
+                original_code
+            )
+            
+            retry_strategy = analysis["retry_strategy"]
+            patch_feasibility = analysis["patch_feasibility"]
+            
+            logger.info(f"🔍 Smart Retry Analysis for {entity} {task_type}:")
+            logger.info(f"   Strategy: {retry_strategy}")
+            logger.info(f"   Patch feasibility: {patch_feasibility:.2f}")
+            logger.info(f"   Issue count: {analysis['issue_count']}")
+            logger.info(f"   Issue types: {', '.join(analysis['issue_types'])}")
+            
+            if retry_strategy == "targeted_patch":
+                # Attempt targeted patch
+                patcher = CodePatcher()
+                
+                # Determine patch type based on issue types
+                issue_types = analysis["issue_types"]
+                patch_result = None
+                
+                if "missing_decorator" in issue_types:
+                    # Try to add @contextmanager decorator
+                    patch_result = patcher.add_decorator(
+                        original_code,
+                        function_name="get_db_connection",
+                        decorator_name="contextmanager"
+                    )
+                    
+                elif "wrong_status_code" in issue_types:
+                    # Try to fix status code
+                    # Extract function name from feedback
+                    function_name = self._extract_function_name_from_feedback(validation_result)
+                    if function_name:
+                        patch_result = patcher.fix_status_code(
+                            original_code,
+                            target_function=function_name,
+                            correct_status=201  # Default to 201 for POST
+                        )
+                        
+                elif "missing_import" in issue_types:
+                    # Try to add missing import
+                    import_statement = self._extract_import_from_feedback(validation_result)
+                    if import_statement:
+                        patch_result = patcher.add_import(
+                            original_code,
+                            import_statement=import_statement
+                        )
+                
+                if patch_result and patch_result.success:
+                    logger.info(f"✅ Targeted patch SUCCESSFUL for {entity} {task_type}")
+                    logger.info(f"   Patch type: {patch_result.patch_type}")
+                    logger.info(f"   Location: {patch_result.patch_location}")
+                    logger.info(f"   Tokens saved: ~{patch_result.tokens_saved}")
+                    
+                    return {
+                        "retry_strategy": "targeted_patch",
+                        "retry_method": "targeted_patch",
+                        "patch_applied": True,
+                        "patched_code": patch_result.patched_code,
+                        "patch_type": patch_result.patch_type,
+                        "patch_location": patch_result.patch_location,
+                        "tokens_saved": patch_result.tokens_saved,
+                        "success": True
+                    }
+                else:
+                    # Patch failed, fall back to full regeneration
+                    error_msg = patch_result.error_message if patch_result else "No suitable patch found"
+                    logger.warning(f"⚠️ Targeted patch FAILED for {entity} {task_type}: {error_msg}")
+                    logger.info("   Falling back to full regeneration...")
+                    return {
+                        "retry_strategy": "full_regeneration",
+                        "retry_method": "full_regeneration",
+                        "patch_applied": False,
+                        "fallback_reason": error_msg,
+                        "tokens_saved": 0
+                    }
+            
+            else:
+                # Multiple/structural issues → full regeneration
+                logger.info(f"🔄 Full regeneration required for {entity} {task_type}")
+                logger.info(f"   Reason: {analysis['rationale']}")
+                return {
+                    "retry_strategy": "full_regeneration",
+                    "retry_method": "full_regeneration",
+                    "patch_applied": False,
+                    "tokens_saved": 0
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Smart retry analysis failed: {e}")
+            logger.info("   Falling back to full regeneration...")
+            return {
+                "retry_strategy": "full_regeneration",
+                "retry_method": "full_regeneration",
+                "patch_applied": False,
+                "error": str(e),
+                "tokens_saved": 0
+            }
+    
+    def _extract_function_name_from_feedback(self, validation_result: Dict[str, Any]) -> Optional[str]:
+        """Extract function name from validation feedback for targeted patching."""
+        feedback = validation_result.get("issues", []) + validation_result.get("suggestions", [])
+        
+        # Look for function names in feedback
+        for item in feedback:
+            feedback_text = str(item)
+            # Match patterns like "create_student" or "get_student"
+            match = re.search(r'\b(create|get|update|delete)_\w+\b', feedback_text)
+            if match:
+                return match.group(0)
+        
+        return None
+    
+    def _extract_import_from_feedback(self, validation_result: Dict[str, Any]) -> Optional[str]:
+        """Extract missing import statement from validation feedback."""
+        feedback = validation_result.get("issues", []) + validation_result.get("suggestions", [])
+        
+        for item in feedback:
+            feedback_text = str(item)
+            # Match import patterns
+            if "contextmanager" in feedback_text.lower():
+                return "from contextlib import contextmanager"
+            elif "httpexception" in feedback_text.lower():
+                return "from fastapi import HTTPException"
+            elif "status" in feedback_text.lower() and "fastapi" in feedback_text.lower():
+                return "from fastapi import status"
+        
+        return None
 
     def process_natural_language_request(
         self, request: str, context: str = "academic", start_servers: bool = True
@@ -734,6 +1353,19 @@ class EnhancedRuntimeKernel:
 
         results = []
         entity_name = getattr(coordinating_bae, "entity_name", "System")
+        entity_type = coordinating_bae.__class__.__name__ if coordinating_bae else "UnknownBAE"
+
+        # Initialize performance metrics (Feature 001-performance-optimization)
+        import uuid
+        request_id = str(uuid.uuid4())
+        self.current_metrics = PerformanceMetrics(
+            request_id=request_id,
+            entity_name=entity_name,
+            entity_type=entity_type,
+            timestamp=datetime.now()
+        )
+        import time
+        metrics_start_time = time.time()
 
         # Start presentation logging
         presentation_logger.start_generation(entity_name)
@@ -1146,6 +1778,32 @@ class EnhancedRuntimeKernel:
                             if not task_success and retry_count < max_retries:
                                 retry_count += 1
 
+                                # **US6: SMART RETRY - Attempt targeted patch if feasible, otherwise full regeneration**
+                                retry_result = None
+                                if Config.ENABLE_SMART_RETRY and result.get("data", {}).get("code"):
+                                    original_code = result.get("data", {}).get("code", "")
+                                    validation_result = individual_review_result.get("data", {})
+                                    
+                                    # Attempt smart retry (T101-T102)
+                                    retry_result = self._try_smart_retry(
+                                        swea_agent=swea_agent,
+                                        task_type=task_type,
+                                        original_code=original_code,
+                                        validation_result=validation_result,
+                                        entity=payload.get("entity", "Unknown"),
+                                        payload=payload
+                                    )
+                                    
+                                    # Track metrics
+                                    if hasattr(self, 'optimization_metrics') and self.optimization_metrics:
+                                        self.optimization_metrics.retry_method = retry_result.get("retry_method", "full_regeneration")
+                                        self.optimization_metrics.retry_tokens = (
+                                            500 if retry_result.get("patch_applied") else 2000
+                                        )
+                                        self.optimization_metrics.retry_success = retry_result.get("success", False)
+                                        self.optimization_metrics.patch_feasibility = retry_result.get("patch_feasibility", 0.0)
+                                        self.optimization_metrics.retry_count = retry_count
+
                                 # **CRITICAL FIX: Pass TechLeadSWEA feedback to SWEA agent for retry**
                                 # Enhance payload with TechLeadSWEA feedback for intelligent retry
                                 enhanced_payload = payload.copy()
@@ -1163,6 +1821,13 @@ class EnhancedRuntimeKernel:
                                     )
                                 )
                                 enhanced_payload["retry_count"] = retry_count
+                                
+                                # If smart retry produced patched code, use it instead of full regeneration
+                                if retry_result and retry_result.get("patch_applied") and retry_result.get("patched_code"):
+                                    logger.info("✅ Using patched code from smart retry (tokens saved: ~%d)", retry_result.get("tokens_saved", 0))
+                                    enhanced_payload["patched_code"] = retry_result["patched_code"]
+                                    enhanced_payload["skip_llm_call"] = True  # Signal to SWEA to use patched code directly
+                                    enhanced_payload["smart_retry_applied"] = True
 
                                 # Update the task payload for the retry
                                 payload = enhanced_payload
@@ -1307,6 +1972,14 @@ class EnhancedRuntimeKernel:
 
         # Phase 1 completes here - tests generated but not executed
         presentation_logger.phase_1_complete(entity_name, successful_tasks, len(results))
+
+        # Finalize performance metrics (Feature 001-performance-optimization)
+        if self.current_metrics:
+            self.current_metrics.total_time = time.time() - metrics_start_time
+            self.current_metrics.approval_rate = successful_tasks / len(results) if results else 0.0
+            
+            # Log metrics for analysis
+            log_performance_metrics(self.current_metrics)
 
         # Debug summary
         if is_debug_mode():

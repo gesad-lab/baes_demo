@@ -9,9 +9,19 @@ from baes.core.managed_system_manager import ManagedSystemManager
 from baes.domain_entities.base_bae import BaseAgent
 from baes.llm.openai_client import OpenAIClient
 from baes.utils.llm_request_logger import LLMRequestLogger, RequestType
+from baes.utils.template_registry import (
+    TemplateRegistry,
+    TemplateInput,
+    EntityType,
+    SWEAType,
+)
+from baes.utils.presentation_logger import get_presentation_logger
+from baes.standards.compressed_standards import get_compressed_standard
 from config import Config
 
 logger = logging.getLogger(__name__)
+presentation_logger = get_presentation_logger()
+presentation_logger = get_presentation_logger()
 
 
 # Stage 2 Improvement #8: Feedback Loop Analytics for FrontendSWEA
@@ -158,6 +168,7 @@ class FrontendSWEA(BaseAgent):
         super().__init__("FrontendSWEA", "UI Generation Agent", "SWEA")
         self.llm_client = OpenAIClient()
         self._managed_system_manager = None  # Lazy initialization
+        self._template_registry = None  # Lazy initialization (Feature 001-performance-optimization)
         # Stage 2 Improvement #8: Feedback Loop Analytics
         self.feedback_analytics = FeedbackLoopAnalytics()
         self.current_session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -170,6 +181,29 @@ class FrontendSWEA(BaseAgent):
         if self._managed_system_manager is None:
             self._managed_system_manager = ManagedSystemManager()
         return self._managed_system_manager
+
+    @property
+    def template_registry(self):
+        """Lazy initialization of TemplateRegistry (Feature 001-performance-optimization)"""
+        if self._template_registry is None:
+            self._template_registry = TemplateRegistry()
+        return self._template_registry
+
+    def _get_standards_text(self) -> tuple[str, str]:
+        """
+        Get coding standards text based on configuration (US4).
+        
+        Returns:
+            Tuple of (standards_text, standards_type) where standards_type is
+            "compressed" or "full"
+        """
+        if Config.ENABLE_COMPRESSED_STANDARDS:
+            compressed = get_compressed_standard("frontend")
+            if compressed:
+                return compressed.content, "compressed"
+        
+        # Fallback to full standards (embedded in prompt)
+        return "", "full"
 
     def _get_do_not_ignore_warning(self) -> str:
         """
@@ -301,6 +335,12 @@ COMPLIANCE IS MANDATORY - Non-compliance will result in immediate rejection and 
 
         # Stage 4 Improvement #1: Get structured feedback injection
         structured_feedback = self._get_structured_feedback_injection(entity, "FrontendSWEA", "generate_ui")
+        
+        # Get standards (compressed or full) - Feature 001-performance-optimization US4
+        standards_text, standards_type = self._get_standards_text()
+        
+        # Log standards type for metrics
+        presentation_logger.info(f"FrontendSWEA using {standards_type} standards for {entity}")
 
         prompt = f"""
 {self._get_do_not_ignore_warning()}
@@ -309,7 +349,7 @@ You are a FrontendSWEA agent specialized in generating Streamlit UI code for dom
 
 {structured_feedback}
 
-CRITICAL REQUIREMENTS - Your code MUST include ALL of the following:
+{standards_text if standards_text else '''CRITICAL REQUIREMENTS - Your code MUST include ALL of the following:
 
 1. **MANDATORY: NO st.set_page_config() in entity pages**
    - Entity pages are imported into the main app, which already has st.set_page_config()
@@ -344,7 +384,7 @@ CRITICAL REQUIREMENTS - Your code MUST include ALL of the following:
    - NEVER include 'id' field in create/update forms (it's auto-generated)
    - NEVER include 'id' in data dictionaries sent to API
    - Display 'id' as read-only text in edit forms only
-   - The 'id' field should NEVER be user-editable
+   - The 'id' field should NEVER be user-editable'''}
 
 Entity: {entity}
 Attributes: {attributes}
@@ -920,7 +960,52 @@ CRITICAL: Return ONLY the JSON object, no markdown formatting or explanations.
         attributes: List[Dict[str, str]],
         context: str,
     ) -> str:
-        """Create comprehensive Streamlit UI code using DRY template patterns"""
+        """Create comprehensive Streamlit UI code using template system or DRY template patterns"""
+        # Try template-based generation first
+        if self.template_registry:
+            try:
+                # Convert attributes list to dictionary for template
+                attr_dict = {}
+                for attr in attributes:
+                    if isinstance(attr, dict):
+                        attr_dict[attr.get("name", "unknown")] = attr.get("type", "str")
+                    else:
+                        attr_dict[str(attr)] = "str"
+                
+                from baes.utils.template_registry import EntityType
+                
+                # Create template input
+                template_input = TemplateInput(
+                    entity_name=entity,
+                    entity_type=EntityType.STANDARD,
+                    swea_type=SWEAType.FRONTEND,
+                    attributes=attr_dict,
+                )
+                
+                # Try to render template
+                template_output = self.template_registry.render_template(template_input)
+                
+                if template_output.template_used:
+                    # Log optimization metrics
+                    presentation_logger.template_selected(
+                        "frontend",
+                        template_output.template_id,
+                        template_output.token_estimate
+                    )
+                    
+                    logger.info("FrontendSWEA: Using template %s for %s", template_output.template_id, entity)
+                    return template_output.generated_code
+                else:
+                    # Template indicated fallback needed
+                    presentation_logger.template_fallback(
+                        "frontend",
+                        template_output.template_id or "frontend_streamlit_crud",
+                        template_output.fallback_reason or "Unknown reason"
+                    )
+            except Exception as e:
+                logger.warning("FrontendSWEA: Template rendering failed: %s, falling back to DRY templates", str(e))
+        
+        # Fallback to existing DRY template patterns
         from baes.standards.frontend_standards import FrontendStandards
         
         # Use DRY principle: Create reusable template components

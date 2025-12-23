@@ -1,0 +1,280 @@
+{#
+Integration Test Template - Pytest Full CRUD Lifecycle for Standard Entity
+Feature: 001-performance-optimization / US1: Template-Based Generation
+
+Constitutional Compliance:
+- Integration testing first (BAES Constitution Principle IV)
+- Full CRUD lifecycle coverage
+- Setup/teardown with cleanup
+- Observability via detailed assertions
+
+Context variables:
+- entity_name (str): Business entity name (e.g., "Student", "Course")
+- attributes (dict): {attribute_name: type_string}
+- fixtures (list, optional): Additional pytest fixtures
+- cleanup (bool, optional): Enable automatic cleanup (default: True)
+#}
+"""
+{{ entity_name }} Integration Tests - Full CRUD Lifecycle
+
+This module implements integration tests for {{ entity_name }} entity CRUD operations.
+Generated using BAES Template System for standard CRUD validation.
+
+Constitutional Compliance: Integration Testing First, Full Coverage, Cleanup
+Feature: 001-performance-optimization (Template-based generation)
+"""
+
+import pytest
+from datetime import date, datetime
+from typing import Dict, Any
+
+import requests
+
+# API configuration
+API_BASE_URL = "http://localhost:8100/api"
+
+
+@pytest.fixture
+def {{ entity_name | snake_case }}_test_data() -> Dict[str, Any]:
+    """
+    Test data fixture for {{ entity_name }} entity
+
+    Returns:
+        Dictionary with valid {{ entity_name }} attributes
+    """
+    return {
+{%- for attr_name, attr_type in attributes.items() %}
+{%- if attr_type | python_type == 'str' %}
+        "{{ attr_name }}": "test_{{ attr_name }}_value",
+{%- elif attr_type | python_type == 'int' %}
+        "{{ attr_name }}": 123,
+{%- elif attr_type | python_type == 'float' %}
+        "{{ attr_name }}": 3.14,
+{%- elif attr_type | python_type == 'bool' %}
+        "{{ attr_name }}": True,
+{%- elif attr_type | python_type == 'datetime.date' %}
+        "{{ attr_name }}": "2025-01-01",
+{%- elif attr_type | python_type == 'datetime.datetime' %}
+        "{{ attr_name }}": "2025-01-01T00:00:00",
+{%- else %}
+        "{{ attr_name }}": "test_text_value",
+{%- endif %}
+{%- endfor %}
+    }
+
+
+@pytest.fixture
+def created_{{ entity_name | snake_case }}({{ entity_name | snake_case }}_test_data):
+    """
+    Fixture that creates {{ entity_name }} and cleans up after test
+
+    Yields:
+        Created {{ entity_name }} ID
+
+    Constitutional compliance: Automatic cleanup for test isolation
+    """
+    # Create {{ entity_name }}
+    response = requests.post(
+        f"{API_BASE_URL}/{{ entity_name | snake_case }}/",
+        json={{ entity_name | snake_case }}_test_data,
+        timeout=10
+    )
+    assert response.status_code == 201, f"Failed to create {{ entity_name }}: {response.text}"
+    
+    {{ entity_name | snake_case }}_data = response.json()
+    {{ entity_name | snake_case }}_id = {{ entity_name | snake_case }}_data["id"]
+    
+    yield {{ entity_name | snake_case }}_id
+    
+{%- if cleanup %}
+    # Cleanup: Delete {{ entity_name }} after test
+    try:
+        delete_response = requests.delete(
+            f"{API_BASE_URL}/{{ entity_name | snake_case }}/{{{ entity_name | snake_case }}_id}",
+            timeout=10
+        )
+        # 204 (deleted) or 404 (already deleted) are acceptable
+        assert delete_response.status_code in [204, 404]
+    except Exception as e:
+        print(f"Cleanup warning: Failed to delete {{ entity_name }} ID {{{ entity_name | snake_case }}_id}: {e}")
+{%- endif %}
+
+
+class Test{{ entity_name }}CRUD:
+    """
+    Integration tests for {{ entity_name }} CRUD operations
+
+    Constitutional compliance:
+    - Full lifecycle coverage (create, read, update, delete)
+    - Integration testing validates API contracts
+    - Cleanup ensures test isolation
+    """
+
+    def test_create_{{ entity_name | snake_case }}(self, {{ entity_name | snake_case }}_test_data):
+        """
+        Test creating new {{ entity_name }} (POST endpoint)
+
+        Validates:
+        - HTTP 201 Created status
+        - Response contains all attributes
+        - Generated ID is present
+        - Timestamps are set
+        """
+        response = requests.post(
+            f"{API_BASE_URL}/{{ entity_name | snake_case }}/",
+            json={{ entity_name | snake_case }}_test_data,
+            timeout=10
+        )
+
+        assert response.status_code == 201, f"Expected HTTP 201, got {response.status_code}"
+        
+        {{ entity_name | snake_case }}_data = response.json()
+        
+        # Validate response structure
+        assert "id" in {{ entity_name | snake_case }}_data, "Response missing 'id' field"
+        assert {{ entity_name | snake_case }}_data["id"] > 0, "Invalid ID value"
+{%- for attr_name in attributes.keys() %}
+        assert "{{ attr_name }}" in {{ entity_name | snake_case }}_data, "Response missing '{{ attr_name }}' field"
+{%- endfor %}
+        assert "created_at" in {{ entity_name | snake_case }}_data, "Response missing 'created_at' field"
+        assert "updated_at" in {{ entity_name | snake_case }}_data, "Response missing 'updated_at' field"
+
+    def test_get_{{ entity_name | snake_case }}_by_id(self, created_{{ entity_name | snake_case }}, {{ entity_name | snake_case }}_test_data):
+        """
+        Test retrieving {{ entity_name }} by ID (GET endpoint)
+
+        Validates:
+        - HTTP 200 OK status
+        - Correct {{ entity_name }} data returned
+        - All attributes match creation data
+        """
+        response = requests.get(
+            f"{API_BASE_URL}/{{ entity_name | snake_case }}/{created_{{ entity_name | snake_case }}}",
+            timeout=10
+        )
+
+        assert response.status_code == 200, f"Expected HTTP 200, got {response.status_code}"
+        
+        {{ entity_name | snake_case }}_data = response.json()
+        
+        # Validate data matches creation
+        assert {{ entity_name | snake_case }}_data["id"] == created_{{ entity_name | snake_case }}
+{%- for attr_name in attributes.keys() %}
+        assert {{ entity_name | snake_case }}_data["{{ attr_name }}"] == {{ entity_name | snake_case }}_test_data["{{ attr_name }}"]
+{%- endfor %}
+
+    def test_get_{{ entity_name | snake_case }}_not_found(self):
+        """
+        Test retrieving non-existent {{ entity_name }} (GET endpoint)
+
+        Validates:
+        - HTTP 404 Not Found status
+        - Error message is descriptive
+        """
+        response = requests.get(
+            f"{API_BASE_URL}/{{ entity_name | snake_case }}/99999",
+            timeout=10
+        )
+
+        assert response.status_code == 404, f"Expected HTTP 404, got {response.status_code}"
+
+    def test_list_{{ entity_name | snake_case }}s(self, created_{{ entity_name | snake_case }}):
+        """
+        Test listing all {{ entity_name }}s (GET endpoint)
+
+        Validates:
+        - HTTP 200 OK status
+        - Response is list
+        - Created {{ entity_name }} is in list
+        """
+        response = requests.get(
+            f"{API_BASE_URL}/{{ entity_name | snake_case }}/",
+            timeout=10
+        )
+
+        assert response.status_code == 200, f"Expected HTTP 200, got {response.status_code}"
+        
+        {{ entity_name | snake_case }}_list = response.json()
+        
+        assert isinstance({{ entity_name | snake_case }}_list, list), "Response is not a list"
+        assert len({{ entity_name | snake_case }}_list) > 0, "List is empty"
+        
+        # Verify created {{ entity_name }} is in list
+        {{ entity_name | snake_case }}_ids = [item["id"] for item in {{ entity_name | snake_case }}_list]
+        assert created_{{ entity_name | snake_case }} in {{ entity_name | snake_case }}_ids
+
+    def test_update_{{ entity_name | snake_case }}(self, created_{{ entity_name | snake_case }}, {{ entity_name | snake_case }}_test_data):
+        """
+        Test updating {{ entity_name }} (PUT endpoint)
+
+        Validates:
+        - HTTP 200 OK status
+        - Updated data is returned
+        - Timestamps are updated
+        """
+        # Prepare update data
+        update_data = {{ entity_name | snake_case }}_test_data.copy()
+{%- for attr_name, attr_type in attributes.items() %}
+{%- if loop.first %}
+{%- if attr_type | python_type == 'str' %}
+        update_data["{{ attr_name }}"] = "updated_{{ attr_name }}_value"
+{%- elif attr_type | python_type == 'int' %}
+        update_data["{{ attr_name }}"] = 999
+{%- elif attr_type | python_type == 'float' %}
+        update_data["{{ attr_name }}"] = 9.99
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+
+        response = requests.put(
+            f"{API_BASE_URL}/{{ entity_name | snake_case }}/{created_{{ entity_name | snake_case }}}",
+            json=update_data,
+            timeout=10
+        )
+
+        assert response.status_code == 200, f"Expected HTTP 200, got {response.status_code}"
+        
+        {{ entity_name | snake_case }}_data = response.json()
+        
+        # Validate update applied
+{%- for attr_name, attr_type in attributes.items() %}
+{%- if loop.first %}
+        assert {{ entity_name | snake_case }}_data["{{ attr_name }}"] == update_data["{{ attr_name }}"]
+{%- endif %}
+{%- endfor %}
+
+    def test_delete_{{ entity_name | snake_case }}(self, created_{{ entity_name | snake_case }}):
+        """
+        Test deleting {{ entity_name }} (DELETE endpoint)
+
+        Validates:
+        - HTTP 204 No Content status
+        - {{ entity_name }} no longer retrievable after deletion
+        """
+        response = requests.delete(
+            f"{API_BASE_URL}/{{ entity_name | snake_case }}/{created_{{ entity_name | snake_case }}}",
+            timeout=10
+        )
+
+        assert response.status_code == 204, f"Expected HTTP 204, got {response.status_code}"
+        
+        # Verify {{ entity_name }} is deleted
+        get_response = requests.get(
+            f"{API_BASE_URL}/{{ entity_name | snake_case }}/{created_{{ entity_name | snake_case }}}",
+            timeout=10
+        )
+        assert get_response.status_code == 404, "{{ entity_name }} still exists after deletion"
+
+    def test_delete_{{ entity_name | snake_case }}_not_found(self):
+        """
+        Test deleting non-existent {{ entity_name }} (DELETE endpoint)
+
+        Validates:
+        - HTTP 404 Not Found status
+        """
+        response = requests.delete(
+            f"{API_BASE_URL}/{{ entity_name | snake_case }}/99999",
+            timeout=10
+        )
+
+        assert response.status_code == 404, f"Expected HTTP 404, got {response.status_code}"

@@ -11,9 +11,18 @@ from typing import Any, Dict, List
 from baes.core.managed_system_manager import ManagedSystemManager
 from baes.domain_entities.base_bae import BaseAgent, is_debug_mode
 from baes.llm.openai_client import OpenAIClient
+from baes.utils.template_registry import (
+    TemplateRegistry,
+    TemplateInput,
+    EntityType,
+    SWEAType,
+)
+from baes.utils.presentation_logger import get_presentation_logger
 from config import Config
 
 logger = logging.getLogger(__name__)
+presentation_logger = get_presentation_logger()
+presentation_logger = get_presentation_logger()
 
 
 # Stage 2 Improvement #8: Feedback Loop Analytics for DatabaseSWEA
@@ -164,6 +173,7 @@ class DatabaseSWEA(BaseAgent):
         super().__init__("DatabaseSWEA", "Database Provisioning Agent", "SWEA")
         self._managed_system_manager = None  # Lazy initialization
         self.llm_client = OpenAIClient()
+        self._template_registry = None  # Lazy initialization (Feature 001-performance-optimization)
         # Stage 2 Improvement #8: Feedback Loop Analytics
         self.feedback_analytics = FeedbackLoopAnalytics()
         self.current_session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -174,6 +184,13 @@ class DatabaseSWEA(BaseAgent):
         if self._managed_system_manager is None:
             self._managed_system_manager = ManagedSystemManager()
         return self._managed_system_manager
+
+    @property
+    def template_registry(self):
+        """Lazy initialization of TemplateRegistry (Feature 001-performance-optimization)"""
+        if self._template_registry is None:
+            self._template_registry = TemplateRegistry()
+        return self._template_registry
 
     def _get_do_not_ignore_warning(self) -> str:
         """
@@ -479,35 +496,97 @@ Please provide the JSON response with database improvements."""
                 return self._apply_schema_migration(interpretation, entity, db_file)
             else:
                 # Table does not exist, safe to create
-                # Map Python types → SQLite
-                type_map = {
-                    "str": "TEXT",
-                    "int": "INTEGER",
-                    "float": "REAL",
-                    "date": "TEXT",
-                    "bool": "INTEGER",
-                }
-                columns_sql: List[str] = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
-                for attr in attributes:
-                    if isinstance(attr, dict):
-                        name = attr.get("name", "unknown_field")
-                        typ = attr.get("type", "str")
-                    elif isinstance(attr, str):
-                        if ":" in attr:
-                            name, typ = [p.strip() for p in attr.split(":", 1)]
+                
+                # Try template-based generation first
+                sql_code = None
+                template_used = False
+                template_id = None
+                if self.template_registry:
+                    try:
+                        # Prepare attributes as dictionary for template
+                        attr_dict = {}
+                        for attr in attributes:
+                            if isinstance(attr, dict):
+                                attr_dict[attr.get("name", "unknown")] = attr.get("type", "str")
+                            elif isinstance(attr, str):
+                                if ":" in attr:
+                                    name, typ = [p.strip() for p in attr.split(":", 1)]
+                                else:
+                                    name, typ = attr.strip(), "str"
+                                attr_dict[name] = typ
+                        
+                        from baes.utils.template_registry import EntityType as TemplateEntityType
+                        
+                        # Create template input
+                        template_input = TemplateInput(
+                            entity_name=entity,
+                            entity_type=TemplateEntityType.STANDARD,
+                            swea_type=SWEAType.DATABASE,
+                            attributes=attr_dict,
+                        )
+                        
+                        # Try to render template
+                        template_output = self.template_registry.render_template(template_input)
+                        
+                        if template_output.template_used:
+                            sql_code = template_output.generated_code
+                            template_used = True
+                            template_id = template_output.template_id
+                            
+                            # Log optimization metrics
+                            presentation_logger.template_selected(
+                                "database",
+                                template_output.template_id,
+                                template_output.token_estimate
+                            )
+                            
+                            logger.info("DatabaseSWEA: Using template %s for %s", template_id, entity)
                         else:
-                            name, typ = attr.strip(), "str"
-                    else:
-                        name, typ = str(attr), "str"
-                    name = name.replace(" ", "_").lower()
-                    if name == 'id':
-                        continue
-                    sql_type = type_map.get(typ.replace("Optional[", "").replace("]", ""), "TEXT")
-                    columns_sql.append(f"{name} {sql_type}")
-                columns_sql_str = ", ".join(columns_sql)
+                            # Template indicated fallback needed
+                            presentation_logger.template_fallback(
+                                "database",
+                                template_output.template_id or "database_schema_crud",
+                                template_output.fallback_reason or "Unknown reason"
+                            )
+                    except Exception as e:
+                        logger.warning("DatabaseSWEA: Template rendering failed: %s, falling back to direct SQL generation", str(e))
+                
+                # If template didn't work, use direct SQL generation
+                if not template_used:
+                    # Map Python types → SQLite
+                    type_map = {
+                        "str": "TEXT",
+                        "int": "INTEGER",
+                        "float": "REAL",
+                        "date": "TEXT",
+                        "bool": "INTEGER",
+                    }
+                    columns_sql: List[str] = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
+                    for attr in attributes:
+                        if isinstance(attr, dict):
+                            name = attr.get("name", "unknown_field")
+                            typ = attr.get("type", "str")
+                        elif isinstance(attr, str):
+                            if ":" in attr:
+                                name, typ = [p.strip() for p in attr.split(":", 1)]
+                            else:
+                                name, typ = attr.strip(), "str"
+                        else:
+                            name, typ = str(attr), "str"
+                        name = name.replace(" ", "_").lower()
+                        if name == 'id':
+                            continue
+                        sql_type = type_map.get(typ.replace("Optional[", "").replace("]", ""), "TEXT")
+                        columns_sql.append(f"{name} {sql_type}")
+                    columns_sql_str = ", ".join(columns_sql)
+                    sql_code = f"CREATE TABLE {table_name} ({columns_sql_str})"
+                
+                # Execute the SQL
                 with sqlite3.connect(db_file) as conn:
                     cursor = conn.cursor()
-                    cursor.execute(f"CREATE TABLE {table_name} ({columns_sql_str})")
+                    # Execute main CREATE TABLE statement
+                    cursor.execute(sql_code if template_used else sql_code)
+                    # Apply any additional constraints
                     for constraint in constraints:
                         try:
                             cursor.execute(constraint)
@@ -515,12 +594,45 @@ Please provide the JSON response with database improvements."""
                         except Exception as e:
                             logger.warning(f"Could not apply constraint '{constraint}': {e}")
                     conn.commit()
+                
+                # Build columns list for result
+                if template_used:
+                    # Extract columns from SQL code
+                    columns_sql = []
+                    # Simple extraction - in production might want more robust parsing
+                    if "(" in sql_code:
+                        cols_part = sql_code.split("(", 1)[1].rsplit(")", 1)[0]
+                        columns_sql = [col.strip() for col in cols_part.split(",")]
+                else:
+                    columns_sql = []
+                    if not template_used:
+                        columns_sql = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
+                        for attr in attributes:
+                            if isinstance(attr, dict):
+                                name = attr.get("name", "unknown_field")
+                                typ = attr.get("type", "str")
+                            elif isinstance(attr, str):
+                                if ":" in attr:
+                                    name, typ = [p.strip() for p in attr.split(":", 1)]
+                                else:
+                                    name, typ = attr.strip(), "str"
+                            else:
+                                name, typ = str(attr), "str"
+                            name = name.replace(" ", "_").lower()
+                            if name == 'id':
+                                continue
+                            type_map = {"str": "TEXT", "int": "INTEGER", "float": "REAL", "date": "TEXT", "bool": "INTEGER"}
+                            sql_type = type_map.get(typ.replace("Optional[", "").replace("]", ""), "TEXT")
+                            columns_sql.append(f"{name} {sql_type}")
+                
                 result = {
                     "database_path": db_file,
                     "table": table_name,
                     "columns": columns_sql,
                     "tables_created": [table_name],
                     "managed_system": True,
+                    "template_used": template_used,
+                    "template_id": template_id,
                     "improvements_applied": {
                         "attributes": attributes,
                         "additional_requirements": additional_requirements,
@@ -529,7 +641,7 @@ Please provide the JSON response with database improvements."""
                         "explanation": interpretation.get("explanation", "No explanation provided"),
                     },
                 }
-                logger.info(f"DatabaseSWEA applied improvements (new table created): {interpretation.get('explanation', 'No explanation')}")
+                logger.info(f"DatabaseSWEA applied improvements (new table created, template={template_used}): {interpretation.get('explanation', 'No explanation')}")
                 return result
         except Exception as e:
             logger.error(f"Failed to apply database improvements: {e}")

@@ -1,0 +1,11 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting nltk
+  Downloading nltk-3.9.2-py3-none-any.whl.metadata (3.2 kB)
+Requirement already satisfied: click in /usr/lib/python3/dist-packages (from nltk) (8.1.6)
+Requirement already satisfied: joblib in /home/amg/.local/lib/python3.11/site-packages (from nltk) (1.5.2)
+Requirement already satisfied: regex>=2021.8.3 in /home/amg/.local/lib/python3.11/site-packages (from nltk) (2024.11.6)
+Requirement already satisfied: tqdm in /home/amg/.local/lib/python3.11/site-packages (from nltk) (4.67.1)
+Downloading nltk-3.9.2-py3-none-any.whl (1.5 MB)
+   ━━━━━━━━━━━━━━━━ 1.5/1.5 MB 40.4 MB/s eta 0:00:00
+Installing collected packages: nltk
+Successfully installed nltk-3.9.2

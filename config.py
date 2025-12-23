@@ -58,6 +58,27 @@ class Config:
     # When True: After max retries, interrupt generation and return error (strict quality gate mode)
     BAE_STRICT_MODE = os.getenv("BAE_STRICT_MODE", "false").lower() in ("true", "1", "yes", "on")
 
+    # Performance Optimization Flags (Feature 001-performance-optimization)
+    # Enable/disable individual optimization strategies for A/B testing and rollback
+    
+    # Template-based code generation: Use Jinja2 templates for standard CRUD operations (40-60% token savings)
+    ENABLE_TEMPLATES = os.getenv("ENABLE_TEMPLATES", "true").lower() in ("true", "1", "yes", "on")
+    
+    # Rule-based validation: Use regex/AST patterns for confident approval/rejection (20-30% token savings)
+    ENABLE_RULE_VALIDATION = os.getenv("ENABLE_RULE_VALIDATION", "true").lower() in ("true", "1", "yes", "on")
+    
+    # Two-tier persistent cache: Normalize and cache recognition results (10-15% token savings on cache hits)
+    ENABLE_RECOGNITION_CACHE = os.getenv("ENABLE_RECOGNITION_CACHE", "true").lower() in ("true", "1", "yes", "on")
+    
+    # Compressed prompts: Use token-efficient coding standards (15-20% token savings)
+    ENABLE_COMPRESSED_STANDARDS = os.getenv("ENABLE_COMPRESSED_STANDARDS", "true").lower() in ("true", "1", "yes", "on")
+    
+    # Parallel SWEA execution: Run independent SWEAs concurrently (30-40% time savings, no token impact)
+    ENABLE_PARALLEL_EXECUTION = os.getenv("ENABLE_PARALLEL_EXECUTION", "true").lower() in ("true", "1", "yes", "on")
+    
+    # Smart retry with exponential backoff: Reduce retry overhead (5-10% time savings on retries)
+    ENABLE_SMART_RETRY = os.getenv("ENABLE_SMART_RETRY", "true").lower() in ("true", "1", "yes", "on")
+
     # Managed System Configuration
     @classmethod
     def get_managed_system_path(cls) -> Path:
