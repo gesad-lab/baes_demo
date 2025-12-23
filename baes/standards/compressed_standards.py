@@ -221,19 +221,33 @@ def get_compressed_standard(swea_type: str) -> Optional[CompressedStandard]:
     return standard
 
 
-def estimate_token_count(text: str) -> int:
-    """Estimate token count for text (rough approximation).
+def estimate_token_count(text: str, model: str = "gpt-4") -> int:
+    """
+    Count tokens in text using tiktoken for OpenAI models.
     
-    Uses simple heuristic: ~4 characters per token for English text.
-    For accurate counting, use tiktoken library with specific model.
+    Falls back to simple heuristic (~4 characters per token) if tiktoken
+    is not available.
     
     Args:
         text: Text to estimate tokens for
+        model: OpenAI model name for encoding (default: gpt-4)
         
     Returns:
-        Estimated token count
+        Token count (accurate if tiktoken available, approximate otherwise)
     """
-    return len(text) // 4
+    try:
+        import tiktoken
+        encoding = tiktoken.encoding_for_model(model)
+        return len(encoding.encode(text))
+    except ImportError:
+        logger.warning(
+            "tiktoken not installed, using approximate token count (1 token ≈ 4 characters). "
+            "Install tiktoken for accurate counts: pip install tiktoken"
+        )
+        return len(text) // 4
+    except Exception as e:
+        logger.warning(f"Failed to count tokens with tiktoken: {e}, using approximate count")
+        return len(text) // 4
 
 
 def calculate_compression_ratio(compressed_tokens: int, full_tokens: int) -> float:
