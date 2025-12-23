@@ -1,17 +1,16 @@
 # BAES Framework Constitution
 <!--
   Sync Impact Report:
-  - Version Change: 1.0.0 → 1.1.0
+  - Version Change: 1.1.0 → 1.2.0
   - Amendment Date: 2025-12-23
-  - Modified Principles:
-    * Principle IV: Test-First Development - Simplified to focus on integration tests and manual testing
-    * Principle VI: Error Handling & Fail-Fast - Added explicit fail-fast guidance, removed fallback patterns
-  - Added Sections: None
+  - Modified Principles: None
+  - Added Principles:
+    * Principle VIII: Generator-First Fixes - Fixes must be done in generator components (BAEs/SWEAs) not in generated system
   - Removed Sections: None
   - Templates Status:
-    ✅ plan-template.md - Updated to reflect simplified testing gates
+    ✅ plan-template.md - Updated to include generator-first fix gate
     ✅ spec-template.md - Compatible (no changes needed)
-    ✅ tasks-template.md - Updated to reflect integration-first testing approach
+    ✅ tasks-template.md - Updated to emphasize generator fixes over managed system patches
   - Follow-up TODOs: None
 -->
 
@@ -107,6 +106,20 @@
 - TechLeadSWEA MUST review all generated artifacts and provide feedback for quality assurance
 
 **Rationale**: LLMs can generate plausible but incorrect outputs. Semantic validation ensures generated systems align with business requirements, follow project standards, and maintain domain integrity.
+
+### VIII. Generator-First Fixes (NON-NEGOTIABLE)
+
+**All fixes and improvements MUST be implemented in generator components (BAEs and SWEAs), NOT in the generated system (managed system).**
+
+- When bugs are found in generated code, fix the generator (BAE/SWEA) that produced it, then regenerate
+- Manual patches to managed system code are FORBIDDEN - they will be lost on next regeneration
+- Generated system (managed_system/) is ephemeral and disposable - treat it as build output
+- Generator components (baes/) are the source of truth - all changes go there
+- If generated code needs improvement, improve the generator's prompts, standards, or validation logic
+- Document generator improvements in standards classes and prompt templates
+- Regeneration MUST produce correct code - manual post-generation fixes indicate generator defects
+
+**Rationale**: The managed system is generated output that can be recreated at any time. Fixing issues there creates technical debt and makes those fixes disappear on regeneration. The generators are the source of truth - fixing them ensures all future generations benefit and maintains the integrity of the adaptive generation paradigm.
 
 ## Technology Standards
 
@@ -223,5 +236,6 @@ When constitutional principles must be violated (e.g., DRY, PEP 8, Test-First), 
 
 - **1.0.0** (2025-12-23): Initial constitution ratified with 7 core principles, technology standards, SWEA governance, and development workflow
 - **1.1.0** (2025-12-23): Amended to add fail-fast principle and simplify testing approach (integration-first with manual validation)
+- **1.2.0** (2025-12-23): Added Principle VIII - Generator-First Fixes (all fixes in BAEs/SWEAs, not in generated managed system)
 
-**Version**: 1.1.0 | **Ratified**: 2025-12-23 | **Last Amended**: 2025-12-23
+**Version**: 1.2.0 | **Ratified**: 2025-12-23 | **Last Amended**: 2025-12-23

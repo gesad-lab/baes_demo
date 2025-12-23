@@ -40,6 +40,7 @@
 - [ ] **Observability**: Will logging, metrics tracking, and LLM request logging be implemented?
 - [ ] **Fail-Fast Error Handling**: Will errors fail immediately with clear messages rather than using fallbacks that mask issues?
 - [ ] **Semantic Coherence**: Will LLM-generated content be validated against schemas and standards?
+- [ ] **Generator-First Fixes**: Will fixes be implemented in generator components (BAEs/SWEAs) rather than patching generated system?
 
 **SWEA Governance (if applicable):**
 

@@ -74,6 +74,7 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] T009 Setup metrics tracking infrastructure (baes/utils/metrics_tracker.py pattern)
 - [ ] T010 Configure context store and persistence framework
 - [ ] T011 Setup standards validation framework (BaseStandards pattern)
+- [ ] T012 Document generator-first fix policy: all fixes in baes/ not managed_system/
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -163,10 +164,12 @@ Examples of foundational tasks (adjust based on your project):
 - [ ] TXXX [P] Documentation updates with proper docstrings (Google style)
 - [ ] TXXX DRY refactoring: extract common patterns to base classes/utilities
 - [ ] TXXX PEP 8 compliance audit: run linting, fix violations
-- [ ] TXXX [P] Additional unit tests for edge cases (if needed) in tests/unit/
+- [ ] TXXX [P] Additional integration tests for edge cases (if needed) in tests/integration/
 - [ ] TXXX Observability audit: ensure all components have logging and metrics
-- [ ] TXXX Error handling audit: validate try/except patterns with logging
+- [ ] TXXX Error handling audit: validate fail-fast patterns with no silent fallbacks
 - [ ] TXXX Standards validation: run BaseStandards.get_comprehensive_validation
+- [ ] TXXX Generator improvements: update BAE/SWEA prompts and standards based on generated code quality
+- [ ] TXXX Verify no manual patches in managed_system/ (all fixes in generators)
 - [ ] TXXX Run quickstart.md validation
 
 ---
